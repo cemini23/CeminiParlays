@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+
+# Secrets
+.env
+.env.*
+
+# Local adopts
+.local/
+
+# Pipeline artifacts
+artifacts/
+runs/
+*.parquet
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Operator line logs and ledgers (never commit live slips)
+data/slates/
+data/ledger/
+research/
+reports/
+briefs/

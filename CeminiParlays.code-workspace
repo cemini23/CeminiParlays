@@ -1,0 +1,11 @@
+{
+  "folders": [
+    {
+      "name": "CeminiParlays",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": ".venv/bin/python"
+  }
+}

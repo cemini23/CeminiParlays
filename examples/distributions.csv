@@ -1,0 +1,6 @@
+player_name,player_key,stat_type,median,sd,family
+Patrick Mahomes,,pass_yds,272,48,lognormal
+Travis Kelce,,rec_yds,66,22,lognormal
+Josh Allen,,pass_yds,255,46,lognormal
+James Cook,,rush_yds,54,18,lognormal
+Isiah Pacheco,,rush_yds,70,20,lognormal

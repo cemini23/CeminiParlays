@@ -1,0 +1,6 @@
+slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,line_type,captured_at,injury_status,book_over,book_under,slip_multiplier
+2025-w01-sun,underdog,Patrick Mahomes,,KC,BUF,pass_yds,265.5,more,standard,2025-09-07T16:00:00Z,,-155,120,
+2025-w01-sun,underdog,Travis Kelce,,KC,BUF,rec_yds,62.5,more,standard,2025-09-07T16:00:00Z,,-148,115,
+2025-w01-sun,underdog,Josh Allen,,BUF,KC,pass_yds,248.5,more,standard,2025-09-07T16:00:00Z,,-162,124,
+2025-w01-sun,underdog,James Cook,,BUF,KC,rush_yds,58.5,less,standard,2025-09-07T16:00:00Z,,,
+2025-w01-sun,underdog,Isiah Pacheco,,KC,BUF,rush_yds,68.5,less,standard,2025-09-07T16:00:00Z,out,,

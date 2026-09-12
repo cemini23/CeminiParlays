@@ -7,6 +7,8 @@ from scipy.optimize import brentq
 
 DevigMethod = Literal["multiplicative", "additive", "power"]
 
+BRENTQ_BRACKETS: tuple[tuple[float, float], ...] = ((1.0, 8.0), (0.05, 32.0))
+
 
 @dataclass(frozen=True)
 class DevigResult:
@@ -43,6 +45,19 @@ def _normalize_pair(p_over: float, p_under: float) -> tuple[float, float]:
     return p_over / total, p_under / total
 
 
+def _power_k(pi_over: float, pi_under: float) -> float:
+    def objective(k: float) -> float:
+        return (pi_over**k) + (pi_under**k) - 1.0
+
+    last_error: ValueError | None = None
+    for low, high in BRENTQ_BRACKETS:
+        try:
+            return float(brentq(objective, low, high))
+        except ValueError as exc:  # bracket did not straddle a root
+            last_error = exc
+    raise ValueError("power de-vig could not bracket k") from last_error
+
+
 def devig_two_way(
     odds_over: int,
     odds_under: int,
@@ -69,12 +84,30 @@ def devig_two_way(
         return DevigResult(p_over, p_under, method, 1.0, width, overround)
 
     if method == "power":
-
-        def objective(k: float) -> float:
-            return (pi_over**k) + (pi_under**k) - 1.0
-
-        k_opt = float(brentq(objective, 1.0, 8.0))
+        k_opt = _power_k(pi_over, pi_under)
         p_over, p_under = _normalize_pair(pi_over**k_opt, pi_under**k_opt)
         return DevigResult(p_over, p_under, method, k_opt, width, overround)
 
     raise ValueError(f"unknown de-vig method: {method}")
+
+
+def devig_spread(odds_over: int, odds_under: int, unstable_pp: float = 1.5) -> dict[str, float | bool]:
+    """Compare all three de-vig methods on one market (I-28).
+
+    Returns each method's ``p_over`` plus the max spread in percentage points.
+    A spread above ``unstable_pp`` means the fair P is method-sensitive and the
+    operator should not trust a single point estimate.
+    """
+
+    power = devig_two_way(odds_over, odds_under, method="power")
+    multiplicative = devig_two_way(odds_over, odds_under, method="multiplicative")
+    additive = devig_two_way(odds_over, odds_under, method="additive")
+    values = [power.p_over, multiplicative.p_over, additive.p_over]
+    spread_pp = (max(values) - min(values)) * 100.0
+    return {
+        "power_p_over": power.p_over,
+        "multiplicative_p_over": multiplicative.p_over,
+        "additive_p_over": additive.p_over,
+        "spread_pp": spread_pp,
+        "unstable": spread_pp > unstable_pp,
+    }

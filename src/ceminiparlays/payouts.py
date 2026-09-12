@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PROFILE_DIR = REPO_ROOT / "config" / "payout_profiles"
+from ceminiparlays.resources import read_config_text
 
 POWER_ALIASES = {"power", "standard"}
 FLEX_ALIASES = {"flex"}
+DISPLAY_NAMES = {"underdog": "Underdog", "prizepicks": "PrizePicks"}
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,7 @@ class PayoutTable:
     all_hit: float
     minus_1: float = 0.0
     minus_2: float = 0.0
+    note: str = ""
 
     def multiplier_for_hits(self, hits: int) -> float:
         misses = self.legs - hits
@@ -32,15 +33,39 @@ class PayoutTable:
         return 0.0
 
 
+def _display(platform: str) -> str:
+    return DISPLAY_NAMES.get(platform.lower(), platform.title())
+
+
+def _missing_row_message(platform: str, mode: str, legs: int) -> str:
+    display = _display(platform)
+    key = mode.lower()
+    if key in FLEX_ALIASES:
+        return f"{display} flex has no {legs}-leg row. Use standard or slip-size 3+."
+    label = "standard" if key in POWER_ALIASES and platform.lower() == "underdog" else key
+    return f"{display} {label} has no {legs}-leg row. Use slip-size 2-6."
+
+
+def _missing_mode_message(platform: str, mode: str) -> str:
+    return f"{_display(platform)} has no {mode!r} payout block; pick standard, power, or flex."
+
+
 def load_profile(platform: str, profile_dir: Path | None = None) -> dict:
-    directory = Path(profile_dir) if profile_dir else DEFAULT_PROFILE_DIR
-    path = directory / f"{platform}.json"
-    if not path.is_file():
-        raise FileNotFoundError(f"payout profile not found: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    if profile_dir is not None:
+        path = Path(profile_dir) / f"{platform}.json"
+        if not path.is_file():
+            raise FileNotFoundError(f"payout profile not found: {path}")
+        return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        text = read_config_text("payout_profiles", f"{platform}.json")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            f"payout profile not found: {platform} (config/ or package data)"
+        ) from exc
+    return json.loads(text)
 
 
-def _mode_block(profile: Mapping[str, object], mode: str) -> Mapping[str, object]:
+def _mode_block(profile: Mapping[str, object], platform: str, mode: str) -> Mapping[str, object]:
     key = mode.lower()
     if key in POWER_ALIASES:
         for alias in ("standard", "power"):
@@ -51,7 +76,7 @@ def _mode_block(profile: Mapping[str, object], mode: str) -> Mapping[str, object
         block = profile.get("flex")
         if isinstance(block, Mapping):
             return block
-    raise KeyError(f"mode {mode!r} missing from payout profile")
+    raise ValueError(_missing_mode_message(platform, mode))
 
 
 def resolve_payout(
@@ -64,11 +89,23 @@ def resolve_payout(
     """Return the payout table. Prefer the in-app displayed all-hit multiplier."""
 
     profile = load_profile(platform, profile_dir)
-    block = _mode_block(profile, mode)
+    block = _mode_block(profile, platform, mode)
     row = block.get(str(legs))
     if not isinstance(row, Mapping):
-        raise KeyError(f"{platform} {mode} has no {legs}-leg row")
-    all_hit = float(displayed_multiplier) if displayed_multiplier else float(row["all"])
+        raise ValueError(_missing_row_message(platform, mode, legs))
+    if displayed_multiplier is not None:
+        # ``is not None`` (not truthy): an explicit 0.0 is a bad multiplier, not
+        # a missing one. Fail closed instead of silently pricing the table (I-19).
+        if displayed_multiplier <= 0:
+            raise ValueError("displayed multiplier must be positive")
+        all_hit = float(displayed_multiplier)
+    else:
+        all_hit = float(row["all"])
+    note = ""
+    if mode.lower() in FLEX_ALIASES:
+        # Flex minus_1 / minus_2 always come from the July table; an override of
+        # all_hit does not reprice the partials (I-15).
+        note = "flex_partials=table (July tables; confirm in-app)"
     return PayoutTable(
         platform=str(profile.get("platform", platform)),
         mode=mode.lower(),
@@ -76,6 +113,7 @@ def resolve_payout(
         all_hit=all_hit,
         minus_1=float(row.get("minus_1", 0.0)),
         minus_2=float(row.get("minus_2", 0.0)),
+        note=note,
     )
 
 

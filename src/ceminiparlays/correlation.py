@@ -7,8 +7,8 @@ from pathlib import Path
 import numpy as np
 
 from ceminiparlays.copula import nearest_correlation
+from ceminiparlays.resources import REPO_ROOT, read_config_text
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PRIORS = REPO_ROOT / "config" / "correlation_priors.json"
 
 
@@ -22,8 +22,9 @@ class LegRef:
 
 
 def load_priors(path: Path | None = None) -> dict:
-    prior_path = Path(path) if path else DEFAULT_PRIORS
-    return json.loads(prior_path.read_text(encoding="utf-8"))
+    if path is not None:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    return json.loads(read_config_text("correlation_priors.json"))
 
 
 def _same_team(a: LegRef, b: LegRef) -> bool:
@@ -56,9 +57,14 @@ def _pair_rho(a: LegRef, b: LegRef, priors: dict) -> float:
     if not same_team and not opp:
         raw = float(priors.get("default_cross_game", 0.0))
     else:
+        # Exact unordered pair, not set membership. ``{pass_yds, rec_yds}``
+        # must not match a ``rec_yds``/``rec_yds`` request (I-02).
+        want = tuple(sorted((a.stat_type, b.stat_type)))
         for row in priors.get("pairs", []):
-            stats = {row.get("stat_a"), row.get("stat_b")}
-            if a.stat_type not in stats or b.stat_type not in stats:
+            have = tuple(
+                sorted((str(row.get("stat_a") or ""), str(row.get("stat_b") or "")))
+            )
+            if want != have:
                 continue
             if row.get("same_team") and same_team:
                 raw = float(row["rho"])
@@ -74,7 +80,17 @@ def _pair_rho(a: LegRef, b: LegRef, priors: dict) -> float:
     return raw * _side_sign(a.side) * _side_sign(b.side)
 
 
-def correlation_matrix(legs: list[LegRef], priors: dict | None = None) -> np.ndarray:
+def correlation_matrix(
+    legs: list[LegRef],
+    priors: dict | None = None,
+    repair: bool = True,
+) -> np.ndarray:
+    """Correlation matrix for the legs.
+
+    ``repair=False`` returns the raw prior matrix, which lets callers diff it
+    against the PSD-repaired matrix and report ``corr_repaired`` (I-23).
+    """
+
     loaded = priors if priors is not None else load_priors()
     n = len(legs)
     matrix = np.eye(n, dtype=float)
@@ -83,4 +99,6 @@ def correlation_matrix(legs: list[LegRef], priors: dict | None = None) -> np.nda
             rho = _pair_rho(legs[i], legs[j], loaded)
             matrix[i, j] = rho
             matrix[j, i] = rho
+    if not repair:
+        return matrix
     return nearest_correlation(matrix)

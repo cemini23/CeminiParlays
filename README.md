@@ -29,18 +29,51 @@ ceminiparlays devig --over -155 --under 120 --method power
 # Rank 2-leg Underdog Standard slips
 ceminiparlays rank --lines examples/manual_lines.csv \
   --distributions examples/distributions.csv \
-  --platform underdog --slip-size 2 --out runs/edges.csv
+  --platform underdog --slip-size 2 --displayed-multiplier 3.5 --out runs/edges.csv
 
 # One slate folder: edges.csv + report.txt
 ceminiparlays run --lines examples/manual_lines.csv \
   --distributions examples/distributions.csv \
-  --slate-id 2025-w01-sun --platform underdog
+  --slate-id 2025-w01-sun --platform underdog --displayed-multiplier 3.5
 
 # Grade your own ledger
 ceminiparlays grade --ledger examples/ledger.csv --out runs/grade.json
 ```
 
 `prop-fair`, `prop-rank`, and `prop-grade` are aliases for the same commands.
+
+`--displayed-multiplier` is the in-app all-hit multiplier. A per-row
+`slip_multiplier` column in the lines CSV wins over the flag for that combo. If
+neither is set, the CLI prints `UNCONFIRMED TABLE MULTIPLIER — confirm in-app`
+and marks those slips `table unconfirmed`; it still ranks so you can paper-trade.
+
+In the example lines, **James Cook is a no-book row**: he has no typed book odds
+but he *does* have a projected distribution, so he ranks. A no-book row with no
+distribution is dropped. **Isiah Pacheco stays `out`** and is always listed as a
+scratch.
+
+## Fail-closed rules (strict by default)
+
+Every `rank` / `run` prints `lines=N live=N dropped=N scratched=N` and names the
+players behind `dropped` and `scratched`. With `--strict` (the default) any
+dropped leg aborts with exit code 2; `--no-strict` ranks anyway after the banner.
+Scratches are always listed but never enter a combo.
+
+A leg is dropped, never silently skipped, when:
+
+- `team` or `opp` is blank (strict CSV reads abort; no `unknown:` teams are minted)
+- only one of `book_over` / `book_under` is typed
+- a `book_line` disagrees with the lounge `line`
+- the line is an integer and `--allow-integer-lines` is off (push mass is voided, not folded into Under)
+- there is no distribution and no both-sided book odds
+
+Injury tokens: `out`, `ir`, `inactive`, `doubtful`, `nfi`, `pup`, `suspended`
+scratch the leg. `q`, `questionable`, `gtd`, `game-time`, `limited`, `dnp` keep
+the leg, print a `questionable` warning, and never haircut the fair P for you.
+
+Same-player multi-stat slips are rejected for v1 (`same-player multi-stat not
+supported`). Alt / demon / goblin `line_type` rows need a row or CLI multiplier
+or they are excluded (`alt-needs-m`).
 
 ## What it computes
 

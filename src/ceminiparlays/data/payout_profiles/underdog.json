@@ -1,0 +1,20 @@
+{
+  "platform": "underdog",
+  "notes": "Help-center tables retrieved 2026-07-05. Confirm in-app. Correlated/alt legs shift displayed M.",
+  "standard": {
+    "2": { "all": 3.5 },
+    "3": { "all": 6.5 },
+    "4": { "all": 10.0 },
+    "5": { "all": 20.0 },
+    "6": { "all": 35.0 },
+    "7": { "all": 65.0 },
+    "8": { "all": 120.0 }
+  },
+  "flex": {
+    "3": { "all": 3.25, "minus_1": 1.09 },
+    "4": { "all": 6.0, "minus_1": 1.5 },
+    "5": { "all": 10.0, "minus_1": 2.5 },
+    "6": { "all": 25.0, "minus_1": 2.6, "minus_2": 0.25 },
+    "8": { "all": 80.0, "minus_1": 3.0, "minus_2": 1.0 }
+  }
+}

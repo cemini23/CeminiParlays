@@ -9,15 +9,36 @@ from ceminiparlays import STANDARD_DISCLAIMER, __version__
 from ceminiparlays.fair import p_over_line, side_probability
 from ceminiparlays.grade import grade_ledger, write_grade
 from ceminiparlays.io import read_distributions, read_manual_lines, write_csv
-from ceminiparlays.odds import DevigMethod, devig_two_way
+from ceminiparlays.odds import devig_spread, devig_two_way
 from ceminiparlays.payouts import breakeven_per_leg, implied_slip_win, resolve_payout
 from ceminiparlays.report import fair_card, slip_card
 from ceminiparlays.slips import EDGE_FIELDS, evaluate_legs, rank_slips, slip_as_row
+
+UNCONFIRMED_BANNER = "UNCONFIRMED TABLE MULTIPLIER — confirm in-app"
 
 
 def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--platform", default="underdog", choices=["underdog", "prizepicks"])
     parser.add_argument("--profile-dir", type=Path, default=None)
+
+
+def _add_rank_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--mode", default="standard", choices=["standard", "power", "flex"])
+    parser.add_argument("--slip-size", type=int, default=2)
+    parser.add_argument("--n-sims", type=int, default=20_000)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--displayed-multiplier", type=float, default=None)
+    parser.add_argument("--devig-method", default="power", choices=["power", "multiplicative", "additive"])
+    parser.add_argument("--max-slips", type=int, default=25)
+    parser.add_argument("--allow-large-enum", action="store_true")
+    parser.add_argument("--allow-integer-lines", action="store_true")
+    parser.add_argument("--shade-pp", type=float, default=0.0)
+    parser.add_argument(
+        "--strict",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Abort (exit 2) when any leg is dropped. Default on; use --no-strict to rank anyway.",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,16 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     rank = sub.add_parser("rank", help="Rank slips from manual lines + distributions")
     _add_common(rank)
+    _add_rank_options(rank)
     rank.add_argument("--lines", type=Path, required=True)
     rank.add_argument("--distributions", type=Path, required=True)
-    rank.add_argument("--mode", default="standard", choices=["standard", "power", "flex"])
-    rank.add_argument("--slip-size", type=int, default=2)
     rank.add_argument("--out", type=Path, default=Path("runs/edges.csv"))
     rank.add_argument("--report", type=Path, default=None)
-    rank.add_argument("--n-sims", type=int, default=20_000)
-    rank.add_argument("--seed", type=int, default=42)
-    rank.add_argument("--displayed-multiplier", type=float, default=None)
-    rank.add_argument("--devig-method", default="power", choices=["power", "multiplicative", "additive"])
 
     grade = sub.add_parser("grade", help="Grade a personal ledger")
     _add_common(grade)
@@ -63,16 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="Write edges.csv + report under runs/{slate}")
     _add_common(run)
+    _add_rank_options(run)
     run.add_argument("--lines", type=Path, required=True)
     run.add_argument("--distributions", type=Path, required=True)
     run.add_argument("--slate-id", default="demo")
-    run.add_argument("--mode", default="standard", choices=["standard", "power", "flex"])
-    run.add_argument("--slip-size", type=int, default=2)
     run.add_argument("--out-dir", type=Path, default=None)
-    run.add_argument("--n-sims", type=int, default=20_000)
-    run.add_argument("--seed", type=int, default=42)
-    run.add_argument("--displayed-multiplier", type=float, default=None)
-    run.add_argument("--devig-method", default="power", choices=["power", "multiplicative", "additive"])
     return parser
 
 
@@ -85,40 +96,83 @@ def _cmd_fair(args: argparse.Namespace) -> int:
     return 0
 
 
-def _rank_and_write(
-    lines_path: Path,
-    dist_path: Path,
-    platform: str,
-    mode: str,
-    slip_size: int,
-    out_csv: Path,
-    report_path: Path | None,
-    n_sims: int,
-    seed: int,
-    displayed_multiplier: float | None,
-    method: DevigMethod,
-    profile_dir: Path | None,
-) -> int:
-    lines = read_manual_lines(lines_path)
+def _effective_multiplier(
+    lines, displayed_multiplier: float | None
+) -> tuple[float | None, bool]:
+    """Best slate-wide M for the implied/breakeven banner.
+
+    Returns ``(multiplier, unconfirmed)``. Per-combo row M still overrides this
+    inside ``rank_slips``.
+    """
+
+    if displayed_multiplier is not None:
+        return displayed_multiplier, False
+    row_ms = sorted(
+        {row.displayed_multiplier for row in lines if row.displayed_multiplier is not None}
+    )
+    if row_ms:
+        return row_ms[0], False
+    return None, True
+
+
+def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path | None) -> int:
+    strict = getattr(args, "strict", True)
+    platform = args.platform
+    lines = read_manual_lines(args.lines, strict=strict)
     lines = [row for row in lines if (not row.platform or row.platform == platform)]
     slate_ids = {row.slate_id for row in lines if row.slate_id}
     if len(slate_ids) > 1:
         raise ValueError(f"mixed slate_id values in lines file: {sorted(slate_ids)}")
-    dists = read_distributions(dist_path)
-    table = resolve_payout(platform, mode, slip_size, displayed_multiplier, profile_dir)
-    implied = implied_slip_win(table.all_hit)
-    per_leg = breakeven_per_leg(table.all_hit, slip_size)
-    evaluated = evaluate_legs(lines, dists, implied_p=per_leg, method=method)
-    slips = rank_slips(
-        evaluated,
-        platform=platform,
-        mode=mode,
-        slip_size=slip_size,
-        n_sims=n_sims,
-        seed=seed,
-        displayed_multiplier=displayed_multiplier,
-        profile_dir=profile_dir,
+
+    effective_m, unconfirmed_slate = _effective_multiplier(lines, args.displayed_multiplier)
+    if unconfirmed_slate:
+        print(UNCONFIRMED_BANNER)
+
+    dists = read_distributions(args.distributions)
+    table = resolve_payout(
+        platform, args.mode, args.slip_size, displayed_multiplier=effective_m, profile_dir=args.profile_dir
     )
+    implied = implied_slip_win(table.all_hit)
+    per_leg = breakeven_per_leg(table.all_hit, args.slip_size)
+    live, excluded = evaluate_legs(
+        lines,
+        dists,
+        implied_p=per_leg,
+        method=args.devig_method,
+        allow_integer_lines=args.allow_integer_lines,
+    )
+    dropped = [leg for leg in excluded if leg.warn not in {"scratch"}]
+    scratched = [leg for leg in excluded if leg.warn == "scratch"]
+    print(
+        f"lines={len(lines)} live={len(live)} dropped={len(dropped)} "
+        f"scratched={len(scratched)}"
+    )
+    for leg in dropped:
+        print(f"  dropped {leg.line.player_name}: {leg.warn}")
+    for leg in scratched:
+        print(f"  scratched {leg.line.player_name}")
+
+    if strict and dropped:
+        print("strict mode: refusing to rank with dropped legs; fix the rows or pass --no-strict")
+        return 2
+
+    notes: list[str] = []
+    slips = rank_slips(
+        live,
+        platform=platform,
+        mode=args.mode,
+        slip_size=args.slip_size,
+        n_sims=args.n_sims,
+        seed=args.seed,
+        displayed_multiplier=args.displayed_multiplier,
+        profile_dir=args.profile_dir,
+        max_slips=args.max_slips,
+        allow_large_enum=args.allow_large_enum,
+        shade_pp=args.shade_pp,
+        notes=notes,
+    )
+    for note in notes:
+        print(f"  {note}")
     write_csv(out_csv, [slip_as_row(slip, i) for i, slip in enumerate(slips, start=1)], EDGE_FIELDS)
     card = slip_card(slips)
     target = report_path or out_csv.with_suffix(".report.txt")
@@ -131,20 +185,7 @@ def _rank_and_write(
 
 
 def _cmd_rank(args: argparse.Namespace) -> int:
-    return _rank_and_write(
-        args.lines,
-        args.distributions,
-        args.platform,
-        args.mode,
-        args.slip_size,
-        args.out,
-        args.report,
-        args.n_sims,
-        args.seed,
-        args.displayed_multiplier,
-        args.devig_method,
-        args.profile_dir,
-    )
+    return _rank_and_write(args, args.out, args.report)
 
 
 def _cmd_grade(args: argparse.Namespace) -> int:
@@ -157,6 +198,7 @@ def _cmd_grade(args: argparse.Namespace) -> int:
 
 def _cmd_devig(args: argparse.Namespace) -> int:
     result = devig_two_way(args.over, args.under, method=args.method)
+    spread = devig_spread(args.over, args.under)
     print(
         json.dumps(
             {
@@ -166,30 +208,23 @@ def _cmd_devig(args: argparse.Namespace) -> int:
                 "k_exponent": round(result.k_exponent, 6),
                 "market_width_cents": result.market_width_cents,
                 "raw_overround": round(result.raw_overround, 6),
+                "multiplicative_p_over": round(float(spread["multiplicative_p_over"]), 6),
+                "additive_p_over": round(float(spread["additive_p_over"]), 6),
+                "spread_pp": round(float(spread["spread_pp"]), 4),
+                "unstable_devig": bool(spread["unstable"]),
             },
             indent=2,
         )
     )
+    if spread["unstable"]:
+        print("UNSTABLE_DEVIG")
     return 0
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
     out_dir = args.out_dir or Path("runs") / args.slate_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    return _rank_and_write(
-        args.lines,
-        args.distributions,
-        args.platform,
-        args.mode,
-        args.slip_size,
-        out_dir / "edges.csv",
-        out_dir / "report.txt",
-        args.n_sims,
-        args.seed,
-        args.displayed_multiplier,
-        args.devig_method,
-        args.profile_dir,
-    )
+    return _rank_and_write(args, out_dir / "edges.csv", out_dir / "report.txt")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -202,7 +237,11 @@ def main(argv: list[str] | None = None) -> int:
         "devig": _cmd_devig,
         "run": _cmd_run,
     }
-    return handlers[args.command](args)
+    try:
+        return handlers[args.command](args)
+    except (ValueError, FileNotFoundError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 def main_fair() -> int:

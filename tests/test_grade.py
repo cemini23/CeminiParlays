@@ -40,3 +40,27 @@ def test_grade_rejects_short_actuals(tmp_path) -> None:
         assert "same length" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_grade_push_is_void_not_miss(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "underdog,standard,3,more|more|less,10.5|20.5|5.5,30|25|5.5,10,6.5\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    # one exact hit voids; the slip steps down to the 2-leg row at 3.5x
+    assert summary.hits == 0
+    assert summary.pnl == 25.0
+
+
+def test_grade_push_refunds_when_no_smaller_row(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "underdog,standard,2,more|more,10.5|20.5,30|20.5,10,3.5\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert summary.pnl == 0.0

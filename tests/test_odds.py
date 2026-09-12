@@ -1,4 +1,11 @@
-from ceminiparlays.odds import american_to_decimal, devig_two_way, market_width_cents
+import pytest
+
+from ceminiparlays.odds import (
+    american_to_decimal,
+    devig_spread,
+    devig_two_way,
+    market_width_cents,
+)
 
 
 def test_american_to_decimal() -> None:
@@ -25,3 +32,26 @@ def test_minus_110_pair_is_coin_flip() -> None:
     assert abs(result.p_over - 0.5) < 1e-9
     assert market_width_cents(-110, -110) == 0
     assert market_width_cents(-115, -105) == 10
+
+
+def test_power_devig_retries_wider_bracket() -> None:
+    result = devig_two_way(-2000, -2000, method="power")
+    assert abs(result.p_over - 0.5) < 1e-9
+
+
+def test_power_devig_unbracketed_raises_clear_message() -> None:
+    with pytest.raises(ValueError, match="power de-vig could not bracket k"):
+        devig_two_way(-100000, -100000, method="power")
+
+
+def test_devig_spread_reports_all_methods() -> None:
+    spread = devig_spread(-155, 120)
+    assert spread["spread_pp"] > 0
+    assert spread["unstable"] is False
+    assert spread["multiplicative_p_over"] != spread["additive_p_over"]
+
+
+def test_devig_spread_flags_unstable_market() -> None:
+    spread = devig_spread(-300, 200)
+    assert spread["spread_pp"] > 1.5
+    assert spread["unstable"] is True

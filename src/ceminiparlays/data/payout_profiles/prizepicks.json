@@ -1,0 +1,17 @@
+{
+  "platform": "prizepicks",
+  "notes": "Help-center tables retrieved 2026-07-05. Confirm in-app. Demon/goblin and combos shift displayed M.",
+  "power": {
+    "2": { "all": 3.0 },
+    "3": { "all": 6.0 },
+    "4": { "all": 10.0 },
+    "5": { "all": 20.0 },
+    "6": { "all": 37.5 }
+  },
+  "flex": {
+    "3": { "all": 3.0, "minus_1": 1.0 },
+    "4": { "all": 6.0, "minus_1": 1.5 },
+    "5": { "all": 10.0, "minus_1": 2.0, "minus_2": 0.4 },
+    "6": { "all": 25.0, "minus_1": 2.0, "minus_2": 0.4 }
+  }
+}

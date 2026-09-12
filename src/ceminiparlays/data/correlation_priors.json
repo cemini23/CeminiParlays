@@ -1,0 +1,15 @@
+{
+  "notes": "Same-game raw-stat priors. Cross-game default is 0. Confirm with walk-forward before sizing live.",
+  "default_cross_game": 0.0,
+  "pairs": [
+    { "stat_a": "pass_yds", "stat_b": "rec_yds", "same_team": true, "rho": 0.45 },
+    { "stat_a": "pass_yds", "stat_b": "receptions", "same_team": true, "rho": 0.40 },
+    { "stat_a": "pass_tds", "stat_b": "rec_yds", "same_team": true, "rho": 0.37 },
+    { "stat_a": "pass_yds", "stat_b": "rush_yds", "same_team": true, "rho": -0.33 },
+    { "stat_a": "pass_att", "stat_b": "rush_yds", "same_team": true, "rho": -0.33 },
+    { "stat_a": "rec_yds", "stat_b": "rec_yds", "same_team": true, "rho": 0.10 },
+    { "stat_a": "rush_yds", "stat_b": "rec_yds", "same_team": true, "rho": -0.12 },
+    { "stat_a": "pass_yds", "stat_b": "pass_yds", "opponents": true, "rho": 0.18 },
+    { "stat_a": "rec_yds", "stat_b": "rec_yds", "opponents": true, "rho": 0.16 }
+  ]
+}

@@ -9,7 +9,29 @@ from ceminiparlays.resources import read_config_text
 
 POWER_ALIASES = {"power", "standard"}
 FLEX_ALIASES = {"flex"}
-DISPLAY_NAMES = {"underdog": "Underdog", "prizepicks": "PrizePicks"}
+DISPLAY_NAMES = {
+    "underdog": "Underdog",
+    "prizepicks": "PrizePicks",
+    "hardrock": "Hard Rock",
+    "fanduel": "FanDuel",
+    "draftkings": "DraftKings",
+}
+SPORTSBOOK_PLATFORMS = {"hardrock", "fanduel", "draftkings"}
+PLATFORM_ALIASES = {
+    "hard_rock": "hardrock",
+    "hardrockbet": "hardrock",
+    "hr": "hardrock",
+    "hard-rock": "hardrock",
+    "fd": "fanduel",
+    "fan_duel": "fanduel",
+    "dk": "draftkings",
+    "draft_kings": "draftkings",
+}
+
+
+def normalize_platform(platform: str) -> str:
+    token = (platform or "").strip().lower()
+    return PLATFORM_ALIASES.get(token, token)
 
 
 @dataclass(frozen=True)
@@ -33,12 +55,12 @@ class PayoutTable:
         return 0.0
 
 
-def _display(platform: str) -> str:
+def display_name(platform: str) -> str:
     return DISPLAY_NAMES.get(platform.lower(), platform.title())
 
 
 def _missing_row_message(platform: str, mode: str, legs: int) -> str:
-    display = _display(platform)
+    display = display_name(platform)
     key = mode.lower()
     if key in FLEX_ALIASES:
         return f"{display} flex has no {legs}-leg row. Use standard or slip-size 3+."
@@ -47,7 +69,7 @@ def _missing_row_message(platform: str, mode: str, legs: int) -> str:
 
 
 def _missing_mode_message(platform: str, mode: str) -> str:
-    return f"{_display(platform)} has no {mode!r} payout block; pick standard, power, or flex."
+    return f"{display_name(platform)} has no {mode!r} payout block; pick standard, power, or flex."
 
 
 def load_profile(platform: str, profile_dir: Path | None = None) -> dict:
@@ -87,6 +109,30 @@ def resolve_payout(
     profile_dir: Path | None = None,
 ) -> PayoutTable:
     """Return the payout table. Prefer the in-app displayed all-hit multiplier."""
+
+    platform = normalize_platform(platform)
+    if platform in SPORTSBOOK_PLATFORMS:
+        display = display_name(platform)
+        if mode.lower() in FLEX_ALIASES:
+            raise ValueError(
+                f"{display} Flex Parlay is not modeled. Use standard and the "
+                "displayed SGP / parlay American price."
+            )
+        if displayed_multiplier is None:
+            raise ValueError(
+                f"{display} has no fixed lounge table. Pass --displayed-odds "
+                "(American) or --displayed-multiplier (decimal), or type "
+                "slip_odds / slip_multiplier / leg_odds on the CSV."
+            )
+        if displayed_multiplier <= 1:
+            raise ValueError("displayed multiplier must be greater than 1")
+        return PayoutTable(
+            platform=platform,
+            mode="standard",
+            legs=legs,
+            all_hit=float(displayed_multiplier),
+            note=f"{platform}: confirm the in-app American parlay/SGP price",
+        )
 
     profile = load_profile(platform, profile_dir)
     block = _mode_block(profile, platform, mode)

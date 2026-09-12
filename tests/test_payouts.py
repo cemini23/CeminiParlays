@@ -2,7 +2,12 @@ from math import isclose, sqrt
 
 import pytest
 
-from ceminiparlays.payouts import breakeven_per_leg, implied_slip_win, resolve_payout
+from ceminiparlays.payouts import (
+    breakeven_per_leg,
+    implied_slip_win,
+    normalize_platform,
+    resolve_payout,
+)
 
 
 def test_prizepicks_two_pick_power_breakeven() -> None:
@@ -31,6 +36,13 @@ def test_zero_multiplier_is_rejected_not_treated_as_missing() -> None:
         resolve_payout("underdog", "standard", 2, displayed_multiplier=-1.0)
 
 
+def test_sportsbook_multiplier_must_be_greater_than_one() -> None:
+    with pytest.raises(ValueError, match="greater than 1"):
+        resolve_payout("hardrock", "standard", 2, displayed_multiplier=1.0)
+    with pytest.raises(ValueError, match="greater than 1"):
+        resolve_payout("fanduel", "standard", 2, displayed_multiplier=0.5)
+
+
 def test_flex_partial_row() -> None:
     table = resolve_payout("prizepicks", "flex", 5)
     assert table.minus_1 == 2.0
@@ -56,6 +68,50 @@ def test_missing_underdog_flex_two_leg_message() -> None:
 def test_missing_prizepicks_flex_two_leg_message() -> None:
     with pytest.raises(ValueError, match="PrizePicks flex has no 2-leg row"):
         resolve_payout("prizepicks", "flex", 2)
+
+
+def test_hardrock_requires_a_displayed_price() -> None:
+    with pytest.raises(ValueError, match="no fixed lounge table"):
+        resolve_payout("hardrock", "standard", 2)
+
+
+def test_hardrock_accepts_alias_and_displayed_odds_as_decimal() -> None:
+    table = resolve_payout("hr", "standard", 2, displayed_multiplier=2.6)
+    assert table.platform == "hardrock"
+    assert table.all_hit == 2.6
+
+
+def test_hardrock_rejects_flex() -> None:
+    with pytest.raises(ValueError, match="Flex Parlay is not modeled"):
+        resolve_payout("hardrock", "flex", 3, displayed_multiplier=3.0)
+
+
+def test_fanduel_requires_a_displayed_price() -> None:
+    with pytest.raises(ValueError, match="no fixed lounge table"):
+        resolve_payout("fanduel", "standard", 2)
+
+
+def test_draftkings_requires_a_displayed_price() -> None:
+    with pytest.raises(ValueError, match="no fixed lounge table"):
+        resolve_payout("draftkings", "standard", 2)
+
+
+def test_sportsbook_aliases_fd_and_dk() -> None:
+    assert normalize_platform("fd") == "fanduel"
+    assert normalize_platform("dk") == "draftkings"
+    table = resolve_payout("fd", "standard", 2, displayed_multiplier=2.5)
+    assert table.platform == "fanduel"
+    assert table.all_hit == 2.5
+    table = resolve_payout("dk", "standard", 2, displayed_multiplier=2.7)
+    assert table.platform == "draftkings"
+    assert table.all_hit == 2.7
+
+
+def test_fanduel_and_draftkings_reject_flex() -> None:
+    with pytest.raises(ValueError, match="Flex Parlay is not modeled"):
+        resolve_payout("fanduel", "flex", 3, displayed_multiplier=3.0)
+    with pytest.raises(ValueError, match="Flex Parlay is not modeled"):
+        resolve_payout("draftkings", "flex", 3, displayed_multiplier=3.0)
 
 
 def test_missing_prizepicks_power_seven_leg_message() -> None:

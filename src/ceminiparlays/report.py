@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from ceminiparlays import STANDARD_DISCLAIMER
 from ceminiparlays.fair import FairResult
+from ceminiparlays.odds import decimal_to_american
+from ceminiparlays.payouts import SPORTSBOOK_PLATFORMS, normalize_platform
 from ceminiparlays.slips import EvaluatedSlip
 
 
@@ -51,9 +53,12 @@ def slip_card(slips: list[EvaluatedSlip]) -> str:
         lines.append(f"#{index} {slip.platform} {slip.mode} {len(slip.legs)}-leg")
         for leg in slip.legs:
             warn = f" [{leg.warn}]" if leg.warn else ""
+            detail = f"fair_p={leg.fair_p:.3f}"
+            if leg.implied_p > 0.0:
+                detail += f" implied_p={leg.implied_p:.3f} edge={leg.edge:+.3f}"
             lines.append(
                 f"  {leg.line.player_name} {leg.line.side} {leg.line.line} "
-                f"{leg.line.stat_type} fair_p={leg.fair_p:.3f} via {leg.source}{warn}"
+                f"{leg.line.stat_type} {detail} via {leg.source}{warn}"
             )
         joint = f"  p_joint={slip.p_joint:.4f}"
         if slip.p_all_se > 0.0:
@@ -64,8 +69,16 @@ def slip_card(slips: list[EvaluatedSlip]) -> str:
         if slip.multiplier_unconfirmed:
             source += " unconfirmed"
         kelly = "na (flex proxy suppressed)" if is_flex else f"{slip.kelly:.4f}"
+        price = f"M={slip.multiplier:.4g} ({source})"
+        if normalize_platform(slip.platform) in SPORTSBOOK_PLATFORMS:
+            try:
+                american = decimal_to_american(slip.multiplier)
+                sign = "+" if american > 0 else ""
+                price = f"M={slip.multiplier:.4g} ({sign}{american} {source})"
+            except ValueError:
+                pass
         lines.append(
-            f"  M={slip.multiplier} ({source}) EV={slip.ev:+.3f} "
+            f"  {price} EV={slip.ev:+.3f} "
             f"EV_lo={slip.ev_lo:+.3f} quarter_kelly={kelly}"
         )
         for note in slip.notes:

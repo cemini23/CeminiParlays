@@ -11,6 +11,9 @@ def test_config_resolves_from_a_non_repo_cwd(tmp_path: Path, monkeypatch) -> Non
     assert "pairs" in load_priors()
     assert load_profile("underdog")["platform"] == "underdog"
     assert load_profile("prizepicks")["platform"] == "prizepicks"
+    assert load_profile("hardrock")["platform"] == "hardrock"
+    assert load_profile("fanduel")["platform"] == "fanduel"
+    assert load_profile("draftkings")["platform"] == "draftkings"
 
 
 def test_config_falls_back_to_package_data(tmp_path: Path, monkeypatch) -> None:

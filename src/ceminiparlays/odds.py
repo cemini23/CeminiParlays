@@ -21,13 +21,28 @@ class DevigResult:
 
 
 def american_to_decimal(odds: int) -> float:
-    """Convert American odds to decimal odds."""
+    """Convert American odds to decimal odds.
+
+    Only moneyline-style quotes are legal: ``<= -100`` or ``>= +100``.
+    """
 
     if odds == 0:
         raise ValueError("American odds cannot be zero")
+    if -100 < odds < 100:
+        raise ValueError("American odds must be <= -100 or >= +100")
     if odds > 0:
         return 1.0 + (odds / 100.0)
     return 1.0 + (100.0 / abs(odds))
+
+
+def decimal_to_american(decimal: float) -> int:
+    """Convert a decimal multiplier to the nearest American price."""
+
+    if decimal <= 1.0:
+        raise ValueError("decimal odds must be greater than 1")
+    if decimal >= 2.0:
+        return int(round((decimal - 1.0) * 100.0))
+    return int(round(-100.0 / (decimal - 1.0)))
 
 
 def american_to_implied(odds: int) -> float:

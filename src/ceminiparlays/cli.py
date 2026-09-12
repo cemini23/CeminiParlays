@@ -9,8 +9,15 @@ from ceminiparlays import STANDARD_DISCLAIMER, __version__
 from ceminiparlays.fair import p_over_line, side_probability
 from ceminiparlays.grade import grade_ledger, write_grade
 from ceminiparlays.io import read_distributions, read_manual_lines, write_csv
-from ceminiparlays.odds import devig_spread, devig_two_way
-from ceminiparlays.payouts import breakeven_per_leg, implied_slip_win, resolve_payout
+from ceminiparlays.odds import american_to_decimal, devig_spread, devig_two_way
+from ceminiparlays.payouts import (
+    SPORTSBOOK_PLATFORMS,
+    breakeven_per_leg,
+    display_name,
+    implied_slip_win,
+    normalize_platform,
+    resolve_payout,
+)
 from ceminiparlays.report import fair_card, slip_card
 from ceminiparlays.slips import EDGE_FIELDS, evaluate_legs, rank_slips, slip_as_row
 
@@ -18,7 +25,11 @@ UNCONFIRMED_BANNER = "UNCONFIRMED TABLE MULTIPLIER — confirm in-app"
 
 
 def _add_common(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--platform", default="underdog", choices=["underdog", "prizepicks"])
+    parser.add_argument(
+        "--platform",
+        default="hardrock",
+        choices=["hardrock", "fanduel", "draftkings", "underdog", "prizepicks"],
+    )
     parser.add_argument("--profile-dir", type=Path, default=None)
 
 
@@ -28,6 +39,12 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--n-sims", type=int, default=20_000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--displayed-multiplier", type=float, default=None)
+    parser.add_argument(
+        "--displayed-odds",
+        type=int,
+        default=None,
+        help="In-app American parlay/SGP price, e.g. +260 or -120",
+    )
     parser.add_argument("--devig-method", default="power", choices=["power", "multiplicative", "additive"])
     parser.add_argument("--max-slips", type=int, default=25)
     parser.add_argument("--allow-large-enum", action="store_true")
@@ -44,7 +61,7 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ceminiparlays",
-        description="Local pick'em / parlay research CLI. Operator submits. No scrapers.",
+        description="Local sportsbook parlay / pick'em research CLI. Operator submits. No scrapers.",
     )
     parser.add_argument("--version", action="version", version=f"ceminiparlays {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -112,34 +129,80 @@ def _effective_multiplier(
     )
     if row_ms:
         return row_ms[0], False
+    all_slip = [row.slip_odds for row in lines]
+    if all_slip and all(value is not None for value in all_slip):
+        distinct = sorted(set(all_slip))
+        if len(distinct) == 1:
+            return american_to_decimal(int(distinct[0])), False
     return None, True
+
+
+def _cli_displayed_multiplier(args: argparse.Namespace) -> float | None:
+    decimal = args.displayed_multiplier
+    american = getattr(args, "displayed_odds", None)
+    if american is not None:
+        from_odds = american_to_decimal(american)
+        if decimal is not None and abs(decimal - from_odds) > 1e-9:
+            raise ValueError("conflicting --displayed-multiplier and --displayed-odds")
+        return from_odds
+    return decimal
 
 
 def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path | None) -> int:
     strict = getattr(args, "strict", True)
-    platform = args.platform
+    platform = normalize_platform(args.platform)
+    if platform in SPORTSBOOK_PLATFORMS and args.mode.lower() == "flex":
+        raise ValueError(
+            f"{display_name(platform)} Flex Parlay is not modeled. Use --mode standard "
+            "and pass --displayed-odds from the app."
+        )
     lines = read_manual_lines(args.lines, strict=strict)
-    lines = [row for row in lines if (not row.platform or row.platform == platform)]
+    lines = [
+        row
+        for row in lines
+        if (not row.platform or normalize_platform(row.platform) == platform)
+    ]
+    if not lines:
+        raise ValueError(
+            f"no rows for platform {platform}; set the CSV platform column "
+            "or leave it blank"
+        )
     slate_ids = {row.slate_id for row in lines if row.slate_id}
     if len(slate_ids) > 1:
         raise ValueError(f"mixed slate_id values in lines file: {sorted(slate_ids)}")
 
-    effective_m, unconfirmed_slate = _effective_multiplier(lines, args.displayed_multiplier)
-    if unconfirmed_slate:
+    displayed_m = _cli_displayed_multiplier(args)
+    effective_m, unconfirmed_slate = _effective_multiplier(lines, displayed_m)
+    if unconfirmed_slate and platform not in SPORTSBOOK_PLATFORMS:
         print(UNCONFIRMED_BANNER)
+    if unconfirmed_slate and platform in SPORTSBOOK_PLATFORMS:
+        print(
+            f"{display_name(platform).upper()}: no slate-wide displayed price — ranking "
+            "uses per-row slip_odds / product of leg_odds. Confirm the SGP ticket "
+            "in-app."
+        )
 
     dists = read_distributions(args.distributions)
-    table = resolve_payout(
-        platform, args.mode, args.slip_size, displayed_multiplier=effective_m, profile_dir=args.profile_dir
-    )
-    implied = implied_slip_win(table.all_hit)
-    per_leg = breakeven_per_leg(table.all_hit, args.slip_size)
+    if platform in SPORTSBOOK_PLATFORMS and effective_m is None:
+        implied = 0.0
+        per_leg = 0.0
+    else:
+        table = resolve_payout(
+            platform,
+            args.mode,
+            args.slip_size,
+            displayed_multiplier=effective_m,
+            profile_dir=args.profile_dir,
+        )
+        implied = implied_slip_win(table.all_hit)
+        per_leg = breakeven_per_leg(table.all_hit, args.slip_size)
     live, excluded = evaluate_legs(
         lines,
         dists,
         implied_p=per_leg,
         method=args.devig_method,
         allow_integer_lines=args.allow_integer_lines,
+        platform=platform,
     )
     dropped = [leg for leg in excluded if leg.warn not in {"scratch"}]
     scratched = [leg for leg in excluded if leg.warn == "scratch"]
@@ -164,7 +227,7 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         slip_size=args.slip_size,
         n_sims=args.n_sims,
         seed=args.seed,
-        displayed_multiplier=args.displayed_multiplier,
+        displayed_multiplier=displayed_m,
         profile_dir=args.profile_dir,
         max_slips=args.max_slips,
         allow_large_enum=args.allow_large_enum,
@@ -180,7 +243,8 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
     target.write_text(card + "\n", encoding="utf-8")
     print(card)
     print(f"wrote {out_csv}")
-    print(f"implied slip win {implied:.4f}; per-leg breakeven {per_leg:.4f}")
+    if implied > 0:
+        print(f"implied slip win {implied:.4f}; per-leg breakeven {per_leg:.4f}")
     return 0
 
 
@@ -189,7 +253,11 @@ def _cmd_rank(args: argparse.Namespace) -> int:
 
 
 def _cmd_grade(args: argparse.Namespace) -> int:
-    summary = grade_ledger(args.ledger, profile_dir=args.profile_dir)
+    summary = grade_ledger(
+        args.ledger,
+        profile_dir=args.profile_dir,
+        default_platform=normalize_platform(args.platform),
+    )
     write_grade(summary, args.out)
     print(json.dumps(summary.__dict__, indent=2))
     print(STANDARD_DISCLAIMER)

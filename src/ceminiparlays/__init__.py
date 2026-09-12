@@ -1,6 +1,6 @@
-"""CeminiParlays — local pick'em / parlay research CLI."""
+"""CeminiParlays — local sportsbook parlay / pick'em research CLI."""
 
-__version__ = "0.1.1"
+__version__ = "0.1.3"
 
 STANDARD_DISCLAIMER = (
     "Research only. Confirm every line and multiplier in-app. "

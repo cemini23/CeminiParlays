@@ -1,0 +1,4 @@
+{
+  "platform": "draftkings",
+  "notes": "DraftKings has no fixed lounge multiplier. Price is the in-app American parlay or SGP quote, converted to decimal. The product of per-leg odds overstates same-game payout — confirm --displayed-odds on the ticket screen. Flex Parlay is not modeled. Operator types the ticket. No scrape, no auto-bet."
+}

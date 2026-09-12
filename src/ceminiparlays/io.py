@@ -30,6 +30,8 @@ class LineRow:
     book_over: int | None
     book_under: int | None
     book_line: float | None = None
+    leg_odds: int | None = None
+    slip_odds: int | None = None
 
 
 @dataclass
@@ -95,6 +97,8 @@ def read_manual_lines(
                 book_over=_optional_int(raw.get("book_over", "")),
                 book_under=_optional_int(raw.get("book_under", "")),
                 book_line=_optional_float(raw.get("book_line", "")),
+                leg_odds=_optional_int(raw.get("leg_odds", "")),
+                slip_odds=_optional_int(raw.get("slip_odds", "")),
             )
             if not row.team or not row.opponent:
                 if invalid is not None:

@@ -5,7 +5,7 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from ceminiparlays.payouts import resolve_payout
+from ceminiparlays.payouts import SPORTSBOOK_PLATFORMS, normalize_platform, resolve_payout
 
 MORE_SIDES = {"more", "over", "higher", "o"}
 LESS_SIDES = {"less", "under", "lower", "u"}
@@ -50,13 +50,17 @@ def _leg_outcomes(raw: dict[str, str]) -> tuple[int, int, int]:
     return hits, misses, voids
 
 
-def grade_ledger(path: Path, profile_dir: Path | None = None) -> GradeSummary:
+def grade_ledger(
+    path: Path,
+    profile_dir: Path | None = None,
+    default_platform: str | None = None,
+) -> GradeSummary:
     slips = 0
     hits = 0
     stake_total = 0.0
     pnl = 0.0
     with path.open(newline="", encoding="utf-8") as handle:
-        for raw in csv.DictReader(handle):
+        for row_index, raw in enumerate(csv.DictReader(handle), start=2):
             slips += 1
             stake = float(raw.get("stake", 1.0) or 1.0)
             stake_total += stake
@@ -67,16 +71,31 @@ def grade_ledger(path: Path, profile_dir: Path | None = None) -> GradeSummary:
                 n_legs = 0
             if n_legs <= 0:
                 n_legs = len([p for p in raw.get("sides", "").split("|") if p.strip()])
-            platform = raw.get("platform") or "underdog"
+            raw_platform = (raw.get("platform") or "").strip()
+            platform = normalize_platform(
+                raw_platform or default_platform or "underdog"
+            )
             mode = raw.get("mode") or "standard"
             displayed = float(raw["multiplier"]) if raw.get("multiplier") else None
-            hit_count, _miss_count, void_count = _leg_outcomes(raw)
+            hit_count, miss_count, void_count = _leg_outcomes(raw)
             if hit_count == n_legs:
                 hits += 1
+            sportsbook = platform in SPORTSBOOK_PLATFORMS
+            row_label = raw.get("legs") or raw.get("slip_id") or f"row {row_index}"
             if void_count:
                 payout = _void_payout(
-                    platform, mode, n_legs, void_count, hit_count, profile_dir
+                    platform,
+                    mode,
+                    n_legs,
+                    void_count,
+                    hit_count,
+                    miss_count,
+                    displayed,
+                    profile_dir,
+                    row_label=str(row_label),
                 )
+            elif sportsbook and miss_count > 0:
+                payout = 0.0
             else:
                 table = resolve_payout(
                     platform,
@@ -98,13 +117,34 @@ def _void_payout(
     n_legs: int,
     void_count: int,
     hit_count: int,
+    miss_count: int,
+    displayed: float | None,
     profile_dir: Path | None,
+    row_label: str,
 ) -> float:
-    """Payout after voids: step down to the smaller row, else refund the stake."""
+    """Payout after voids: sportsbook miss is 0x; all-void is 1x; else settle."""
 
     effective_legs = n_legs - void_count
     if effective_legs < 1:
         return 1.0
+    sportsbook = normalize_platform(platform) in SPORTSBOOK_PLATFORMS
+    if sportsbook:
+        if miss_count > 0:
+            return 0.0
+        if displayed is None:
+            raise ValueError(
+                f"{row_label}: sportsbook void with remaining hits needs the "
+                "settled reduced-ticket multiplier (type the in-app price; "
+                "Cemini does not invent SGP step-downs)"
+            )
+        table = resolve_payout(
+            platform,
+            mode,
+            effective_legs,
+            displayed_multiplier=displayed,
+            profile_dir=profile_dir,
+        )
+        return table.all_hit
     try:
         table = resolve_payout(platform, mode, effective_legs, profile_dir=profile_dir)
     except (ValueError, FileNotFoundError):

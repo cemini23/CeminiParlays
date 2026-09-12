@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from ceminiparlays.grade import grade_ledger
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,3 +66,59 @@ def test_grade_push_refunds_when_no_smaller_row(tmp_path) -> None:
     )
     summary = grade_ledger(path)
     assert summary.pnl == 0.0
+
+
+def test_grade_blank_platform_uses_default_sportsbook(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        ",standard,2,more|more,10.5|20.5,9|9,10,\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path, default_platform="hardrock")
+    # sportsbook miss without a price is 0x, not a silent refund
+    assert summary.pnl == -10.0
+
+
+def test_grade_blank_platform_sportsbook_hit_requires_price(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        ",standard,2,more|more,10.5|20.5,30|40,10,\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="no fixed lounge table"):
+        grade_ledger(path, default_platform="hardrock")
+
+
+def test_grade_sportsbook_void_and_miss_is_zero(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,3,more|more|more,10.5|20.5|5.5,30|20.5|1,10,5.0\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert summary.pnl == -10.0
+
+
+def test_grade_sportsbook_void_all_hits_uses_settled_multiplier(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,3,more|more|more,10.5|20.5|5.5,30|40|5.5,10,2.6\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert abs(summary.pnl - 16.0) < 1e-9
+
+
+def test_grade_sportsbook_void_all_hits_without_multiplier_raises(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,3,more|more|more,10.5|20.5|5.5,30|40|5.5,10,\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="settled reduced-ticket multiplier"):
+        grade_ledger(path)

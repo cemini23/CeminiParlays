@@ -25,6 +25,8 @@ def _line(
     book_under: int | None = -110,
     injury: str = "",
     book_line: float | None = None,
+    slip_odds: int | None = None,
+    leg_odds: int | None = None,
 ) -> LineRow:
     return LineRow(
         slate_id="s",
@@ -43,6 +45,8 @@ def _line(
         book_over=book_over,
         book_under=book_under,
         book_line=book_line,
+        slip_odds=slip_odds,
+        leg_odds=leg_odds,
     )
 
 
@@ -280,3 +284,122 @@ def test_combo_budget_aborts_and_can_be_overridden(monkeypatch) -> None:
         rank_slips(live, "underdog", "standard", 2)
     slips = rank_slips(live, "underdog", "standard", 2, allow_large_enum=True, max_slips=3)
     assert len(slips) == 3
+
+
+def test_hardrock_ranks_same_team_sgp() -> None:
+    mahomes = _line("Patrick Mahomes", "KC", "BUF", stat="pass_yds")
+    kelce = _line("Travis Kelce", "KC", "BUF", stat="rec_yds", line=62.5)
+    mahomes.leg_odds = -115
+    kelce.leg_odds = -120
+    mahomes.platform = "hardrock"
+    kelce.platform = "hardrock"
+    live, _ = _evaluate([mahomes, kelce])
+    slips = rank_slips(live, "hardrock", "standard", 2)
+    assert len(slips) == 1
+    assert {leg.line.player_name for leg in slips[0].legs} == {
+        "Patrick Mahomes",
+        "Travis Kelce",
+    }
+    assert slips[0].multiplier_source == "leg_odds_naive"
+    assert slips[0].multiplier_unconfirmed is True
+    assert slips[0].kelly == 0.0
+    expected = (1.0 + 100 / 115) * (1.0 + 100 / 120)
+    assert abs(slips[0].multiplier - expected) < 1e-9
+
+
+def test_fanduel_ranks_same_team_sgp() -> None:
+    mahomes = _line("Patrick Mahomes", "KC", "BUF", stat="pass_yds")
+    kelce = _line("Travis Kelce", "KC", "BUF", stat="rec_yds", line=62.5)
+    mahomes.leg_odds = -115
+    kelce.leg_odds = -120
+    mahomes.platform = "fanduel"
+    kelce.platform = "fanduel"
+    live, _ = _evaluate([mahomes, kelce])
+    slips = rank_slips(live, "fanduel", "standard", 2)
+    assert len(slips) == 1
+    assert {leg.line.player_name for leg in slips[0].legs} == {
+        "Patrick Mahomes",
+        "Travis Kelce",
+    }
+    assert slips[0].platform == "fanduel"
+    assert slips[0].multiplier_source == "leg_odds_naive"
+    assert slips[0].multiplier_unconfirmed is True
+    assert slips[0].kelly == 0.0
+    expected = (1.0 + 100 / 115) * (1.0 + 100 / 120)
+    assert abs(slips[0].multiplier - expected) < 1e-9
+
+
+def test_hardrock_displayed_odds_beats_leg_product() -> None:
+    a = _line("A One", "KC", "BUF")
+    b = _line("B One", "KC", "BUF", stat="rec_yds")
+    a.leg_odds = -110
+    b.leg_odds = -110
+    live, _ = _evaluate([a, b])
+    slips = rank_slips(
+        live, "hardrock", "standard", 2, displayed_multiplier=2.4
+    )
+    assert slips[0].multiplier == 2.4
+    assert slips[0].multiplier_source == "cli"
+
+
+def test_hardrock_cli_displayed_on_three_live_legs_raises() -> None:
+    lines = [
+        _line("A One", "KC", "BUF"),
+        _line("B One", "KC", "BUF", stat="rec_yds"),
+        _line("C One", "BUF", "KC", stat="pass_yds"),
+    ]
+    live, _ = _evaluate(lines)
+    with pytest.raises(ValueError, match="one ticket"):
+        rank_slips(live, "hardrock", "standard", 2, displayed_multiplier=3.6)
+
+
+def test_hardrock_partial_slip_odds_skips_combo() -> None:
+    a = _line("A One", "KC", "BUF", slip_odds=260)
+    b = _line("B One", "KC", "BUF", stat="rec_yds")
+    live, _ = _evaluate([a, b])
+    notes: list[str] = []
+    slips = rank_slips(live, "hardrock", "standard", 2, notes=notes)
+    assert slips == []
+    assert any("needs-price" in note for note in notes)
+
+
+def test_hardrock_agreeing_slip_odds_beats_cli() -> None:
+    a = _line("A One", "KC", "BUF", slip_odds=150, leg_odds=-110)
+    b = _line("B One", "KC", "BUF", stat="rec_yds", slip_odds=150, leg_odds=-110)
+    live, _ = _evaluate([a, b])
+    notes: list[str] = []
+    slips = rank_slips(
+        live,
+        "hardrock",
+        "standard",
+        2,
+        displayed_multiplier=3.6,
+        notes=notes,
+    )
+    assert len(slips) == 1
+    assert slips[0].multiplier == 2.5
+    assert slips[0].multiplier_source == "slip_odds"
+    assert slips[0].multiplier_unconfirmed is False
+    assert any("overrides CLI" in note for note in notes)
+
+
+def test_hardrock_conflicting_slip_odds_skips_combo() -> None:
+    a = _line("A One", "KC", "BUF", slip_odds=260)
+    b = _line("B One", "KC", "BUF", stat="rec_yds", slip_odds=150)
+    live, _ = _evaluate([a, b])
+    notes: list[str] = []
+    slips = rank_slips(live, "hardrock", "standard", 2, notes=notes)
+    assert slips == []
+    assert any("conflicting row slip_odds" in note for note in notes)
+
+
+def test_hardrock_cross_game_leg_odds_is_unconfirmed_kelly_zero() -> None:
+    a = _line("A One", "KC", "BUF", leg_odds=-110)
+    b = _line("B One", "SF", "LAR", stat="pass_yds", leg_odds=-110)
+    live, _ = _evaluate([a, b])
+    slips = rank_slips(live, "hardrock", "standard", 2)
+    assert len(slips) == 1
+    assert slips[0].multiplier_source == "leg_odds_naive"
+    assert slips[0].multiplier_unconfirmed is True
+    assert slips[0].kelly == 0.0
+    assert any("Kelly suppressed" in note for note in slips[0].notes)

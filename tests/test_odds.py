@@ -2,6 +2,7 @@ import pytest
 
 from ceminiparlays.odds import (
     american_to_decimal,
+    decimal_to_american,
     devig_spread,
     devig_two_way,
     market_width_cents,
@@ -11,6 +12,16 @@ from ceminiparlays.odds import (
 def test_american_to_decimal() -> None:
     assert american_to_decimal(-110) == 1.0 + 100 / 110
     assert american_to_decimal(120) == 2.2
+    assert american_to_decimal(-100) == 2.0
+    assert american_to_decimal(100) == 2.0
+    assert decimal_to_american(2.6) == 160
+    assert decimal_to_american(american_to_decimal(-110)) == -110
+
+
+@pytest.mark.parametrize("odds", [-10, 50, 99, -99])
+def test_american_to_decimal_rejects_inside_juice_band(odds: int) -> None:
+    with pytest.raises(ValueError, match=r"<= -100 or >= \+100"):
+        american_to_decimal(odds)
 
 
 def test_power_devig_asymmetric_prop() -> None:

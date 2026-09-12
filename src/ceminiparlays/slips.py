@@ -12,8 +12,15 @@ from ceminiparlays.correlation import LegRef, correlation_matrix, load_priors
 from ceminiparlays.fair import FairResult, p_over_line, side_probability
 from ceminiparlays.io import DistRow, LineRow, is_flagged, is_scratched
 from ceminiparlays.kelly import slip_kelly
-from ceminiparlays.odds import DevigMethod, devig_two_way
-from ceminiparlays.payouts import flex_ev, power_ev, resolve_payout
+from ceminiparlays.odds import DevigMethod, american_to_decimal, devig_two_way
+from ceminiparlays.payouts import (
+    SPORTSBOOK_PLATFORMS,
+    display_name,
+    flex_ev,
+    normalize_platform,
+    power_ev,
+    resolve_payout,
+)
 
 MORE_SIDES = {"more", "over", "higher", "o"}
 LESS_SIDES = {"less", "under", "lower", "u"}
@@ -26,6 +33,7 @@ EXCLUDED_WARNS = {
     "integer-line",
     "no-team",
     "book-line-mismatch",
+    "bad-odds",
 }
 #: Scratch is expected (a listed player is out); every other exclusion is a
 #: data problem and aborts the default strict rank.
@@ -113,56 +121,83 @@ def fair_for_line(
     return side_probability(fair, line.side), "distribution", fair
 
 
+def _american_ok(odds: int | None) -> bool:
+    if odds is None:
+        return True
+    try:
+        american_to_decimal(odds)
+        return True
+    except ValueError:
+        return False
+
+
 def evaluate_legs(
     lines: list[LineRow],
     distributions: dict[tuple[str, str], DistRow],
     implied_p: float,
     method: DevigMethod = "power",
     allow_integer_lines: bool = False,
+    platform: str = "",
 ) -> tuple[list[EvaluatedLeg], list[EvaluatedLeg]]:
     """Split lines into rankable legs and named exclusions.
 
     Every path that skips a line appends to ``excluded`` with a warn token, so
-    the operator can reconcile CSV in vs card out (I-03 / I-26).
+    the operator can reconcile CSV in vs card out (I-03 / I-26). Sportsbook
+    integer lines stay excluded even when ``allow_integer_lines`` is set
+    (push / reduced-ticket payout is not modeled).
     """
 
+    sportsbook = (
+        normalize_platform(platform) in SPORTSBOOK_PLATFORMS if platform else False
+    )
+    allow_integers = bool(allow_integer_lines) and not sportsbook
+    stored_implied = implied_p if implied_p > 0.0 else 0.0
     live: list[EvaluatedLeg] = []
     excluded: list[EvaluatedLeg] = []
     for line in lines:
         dist = distributions.get((line.player_key, line.stat_type))
         if is_scratched(line.injury_status):
-            excluded.append(_excluded_leg(line, implied_p, "scratch"))
+            excluded.append(_excluded_leg(line, stored_implied, "scratch"))
             continue
         if not line.team or not line.opponent:
-            excluded.append(_excluded_leg(line, implied_p, "no-team"))
+            excluded.append(_excluded_leg(line, stored_implied, "no-team"))
             continue
         if line.book_line is not None and abs(line.book_line - line.line) > 1e-9:
-            excluded.append(_excluded_leg(line, implied_p, "book-line-mismatch"))
+            excluded.append(_excluded_leg(line, stored_implied, "book-line-mismatch"))
             continue
         if (line.book_over is None) != (line.book_under is None):
-            excluded.append(_excluded_leg(line, implied_p, "one-sided-book"))
+            excluded.append(_excluded_leg(line, stored_implied, "one-sided-book"))
             continue
         if line.book_over is None and dist is None:
-            excluded.append(_excluded_leg(line, implied_p, "dropped"))
+            excluded.append(_excluded_leg(line, stored_implied, "dropped"))
             continue
-        if not allow_integer_lines and float(line.line).is_integer():
-            excluded.append(_excluded_leg(line, implied_p, "integer-line"))
+        if not allow_integers and float(line.line).is_integer():
+            excluded.append(_excluded_leg(line, stored_implied, "integer-line"))
+            continue
+        if not (
+            _american_ok(line.book_over)
+            and _american_ok(line.book_under)
+            and _american_ok(line.leg_odds)
+            and _american_ok(line.slip_odds)
+        ):
+            excluded.append(_excluded_leg(line, stored_implied, "bad-odds"))
             continue
         try:
             fair_p, source, fair = fair_for_line(line, dist, method=method)
         except (KeyError, ValueError):
-            excluded.append(_excluded_leg(line, implied_p, "dropped"))
+            excluded.append(_excluded_leg(line, stored_implied, "dropped"))
             continue
         warn = "questionable" if is_flagged(line.injury_status) else ""
         family = fair.family if fair else "book"
         if fair is not None and fair.note:
             family = f"{family} ({fair.note})"
+        edge = (fair_p - implied_p) if implied_p > 0.0 else 0.0
         live.append(
             EvaluatedLeg(
                 line=line,
                 fair_p=fair_p,
-                implied_p=implied_p,
-                edge=fair_p - implied_p,
+                implied_p=stored_implied,
+                edge=edge,
                 source=source,
                 family=family,
                 median=fair.median if fair else 0.0,
@@ -184,6 +219,52 @@ def _combo_names(legs: list[EvaluatedLeg] | tuple[EvaluatedLeg, ...]) -> str:
     return " + ".join(leg.line.player_name for leg in legs)
 
 
+def _same_game(refs: list[LegRef]) -> bool:
+    teams = {ref.team for ref in refs if ref.team}
+    if len(teams) <= 1:
+        return True
+    for index, left in enumerate(refs):
+        for right in refs[index + 1 :]:
+            if left.opponent == right.team or right.opponent == left.team:
+                return True
+    return False
+
+
+def _agreeing_quotes(values: list[int | None]) -> tuple[str, int | None]:
+    """Classify a combo's American quotes: agree / conflict / partial / none."""
+
+    if all(value is not None for value in values):
+        distinct = sorted(set(values))
+        if len(distinct) == 1:
+            return "agree", distinct[0]
+        return "conflict", None
+    if any(value is not None for value in values):
+        return "partial", None
+    return "none", None
+
+
+def _sportsbook_combo_multiplier(
+    combo: tuple[EvaluatedLeg, ...] | list[EvaluatedLeg],
+) -> tuple[float, str] | None:
+    """Resolve a sportsbook decimal M from typed American prices.
+
+    ``slip_odds`` prices the combo only when every leg carries the same quote.
+    Partial or conflicting quotes return None (caller skips).
+    """
+
+    state, value = _agreeing_quotes([leg.line.slip_odds for leg in combo])
+    if state == "agree" and value is not None:
+        return american_to_decimal(int(value)), "slip_odds"
+    if state in {"conflict", "partial"}:
+        return None
+    if all(leg.line.leg_odds is not None for leg in combo):
+        product = 1.0
+        for leg in combo:
+            product *= american_to_decimal(int(leg.line.leg_odds))
+        return product, "leg_odds"
+    return None
+
+
 def rank_slips(
     legs: list[EvaluatedLeg],
     platform: str,
@@ -201,15 +282,29 @@ def rank_slips(
 ) -> list[EvaluatedSlip]:
     """Enumerate slip_size combinations and rank by a lower-bound EV.
 
-    Multiplier precedence per combo: agreeing row ``slip_multiplier`` values win
-    over the CLI flag; the CLI flag wins over the JSON table; a table-only price
-    is marked unconfirmed (I-01 / I-07 / I-14 / I-19).
+    Multiplier precedence per combo: agreeing row ``slip_multiplier`` → agreeing
+    all-leg ``slip_odds`` → CLI displayed (sportsbook: only when live ==
+    slip_size) → ``leg_odds`` product (unconfirmed, Kelly 0). A table-only
+    pick'em price is marked unconfirmed (I-01 / I-07 / I-14 / I-19).
     """
 
     if notes is None:
         notes = []
+    platform = normalize_platform(platform)
+    sportsbook = platform in SPORTSBOOK_PLATFORMS
     is_flex = mode.lower() in {"flex"}
     live = [leg for leg in legs if leg.warn not in EXCLUDED_WARNS]
+    if (
+        sportsbook
+        and displayed_multiplier is not None
+        and len(live) != slip_size
+    ):
+        raise ValueError(
+            "displayed odds / multiplier prices one ticket. "
+            f"This slate has {len(live)} live legs; slip-size is {slip_size}. "
+            "Filter the CSV to those legs (see examples/hardrock_ticket.csv) "
+            "or type the same slip_odds on every combo leg."
+        )
     if len(live) < slip_size or slip_size < 1:
         return []
     total_combos = comb(len(live), slip_size)
@@ -234,10 +329,14 @@ def rank_slips(
         if any(not ref.team for ref in refs):
             notes.append(f"skip no-team: {_combo_names(combo)}")
             continue
-        if len({ref.team for ref in refs}) < 2:
+        if not sportsbook and len({ref.team for ref in refs}) < 2:
             notes.append(f"skip same-team (two-team rule): {_combo_names(combo)}")
             continue
-        if len({ref.player_key for ref in refs}) < slip_size:
+        props = [(ref.player_key, ref.stat_type) for ref in refs]
+        if len(set(props)) < slip_size:
+            notes.append(f"skip duplicate player+stat: {_combo_names(combo)}")
+            continue
+        if not sportsbook and len({ref.player_key for ref in refs}) < slip_size:
             notes.append(
                 f"skip same-player multi-stat not supported: {_combo_names(combo)}"
             )
@@ -266,6 +365,48 @@ def rank_slips(
                     f"row M {multiplier} overrides CLI M {displayed_multiplier}: "
                     f"{_combo_names(combo)}"
                 )
+        elif sportsbook:
+            slip_state, slip_value = _agreeing_quotes(
+                [leg.line.slip_odds for leg in combo]
+            )
+            if slip_state == "conflict":
+                notes.append(
+                    f"skip conflicting row slip_odds: {_combo_names(combo)}"
+                )
+                continue
+            if slip_state == "partial":
+                notes.append(f"skip {platform}-needs-price: {_combo_names(combo)}")
+                continue
+            if slip_state == "agree" and slip_value is not None:
+                try:
+                    multiplier = american_to_decimal(int(slip_value))
+                except ValueError:
+                    notes.append(f"skip bad-odds: {_combo_names(combo)}")
+                    continue
+                multiplier_source = "slip_odds"
+                if (
+                    displayed_multiplier is not None
+                    and abs(multiplier - displayed_multiplier) > 1e-9
+                ):
+                    notes.append(
+                        f"row slip_odds M {multiplier} overrides CLI M "
+                        f"{displayed_multiplier}: {_combo_names(combo)}"
+                    )
+            elif displayed_multiplier is not None:
+                multiplier = displayed_multiplier
+                multiplier_source = "cli"
+            else:
+                try:
+                    priced = _sportsbook_combo_multiplier(combo)
+                except ValueError:
+                    notes.append(f"skip bad-odds: {_combo_names(combo)}")
+                    continue
+                if priced is None:
+                    notes.append(
+                        f"skip {platform}-needs-price: {_combo_names(combo)}"
+                    )
+                    continue
+                multiplier, multiplier_source = priced
         elif displayed_multiplier is not None:
             multiplier = displayed_multiplier
             multiplier_source = "cli"
@@ -276,6 +417,9 @@ def rank_slips(
             leg.line.line_type not in STANDARD_LINE_TYPES for leg in combo
         ):
             notes.append(f"skip alt-needs-m: {_combo_names(combo)}")
+            continue
+        if sportsbook and multiplier is not None and multiplier <= 1:
+            notes.append(f"skip bad-odds: {_combo_names(combo)}")
             continue
 
         table = resolve_payout(
@@ -328,6 +472,19 @@ def rank_slips(
             slip_notes.append(f"corr_repaired=yes max_delta={max_corr_delta:.4f}")
         if unconfirmed:
             slip_notes.append("multiplier_unconfirmed=yes (table)")
+        if sportsbook and multiplier_source == "leg_odds":
+            unconfirmed = True
+            multiplier_source = "leg_odds_naive"
+            kelly = 0.0
+            if _same_game(refs):
+                slip_notes.append(
+                    f"naive product of leg_odds — {display_name(platform)} SGP "
+                    "usually pays less; rebuild in-app and pass --displayed-odds"
+                )
+            else:
+                slip_notes.append(
+                    "naive product of leg_odds — confirm in-app; Kelly suppressed"
+                )
         if shade_pp:
             slip_notes.append(f"shade_pp={shade_pp:g}")
 
@@ -353,7 +510,7 @@ def rank_slips(
                 notes=slip_notes,
             )
         )
-    ranked.sort(key=lambda item: (item.ev_lo, item.ev), reverse=True)
+    ranked.sort(key=lambda item: (item.multiplier_unconfirmed, -item.ev_lo, -item.ev))
     return ranked[:max_slips]
 
 

@@ -2,13 +2,16 @@
 
 v1 follows Fable verdict **C′**: K147 CLI surface + offline Gemini math. No live polling.
 
+**v0.1.3 product:** sportsbook parlays are the v1 product (Hard Rock primary; FanDuel / DraftKings same math). Pick'em (Underdog / PrizePicks) is the lounge addon.
+
 ## Internal
 
 | Source | Keep |
 |--------|------|
-| Gambling wiki K147 architecture + pipeline spec | `fair` / `rank` / `grade`; `edges.csv`; Underdog first |
+| Gambling wiki K147 architecture + pipeline spec | `fair` / `rank` / `grade`; `edges.csv`; sportsbook first, pick'em addon |
 | `briefs/2026-09-12_ceminidfs-lessons-pickem-parlay-cli.md` | Stages, CSV contract, operator submits, copula not product, injury as a human gate |
-| Wiki payout pages | UD 2-leg Standard **3.5×**; PP Power **3×** |
+| Wiki payout pages | UD 2-leg Standard **3.5×**; PP Power **3×**; Hard Rock = displayed American, not a lounge table |
+| Hard Rock entity + parlay concept | SGP Max / Flex Parlay; operator types ticket; compare vs DK/FD; no auto-bet |
 | Wiki legal page | Local CLI **GO**. Scrapers and auto-submit **NO-GO** |
 | Underdog entity page | Lounge **does** shift multipliers on correlated legs — prefer displayed M |
 | OSINT Kalshi parlay pages | Different product (PM RFQ). Do not mix into this CLI |
@@ -67,7 +70,7 @@ Verdict was **REWORK**; the P0 patch set landed as v0.1.1. Issue catalog from
 | I-19 | fixed | `displayed_multiplier is not None`; `<= 0` rejected |
 | I-20 | fixed | scratch/`questionable` warnings render on the card |
 | I-21 | fixed | power de-vig retries `[0.05, 32]`, then says it could not bracket k |
-| I-22 | open | same-team 2-legs still excluded by the two-team rule |
+| I-22 | sportsbook | same-team / SGP 2-legs rank on Hard Rock / FanDuel / DraftKings; pick'em still uses the two-team rule |
 | I-23 | fixed | `corr_repaired=yes` plus the repaired matrix row is printed |
 | I-24 | fixed | optional `book_line` column; a mismatch drops the leg |
 | I-25 | fixed | card prints EV and `EV_lo`; rank sorts by lower bound then EV |

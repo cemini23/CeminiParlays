@@ -15,8 +15,14 @@ DISPLAY_NAMES = {
     "hardrock": "Hard Rock",
     "fanduel": "FanDuel",
     "draftkings": "DraftKings",
+    "betmgm": "BetMGM",
+    "polymarket": "Polymarket",
+    "kalshi": "Kalshi",
 }
-SPORTSBOOK_PLATFORMS = {"hardrock", "fanduel", "draftkings"}
+SPORTSBOOK_PLATFORMS = {"hardrock", "fanduel", "draftkings", "betmgm"}
+#: Prediction venues. Each leg is a 0-1 contract; a combo is the product of
+#: independently settled binaries (DKeX COMBOS), paper only.
+PREDICTION_PLATFORMS = {"polymarket", "kalshi"}
 PLATFORM_ALIASES = {
     "hard_rock": "hardrock",
     "hardrockbet": "hardrock",
@@ -26,6 +32,12 @@ PLATFORM_ALIASES = {
     "fan_duel": "fanduel",
     "dk": "draftkings",
     "draft_kings": "draftkings",
+    "mgm": "betmgm",
+    "bet_mgm": "betmgm",
+    "bet-mgm": "betmgm",
+    "poly": "polymarket",
+    "polymarket": "polymarket",
+    "kalshi": "kalshi",
 }
 
 
@@ -111,6 +123,28 @@ def resolve_payout(
     """Return the payout table. Prefer the in-app displayed all-hit multiplier."""
 
     platform = normalize_platform(platform)
+    if platform in PREDICTION_PLATFORMS:
+        display = display_name(platform)
+        if mode.lower() in FLEX_ALIASES:
+            raise ValueError(
+                f"{display} COMBOS are independent binaries; flex is not modeled. "
+                "Use --mode standard."
+            )
+        if displayed_multiplier is None:
+            raise ValueError(
+                f"{display} has no fixed table. Pass --displayed-odds (American), "
+                "--displayed-multiplier (decimal), or type contract_price on every "
+                "combo leg."
+            )
+        if displayed_multiplier <= 1:
+            raise ValueError("displayed multiplier must be greater than 1")
+        return PayoutTable(
+            platform=platform,
+            mode="standard",
+            legs=legs,
+            all_hit=float(displayed_multiplier),
+            note=f"{platform}: COMBOS pay the product of independent binaries",
+        )
     if platform in SPORTSBOOK_PLATFORMS:
         display = display_name(platform)
         if mode.lower() in FLEX_ALIASES:

@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import csv
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from ceminiparlays.payouts import SPORTSBOOK_PLATFORMS, normalize_platform, resolve_payout
 
 MORE_SIDES = {"more", "over", "higher", "o"}
 LESS_SIDES = {"less", "under", "lower", "u"}
+#: Optional ledger columns. Unknown extra columns are ignored, never fatal.
+OPTIONAL_LEDGER_COLUMNS = ("ticket_id", "market", "stake_kind")
 
 
 @dataclass
@@ -19,6 +21,10 @@ class GradeSummary:
     stake: float
     pnl: float
     roi: float
+    bonus_stake: float = 0.0
+    ticket_ids: list[str] = field(default_factory=list)
+    markets: list[str] = field(default_factory=list)
+    stake_kinds: list[str] = field(default_factory=list)
 
 
 def _leg_outcomes(raw: dict[str, str]) -> tuple[int, int, int]:
@@ -59,11 +65,27 @@ def grade_ledger(
     hits = 0
     stake_total = 0.0
     pnl = 0.0
+    bonus_stake = 0.0
+    ticket_ids: list[str] = []
+    markets: list[str] = []
+    stake_kinds: list[str] = []
     with path.open(newline="", encoding="utf-8") as handle:
         for row_index, raw in enumerate(csv.DictReader(handle), start=2):
             slips += 1
             stake = float(raw.get("stake", 1.0) or 1.0)
             stake_total += stake
+            stake_kind = (raw.get("stake_kind") or "").strip().lower()
+            if stake_kind:
+                if stake_kind not in stake_kinds:
+                    stake_kinds.append(stake_kind)
+                if stake_kind == "bonus":
+                    bonus_stake += stake
+            ticket_id = (raw.get("ticket_id") or "").strip()
+            if ticket_id and ticket_id not in ticket_ids:
+                ticket_ids.append(ticket_id)
+            market = (raw.get("market") or "").strip()
+            if market and market not in markets:
+                markets.append(market)
             raw_legs = raw.get("n_legs") or raw.get("legs") or ""
             try:
                 n_legs = int(raw_legs)
@@ -108,7 +130,18 @@ def grade_ledger(
             pnl += stake * (payout - 1.0)
     hit_rate = hits / slips if slips else 0.0
     roi = pnl / stake_total if stake_total else 0.0
-    return GradeSummary(slips, hits, hit_rate, stake_total, pnl, roi)
+    return GradeSummary(
+        n_slips=slips,
+        hits=hits,
+        hit_rate=hit_rate,
+        stake=stake_total,
+        pnl=pnl,
+        roi=roi,
+        bonus_stake=bonus_stake,
+        ticket_ids=ticket_ids,
+        markets=markets,
+        stake_kinds=stake_kinds,
+    )
 
 
 def _void_payout(

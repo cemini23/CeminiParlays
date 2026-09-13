@@ -6,7 +6,12 @@ import pytest
 from ceminiparlays import slips as slips_module
 from ceminiparlays.io import LineRow, read_distributions, read_manual_lines
 from ceminiparlays.payouts import breakeven_per_leg, resolve_payout
-from ceminiparlays.slips import evaluate_legs, rank_slips, slip_as_row
+from ceminiparlays.slips import (
+    evaluate_legs,
+    filter_slips_by_odds,
+    rank_slips,
+    slip_as_row,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -403,3 +408,132 @@ def test_hardrock_cross_game_leg_odds_is_unconfirmed_kelly_zero() -> None:
     assert slips[0].multiplier_unconfirmed is True
     assert slips[0].kelly == 0.0
     assert any("Kelly suppressed" in note for note in slips[0].notes)
+
+
+def test_odds_filter_keeps_window() -> None:
+    a = _line("A One", "KC", "BUF", slip_odds=260)
+    b = _line("B One", "KC", "BUF", stat="rec_yds", slip_odds=260)
+    live, _ = _evaluate([a, b])
+    slips = rank_slips(live, "hardrock", "standard", 2)
+    assert len(slips) == 1
+    assert filter_slips_by_odds(slips, min_odds=200, max_odds=400) == slips
+    assert filter_slips_by_odds(slips, min_odds=400) == []
+    assert filter_slips_by_odds(slips, max_odds=200) == []
+
+
+def test_first_td_same_game_is_skipped() -> None:
+    a = _line("A TD", "DET", "NO", stat="first_td", line=0.5, book_over=None, book_under=None, leg_odds=500)
+    b = _line("B TD", "NO", "DET", stat="first_td", line=0.5, book_over=None, book_under=None, leg_odds=550)
+    c = _line("C TD", "ATL", "PIT", stat="first_td", line=0.5, book_over=None, book_under=None, leg_odds=450)
+    for leg in (a, b, c):
+        leg.fair_p = 0.15
+    live, excluded = _evaluate([a, b, c])
+    assert excluded == []
+    assert len(live) == 3
+    assert all(leg.source == "fair_p" for leg in live)
+    notes: list[str] = []
+    slips = rank_slips(live, "hardrock", "standard", 2, notes=notes)
+    assert any("same-game-first-td" in note for note in notes)
+    pairs = {frozenset(leg.line.player_name for leg in slip.legs) for slip in slips}
+    assert frozenset({"A TD", "B TD"}) not in pairs
+    assert pairs == {frozenset({"A TD", "C TD"}), frozenset({"B TD", "C TD"})}
+
+
+def test_td_leg_odds_implied_is_the_fair_source() -> None:
+    leg = _line("TD Guy", "DET", "NO", stat="anytime_td", line=0.5, book_over=None, book_under=None, leg_odds=400)
+    live, excluded = _evaluate([leg])
+    assert excluded == []
+    assert live[0].source == "leg_odds_implied"
+    assert abs(live[0].fair_p - 0.2) < 1e-9
+
+
+def test_td_without_fair_p_or_dist_is_dropped() -> None:
+    leg = _line("TD Guy", "DET", "NO", stat="first_td", line=0.5, book_over=None, book_under=None)
+    live, excluded = _evaluate([leg])
+    assert live == []
+    assert excluded[0].warn == "dropped"
+
+
+def test_ticket_id_groups_combos_and_prices() -> None:
+    a = _line("A One", "CIN", "TB", slip_odds=260)
+    b = _line("B One", "DET", "NO", slip_odds=260)
+    c = _line("C One", "BUF", "HOU", slip_odds=150)
+    d = _line("D One", "PHI", "WAS", slip_odds=150)
+    for leg, ticket in ((a, "t1"), (b, "t1"), (c, "t2"), (d, "t2")):
+        leg.ticket_id = ticket
+    live, _ = _evaluate([a, b, c, d])
+    notes: list[str] = []
+    slips = rank_slips(live, "hardrock", "standard", 2, notes=notes)
+    assert len(slips) == 2
+    assert sorted(slip.multiplier for slip in slips) == [2.5, 3.6]
+    assert all(len({leg.line.ticket_id for leg in slip.legs}) == 1 for slip in slips)
+    assert any("mixed-ticket-id" in note for note in notes)
+
+
+def test_cli_displayed_odds_needs_size_match_even_with_one_ticket_id() -> None:
+    a = _line("A One", "CIN", "TB")
+    b = _line("B One", "DET", "NO")
+    c = _line("C One", "BUF", "HOU")
+    for leg in (a, b, c):
+        leg.ticket_id = "t1"
+    live, _ = _evaluate([a, b, c])
+    with pytest.raises(ValueError, match="does not relax"):
+        rank_slips(live, "hardrock", "standard", 2, displayed_multiplier=3.6)
+    slips = rank_slips(live, "hardrock", "standard", 3, displayed_multiplier=3.6)
+    assert len(slips) == 1
+    assert slips[0].multiplier == 3.6
+    assert slips[0].multiplier_source == "cli"
+
+
+def test_prediction_contract_product_is_unconfirmed_kelly_zero() -> None:
+    a = _line("A One", "CIN", "TB", book_over=None, book_under=None)
+    b = _line("B One", "DET", "NO", book_over=None, book_under=None)
+    a.contract_price = 0.42
+    b.contract_price = 0.55
+    live, excluded = _evaluate([a, b])
+    assert excluded == []
+    assert all(leg.source == "contract_price" for leg in live)
+    slips = rank_slips(live, "polymarket", "standard", 2)
+    assert len(slips) == 1
+    slip = slips[0]
+    assert abs(slip.multiplier - 1.0 / (0.42 * 0.55)) < 1e-9
+    assert slip.multiplier_source == "contract_product"
+    assert slip.multiplier_unconfirmed is True
+    assert slip.kelly == 0.0
+    assert any("contract_product" in note for note in slip.notes)
+
+
+def test_prediction_displayed_odds_is_confirmed() -> None:
+    a = _line("A One", "CIN", "TB", book_over=None, book_under=None)
+    b = _line("B One", "DET", "NO", book_over=None, book_under=None)
+    a.contract_price = 0.42
+    b.contract_price = 0.55
+    live, _ = _evaluate([a, b])
+    slips = rank_slips(live, "kalshi", "standard", 2, displayed_multiplier=4.0)
+    assert len(slips) == 1
+    assert slips[0].multiplier == 4.0
+    assert slips[0].multiplier_source == "cli"
+    assert slips[0].multiplier_unconfirmed is False
+
+
+def test_prediction_without_contract_price_needs_price() -> None:
+    a = _line("A One", "CIN", "TB", book_over=None, book_under=None)
+    b = _line("B One", "DET", "NO", book_over=None, book_under=None)
+    a.fair_p = 0.4
+    b.fair_p = 0.5
+    live, _ = _evaluate([a, b])
+    notes: list[str] = []
+    slips = rank_slips(live, "polymarket", "standard", 2, notes=notes)
+    assert slips == []
+    assert any("needs-price" in note for note in notes)
+
+
+def test_prediction_contract_with_blank_line_ranks() -> None:
+    a = _line("A One", "CIN", "TB", book_over=None, book_under=None, line=float("nan"))
+    b = _line("B One", "DET", "NO", book_over=None, book_under=None, line=float("nan"))
+    a.contract_price = 0.42
+    b.contract_price = 0.55
+    live, excluded = _evaluate([a, b])
+    assert excluded == []
+    assert len(live) == 2
+    assert live[0].line.line == 0.5

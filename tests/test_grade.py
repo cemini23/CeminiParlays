@@ -122,3 +122,19 @@ def test_grade_sportsbook_void_all_hits_without_multiplier_raises(tmp_path) -> N
     )
     with pytest.raises(ValueError, match="settled reduced-ticket multiplier"):
         grade_ledger(path)
+
+
+def test_grade_accepts_optional_ticket_market_stake_kind(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "ticket_id,market,stake_kind,platform,mode,legs,sides,lines,actuals,stake,multiplier,note\n"
+        "t1,pass_yds,cash,underdog,standard,2,more|more,10.5|20.5,30|40,10,3.5,hello\n"
+        "t2,anytime_td,bonus,underdog,standard,2,more|more,0.5|0.5,1|0,5,3.5,world\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert summary.n_slips == 2
+    assert summary.bonus_stake == 5.0
+    assert summary.ticket_ids == ["t1", "t2"]
+    assert summary.markets == ["pass_yds", "anytime_td"]
+    assert summary.stake_kinds == ["cash", "bonus"]

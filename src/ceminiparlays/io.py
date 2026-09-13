@@ -32,6 +32,26 @@ class LineRow:
     book_line: float | None = None
     leg_odds: int | None = None
     slip_odds: int | None = None
+    ticket_id: str = ""
+    fair_p: float | None = None
+    contract_price: float | None = None
+
+
+@dataclass
+class GameRow:
+    slate_id: str
+    kick: str
+    away: str
+    home: str
+    away_itt: float | None
+    home_itt: float | None
+    spread_home: float | None
+    total: float | None
+    roof: str
+
+    @property
+    def game_id(self) -> str:
+        return f"{self.away}@{self.home}"
 
 
 @dataclass
@@ -58,6 +78,22 @@ def _optional_float(value: str) -> float | None:
     return float(text)
 
 
+def _line_value(value: str | None) -> float:
+    """Read a prop line. Blank / non-numeric values become ``nan``.
+
+    ``evaluate_legs`` turns ``nan`` into a named ``no-line`` drop, so a fill-in
+    slate fails closed instead of aborting the whole CSV read.
+    """
+
+    text = (value or "").strip()
+    if not text:
+        return float("nan")
+    try:
+        return float(text)
+    except ValueError:
+        return float("nan")
+
+
 def read_manual_lines(
     path: Path,
     overrides: dict[str, str] | None = None,
@@ -74,7 +110,7 @@ def read_manual_lines(
     rows: list[LineRow] = []
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
-        required = {"player_name", "stat_type", "line", "side"}
+        required = {"player_name", "stat_type", "side"}
         missing = required - set(reader.fieldnames or [])
         if missing:
             raise ValueError(f"{path} missing columns: {sorted(missing)}")
@@ -88,7 +124,7 @@ def read_manual_lines(
                 team=raw.get("team", "").upper(),
                 opponent=raw.get("opp", raw.get("opponent", "")).upper(),
                 stat_type=raw["stat_type"].strip(),
-                line=float(raw["line"]),
+                line=_line_value(raw.get("line")),
                 side=raw["side"].strip().lower(),
                 line_type=raw.get("line_type", "standard") or "standard",
                 captured_at=raw.get("captured_at", ""),
@@ -99,6 +135,9 @@ def read_manual_lines(
                 book_line=_optional_float(raw.get("book_line", "")),
                 leg_odds=_optional_int(raw.get("leg_odds", "")),
                 slip_odds=_optional_int(raw.get("slip_odds", "")),
+                ticket_id=(raw.get("ticket_id") or "").strip(),
+                fair_p=_optional_float(raw.get("fair_p", "")),
+                contract_price=_optional_float(raw.get("contract_price", "")),
             )
             if not row.team or not row.opponent:
                 if invalid is not None:
@@ -110,6 +149,34 @@ def read_manual_lines(
                     )
             rows.append(row)
     return rows
+
+
+def read_games(path: Path) -> list[GameRow]:
+    """Read a slate games file (the ``slate`` input)."""
+
+    games: list[GameRow] = []
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        required = {"away", "home"}
+        missing = required - set(reader.fieldnames or [])
+        if missing:
+            raise ValueError(f"{path} missing columns: {sorted(missing)}")
+        for raw in reader:
+            games.append(
+                GameRow(
+                    slate_id=(raw.get("slate_id") or "").strip(),
+                    kick=(raw.get("kick") or "").strip(),
+                    away=(raw.get("away") or "").strip().upper(),
+                    home=(raw.get("home") or "").strip().upper(),
+                    away_itt=_optional_float(raw.get("away_itt", "")),
+                    home_itt=_optional_float(raw.get("home_itt", "")),
+                    spread_home=_optional_float(raw.get("spread_home", "")),
+                    total=_optional_float(raw.get("total", "")),
+                    roof=(raw.get("roof") or "").strip().lower(),
+                )
+            )
+    return games
+
 
 
 def read_distributions(

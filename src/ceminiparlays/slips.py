@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from itertools import combinations
-from math import comb
+from math import comb, isnan
 from pathlib import Path
 
 import numpy as np
@@ -12,8 +12,16 @@ from ceminiparlays.correlation import LegRef, correlation_matrix, load_priors
 from ceminiparlays.fair import FairResult, p_over_line, side_probability
 from ceminiparlays.io import DistRow, LineRow, is_flagged, is_scratched
 from ceminiparlays.kelly import slip_kelly
-from ceminiparlays.odds import DevigMethod, american_to_decimal, devig_two_way
+from ceminiparlays.markets import is_first_td, is_td_market
+from ceminiparlays.odds import (
+    DevigMethod,
+    american_to_decimal,
+    american_to_implied,
+    decimal_to_american,
+    devig_two_way,
+)
 from ceminiparlays.payouts import (
+    PREDICTION_PLATFORMS,
     SPORTSBOOK_PLATFORMS,
     display_name,
     flex_ev,
@@ -21,6 +29,7 @@ from ceminiparlays.payouts import (
     power_ev,
     resolve_payout,
 )
+from ceminiparlays.roster import Roster, roster_mismatch
 
 MORE_SIDES = {"more", "over", "higher", "o"}
 LESS_SIDES = {"less", "under", "lower", "u"}
@@ -32,13 +41,18 @@ EXCLUDED_WARNS = {
     "one-sided-book",
     "integer-line",
     "no-team",
+    "no-line",
     "book-line-mismatch",
     "bad-odds",
+    "wrong-team",
 }
 #: Scratch is expected (a listed player is out); every other exclusion is a
 #: data problem and aborts the default strict rank.
 NON_FATAL_EXCLUDES = {"scratch"}
 COMBO_BUDGET = 20_000
+#: TD props and prediction contracts have no yard line. A blank line is legal
+#: for those and shown as this dummy.
+NO_LINE_DUMMY = 0.5
 
 
 @dataclass
@@ -95,8 +109,18 @@ def fair_for_line(
     dist: DistRow | None,
     method: DevigMethod = "power",
 ) -> tuple[float, str, FairResult | None]:
-    """Prefer operator-entered book odds; fall back to a projected distribution."""
+    """Prefer operator-typed probabilities; fall back to a projected distribution.
 
+    Precedence: typed ``fair_p`` → de-vigged two-way book → TD ``leg_odds``
+    implied → projected distribution → prediction ``contract_price`` mid. A TD
+    market never falls through to a fake Gaussian: with no distribution it is
+    dropped, not invented.
+    """
+
+    if line.fair_p is not None:
+        if not 0.0 < line.fair_p < 1.0:
+            raise ValueError(f"fair_p must be between 0 and 1, got {line.fair_p}")
+        return line.fair_p, "fair_p", None
     if line.book_over is not None and line.book_under is not None:
         result = devig_two_way(line.book_over, line.book_under, method=method)
         if line.side in MORE_SIDES:
@@ -106,19 +130,35 @@ def fair_for_line(
         else:
             raise ValueError(f"unknown side: {line.side}")
         return p, "book_devig", None
-    if dist is None:
-        raise KeyError(
-            f"no distribution for {line.player_key}/{line.stat_type} and no book odds"
+    if is_td_market(line.stat_type) and line.leg_odds is not None:
+        implied = american_to_implied(int(line.leg_odds))
+        if line.side in LESS_SIDES:
+            implied = 1.0 - implied
+        elif line.side not in MORE_SIDES:
+            raise ValueError(f"unknown side: {line.side}")
+        return implied, "leg_odds_implied", None
+    if dist is not None:
+        family = dist.family or None
+        fair = p_over_line(
+            line=line.line,
+            median=dist.median,
+            sigma=dist.sigma,
+            family=family if family in {"lognormal", "normal", "poisson"} else None,
+            stat_type=line.stat_type,
         )
-    family = dist.family or None
-    fair = p_over_line(
-        line=line.line,
-        median=dist.median,
-        sigma=dist.sigma,
-        family=family if family in {"lognormal", "normal", "poisson"} else None,
-        stat_type=line.stat_type,
+        return side_probability(fair, line.side), "distribution", fair
+    if line.contract_price is not None:
+        if not 0.0 < line.contract_price < 1.0:
+            raise ValueError(
+                f"contract_price must be between 0 and 1, got {line.contract_price}"
+            )
+        implied = line.contract_price
+        if line.side in LESS_SIDES:
+            implied = 1.0 - implied
+        return implied, "contract_price", None
+    raise KeyError(
+        f"no distribution for {line.player_key}/{line.stat_type} and no book odds"
     )
-    return side_probability(fair, line.side), "distribution", fair
 
 
 def _american_ok(odds: int | None) -> bool:
@@ -138,6 +178,7 @@ def evaluate_legs(
     method: DevigMethod = "power",
     allow_integer_lines: bool = False,
     platform: str = "",
+    roster: Roster | None = None,
 ) -> tuple[list[EvaluatedLeg], list[EvaluatedLeg]]:
     """Split lines into rankable legs and named exclusions.
 
@@ -162,13 +203,34 @@ def evaluate_legs(
         if not line.team or not line.opponent:
             excluded.append(_excluded_leg(line, stored_implied, "no-team"))
             continue
+        td_market = is_td_market(line.stat_type)
+        td_priced = td_market and (
+            line.fair_p is not None or line.leg_odds is not None
+        )
+        line_optional = td_priced or line.contract_price is not None
+        if isnan(line.line):
+            if not line_optional:
+                excluded.append(_excluded_leg(line, stored_implied, "no-line"))
+                continue
+            # TD props and prediction contracts have no yard line; 0.5 is a
+            # display dummy, never priced.
+            line.line = NO_LINE_DUMMY
+        if roster is not None and roster_mismatch(line, roster):
+            excluded.append(_excluded_leg(line, stored_implied, "wrong-team"))
+            continue
         if line.book_line is not None and abs(line.book_line - line.line) > 1e-9:
             excluded.append(_excluded_leg(line, stored_implied, "book-line-mismatch"))
             continue
         if (line.book_over is None) != (line.book_under is None):
             excluded.append(_excluded_leg(line, stored_implied, "one-sided-book"))
             continue
-        if line.book_over is None and dist is None:
+        if (
+            line.book_over is None
+            and dist is None
+            and line.fair_p is None
+            and not td_priced
+            and line.contract_price is None
+        ):
             excluded.append(_excluded_leg(line, stored_implied, "dropped"))
             continue
         if not allow_integers and float(line.line).is_integer():
@@ -265,6 +327,26 @@ def _sportsbook_combo_multiplier(
     return None
 
 
+def _prediction_combo_multiplier(
+    combo: tuple[EvaluatedLeg, ...] | list[EvaluatedLeg],
+) -> tuple[float, str] | None:
+    """Prediction COMBOS: M = 1 / product of typed 0-1 contract prices.
+
+    Every leg must carry a ``contract_price`` strictly inside (0, 1); a missing
+    or out-of-range price returns None so the combo is skipped, not guessed.
+    """
+
+    product = 1.0
+    for leg in combo:
+        price = leg.line.contract_price
+        if price is None or not 0.0 < price < 1.0:
+            return None
+        product *= price
+    if product <= 0.0:
+        return None
+    return 1.0 / product, "contract_product"
+
+
 def rank_slips(
     legs: list[EvaluatedLeg],
     platform: str,
@@ -283,27 +365,33 @@ def rank_slips(
     """Enumerate slip_size combinations and rank by a lower-bound EV.
 
     Multiplier precedence per combo: agreeing row ``slip_multiplier`` → agreeing
-    all-leg ``slip_odds`` → CLI displayed (sportsbook: only when live ==
-    slip_size) → ``leg_odds`` product (unconfirmed, Kelly 0). A table-only
-    pick'em price is marked unconfirmed (I-01 / I-07 / I-14 / I-19).
+    all-leg ``slip_odds`` → CLI displayed (sportsbook / prediction: legal only
+    for one ticket, i.e. ``live == slip_size``; a shared ``ticket_id`` does not
+    relax the size match) →
+    product of ``leg_odds`` (sportsbook) or ``contract_price`` (prediction
+    COMBOS), both unconfirmed with Kelly 0. A table-only pick'em price is marked
+    unconfirmed (I-01 / I-07 / I-14 / I-19).
     """
 
     if notes is None:
         notes = []
     platform = normalize_platform(platform)
     sportsbook = platform in SPORTSBOOK_PLATFORMS
+    prediction = platform in PREDICTION_PLATFORMS
+    priced_venue = sportsbook or prediction
     is_flex = mode.lower() in {"flex"}
     live = [leg for leg in legs if leg.warn not in EXCLUDED_WARNS]
     if (
-        sportsbook
+        priced_venue
         and displayed_multiplier is not None
         and len(live) != slip_size
     ):
         raise ValueError(
             "displayed odds / multiplier prices one ticket. "
             f"This slate has {len(live)} live legs; slip-size is {slip_size}. "
-            "Filter the CSV to those legs (see examples/hardrock_ticket.csv) "
-            "or type the same slip_odds on every combo leg."
+            "Filter the CSV to those legs (see examples/hardrock_ticket.csv), "
+            "pass --legs matching the ticket, or type the same slip_odds on "
+            "every combo leg. A shared ticket_id does not relax this."
         )
     if len(live) < slip_size or slip_size < 1:
         return []
@@ -329,14 +417,25 @@ def rank_slips(
         if any(not ref.team for ref in refs):
             notes.append(f"skip no-team: {_combo_names(combo)}")
             continue
-        if not sportsbook and len({ref.team for ref in refs}) < 2:
+        ticket_ids = {leg.line.ticket_id for leg in combo if leg.line.ticket_id}
+        if ticket_ids and any(not leg.line.ticket_id for leg in combo):
+            notes.append(f"skip mixed-ticket-id: {_combo_names(combo)}")
+            continue
+        if len(ticket_ids) > 1:
+            notes.append(f"skip mixed-ticket-id: {_combo_names(combo)}")
+            continue
+        first_td_refs = [ref for ref in refs if is_first_td(ref.stat_type)]
+        if len(first_td_refs) > 1 and _same_game(first_td_refs):
+            notes.append(f"skip same-game-first-td: {_combo_names(combo)}")
+            continue
+        if not priced_venue and len({ref.team for ref in refs}) < 2:
             notes.append(f"skip same-team (two-team rule): {_combo_names(combo)}")
             continue
         props = [(ref.player_key, ref.stat_type) for ref in refs]
         if len(set(props)) < slip_size:
             notes.append(f"skip duplicate player+stat: {_combo_names(combo)}")
             continue
-        if not sportsbook and len({ref.player_key for ref in refs}) < slip_size:
+        if not priced_venue and len({ref.player_key for ref in refs}) < slip_size:
             notes.append(
                 f"skip same-player multi-stat not supported: {_combo_names(combo)}"
             )
@@ -365,7 +464,7 @@ def rank_slips(
                     f"row M {multiplier} overrides CLI M {displayed_multiplier}: "
                     f"{_combo_names(combo)}"
                 )
-        elif sportsbook:
+        elif priced_venue:
             slip_state, slip_value = _agreeing_quotes(
                 [leg.line.slip_odds for leg in combo]
             )
@@ -397,7 +496,10 @@ def rank_slips(
                 multiplier_source = "cli"
             else:
                 try:
-                    priced = _sportsbook_combo_multiplier(combo)
+                    if prediction:
+                        priced = _prediction_combo_multiplier(combo)
+                    else:
+                        priced = _sportsbook_combo_multiplier(combo)
                 except ValueError:
                     notes.append(f"skip bad-odds: {_combo_names(combo)}")
                     continue
@@ -418,7 +520,7 @@ def rank_slips(
         ):
             notes.append(f"skip alt-needs-m: {_combo_names(combo)}")
             continue
-        if sportsbook and multiplier is not None and multiplier <= 1:
+        if priced_venue and multiplier is not None and multiplier <= 1:
             notes.append(f"skip bad-odds: {_combo_names(combo)}")
             continue
 
@@ -485,6 +587,13 @@ def rank_slips(
                 slip_notes.append(
                     "naive product of leg_odds — confirm in-app; Kelly suppressed"
                 )
+        if prediction and multiplier_source == "contract_product":
+            unconfirmed = True
+            kelly = 0.0
+            slip_notes.append(
+                "contract_product — independent-binary COMBOS; correlated NFL "
+                "legs overstate EV; Kelly 0"
+            )
         if shade_pp:
             slip_notes.append(f"shade_pp={shade_pp:g}")
 
@@ -514,14 +623,130 @@ def rank_slips(
     return ranked[:max_slips]
 
 
+def resolve_slip_sizes(slip_size: int, legs: str | None = None) -> list[int]:
+    """Return the slip sizes to rank. ``--legs 2,3,4`` or ``2-4`` overrides slip-size."""
+
+    if legs is None or not str(legs).strip():
+        parts = [str(slip_size)]
+    else:
+        parts = [part.strip() for part in str(legs).split(",") if part.strip()]
+    sizes: list[int] = []
+    for part in parts:
+        if "-" in part:
+            low_text, high_text = part.split("-", 1)
+            start, end = int(low_text), int(high_text)
+            if start > end:
+                raise ValueError(f"legs range {part} is empty")
+            sizes.extend(range(start, end + 1))
+        else:
+            sizes.append(int(part))
+    cleaned: list[int] = []
+    for size in sizes:
+        if size < 1:
+            raise ValueError("leg count must be >= 1")
+        if size not in cleaned:
+            cleaned.append(size)
+    return cleaned
+
+
+def slip_clears_odds(
+    slip: EvaluatedSlip,
+    min_odds: int | None = None,
+    max_odds: int | None = None,
+) -> bool:
+    """Keep slips whose decimal M sits between the American min and max."""
+
+    if min_odds is None and max_odds is None:
+        return True
+    if min_odds is not None and slip.multiplier + 1e-12 < american_to_decimal(min_odds):
+        return False
+    if max_odds is not None and slip.multiplier > american_to_decimal(max_odds) + 1e-12:
+        return False
+    return True
+
+
+def filter_slips_by_odds(
+    slips: list[EvaluatedSlip],
+    min_odds: int | None = None,
+    max_odds: int | None = None,
+) -> list[EvaluatedSlip]:
+    if min_odds is not None and max_odds is not None:
+        if american_to_decimal(min_odds) > american_to_decimal(max_odds) + 1e-12:
+            raise ValueError("--min-odds is longer than --max-odds")
+    return [slip for slip in slips if slip_clears_odds(slip, min_odds, max_odds)]
+
+
+def rank_slip_sizes(
+    legs: list[EvaluatedLeg],
+    platform: str,
+    mode: str,
+    sizes: list[int],
+    n_sims: int = 20_000,
+    seed: int = 42,
+    displayed_multiplier: float | None = None,
+    profile_dir: Path | None = None,
+    priors_path: Path | None = None,
+    max_slips: int = 25,
+    allow_large_enum: bool = False,
+    shade_pp: float = 0.0,
+    notes: list[str] | None = None,
+    min_odds: int | None = None,
+    max_odds: int | None = None,
+) -> list[EvaluatedSlip]:
+    """Rank one or more slip sizes, then apply optional American odds filters."""
+
+    if notes is None:
+        notes = []
+    ranked: list[EvaluatedSlip] = []
+    per_call = max(max_slips, 1) * max(len(sizes), 1)
+    for size in sizes:
+        ranked.extend(
+            rank_slips(
+                legs,
+                platform=platform,
+                mode=mode,
+                slip_size=size,
+                n_sims=n_sims,
+                seed=seed,
+                displayed_multiplier=displayed_multiplier,
+                profile_dir=profile_dir,
+                priors_path=priors_path,
+                max_slips=per_call,
+                allow_large_enum=allow_large_enum,
+                shade_pp=shade_pp,
+                notes=notes,
+            )
+        )
+    before = len(ranked)
+    ranked = filter_slips_by_odds(ranked, min_odds, max_odds)
+    dropped = before - len(ranked)
+    if dropped:
+        bounds = []
+        if min_odds is not None:
+            bounds.append(f"min={min_odds:+d}" if min_odds > 0 else f"min={min_odds}")
+        if max_odds is not None:
+            bounds.append(f"max={max_odds:+d}" if max_odds > 0 else f"max={max_odds}")
+        notes.append(f"odds-filter dropped {dropped} ({' '.join(bounds)})")
+    ranked.sort(key=lambda item: (item.multiplier_unconfirmed, -item.ev_lo, -item.ev))
+    return ranked[:max_slips]
+
+
 def slip_as_row(slip: EvaluatedSlip, index: int) -> dict[str, object]:
     first = slip.legs[0].line
     is_flex = slip.mode.lower() in {"flex"}
+    ticket_ids = {leg.line.ticket_id for leg in slip.legs if leg.line.ticket_id}
     return {
         "slate_id": first.slate_id,
         "platform": slip.platform,
         "slip_id": f"slip-{index:03d}",
+        "ticket_id": next(iter(ticket_ids)) if len(ticket_ids) == 1 else "",
         "mode": slip.mode,
+        "n_legs": len(slip.legs),
+        "american": (
+            decimal_to_american(slip.multiplier)
+            if slip.mode.lower() not in {"flex"} and slip.multiplier > 1.0
+            else ""
+        ),
         "legs": _slip_label(slip.legs),
         "player_keys": "|".join(leg.line.player_key for leg in slip.legs),
         "stat_types": "|".join(leg.line.stat_type for leg in slip.legs),
@@ -557,7 +782,10 @@ EDGE_FIELDS = [
     "slate_id",
     "platform",
     "slip_id",
+    "ticket_id",
     "mode",
+    "n_legs",
+    "american",
     "legs",
     "player_keys",
     "stat_types",

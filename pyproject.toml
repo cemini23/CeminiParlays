@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ceminiparlays"
-version = "0.1.3"
+version = "0.2.0"
 description = "Local NFL sportsbook parlay research CLI — fair value, slip EV, no scrapers"
 readme = "README.md"
 license = { text = "MIT" }
@@ -42,7 +42,7 @@ Source = "https://github.com/cemini23/CeminiParlays"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ceminiparlays = ["py.typed", "data/*.json", "data/payout_profiles/*.json"]
+ceminiparlays = ["py.typed", "data/*.json", "data/payout_profiles/*.json", "data/rosters/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,13 @@
+slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,line_type,captured_at,injury_status,book_over,book_under,leg_odds,slip_odds,slip_multiplier,ticket_id,fair_p,contract_price
+2026-w01-sun,hardrock,Joe Burrow,,CIN,TB,pass_yds,265.5,more,standard,,,-115,-105,-110,,,,,
+2026-w01-sun,hardrock,Ja'Marr Chase,,CIN,TB,rec_yds,82.5,more,standard,,,-120,100,-115,,,,,
+2026-w01-sun,hardrock,Jared Goff,,DET,NO,pass_yds,258.5,more,standard,,,-110,-110,-110,,,,,
+2026-w01-sun,hardrock,Amon-Ra St. Brown,,DET,NO,rec_yds,78.5,more,standard,,,-125,105,-120,,,,,
+2026-w01-sun,hardrock,Caleb Williams,,CHI,CAR,pass_yds,244.5,more,standard,,,-110,-110,-110,,,,,
+2026-w01-sun,hardrock,Chuba Hubbard,,CAR,CHI,rush_yds,58.5,more,standard,,,-115,-105,-115,,,,,
+2026-w01-sun,hardrock,Josh Allen,,BUF,HOU,pass_yds,252.5,more,standard,,,-120,100,-115,,,,,
+2026-w01-sun,hardrock,Nico Collins,,HOU,BUF,rec_yds,71.5,more,standard,,,-115,-105,-110,,,,,
+2026-w01-sun,hardrock,Jalen Hurts,,PHI,WAS,pass_yds,231.5,more,standard,,,-110,-110,-110,,,,,
+2026-w01-sun,hardrock,Saquon Barkley,,PHI,WAS,rush_yds,88.5,more,standard,,,-125,105,-120,,,,,
+2026-w01-sun,hardrock,De'Von Achane,,MIA,LV,rush_yds,62.5,more,standard,,,-110,-110,-110,,,,,
+2026-w01-sun,hardrock,Ashton Jeanty,,LV,MIA,rush_yds,74.5,more,standard,,,-115,-105,-115,,,,,

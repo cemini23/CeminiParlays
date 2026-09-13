@@ -6,11 +6,16 @@ import sys
 from pathlib import Path
 
 from ceminiparlays import STANDARD_DISCLAIMER, __version__
+from ceminiparlays.bankroll import flat_stake, kelly_cap_stake
+from ceminiparlays.compose import TICKET_FIELDS, compose_tickets, estimate_multiplier, ticket_rows
+from ceminiparlays.environment import read_environment
 from ceminiparlays.fair import p_over_line, side_probability
 from ceminiparlays.grade import grade_ledger, write_grade
-from ceminiparlays.io import read_distributions, read_manual_lines, write_csv
+from ceminiparlays.io import read_distributions, read_games, read_manual_lines, write_csv
+from ceminiparlays.markets import AUTO_MARKETS, parse_markets
 from ceminiparlays.odds import american_to_decimal, devig_spread, devig_two_way
 from ceminiparlays.payouts import (
+    PREDICTION_PLATFORMS,
     SPORTSBOOK_PLATFORMS,
     breakeven_per_leg,
     display_name,
@@ -18,24 +23,106 @@ from ceminiparlays.payouts import (
     normalize_platform,
     resolve_payout,
 )
-from ceminiparlays.report import fair_card, slip_card
-from ceminiparlays.slips import EDGE_FIELDS, evaluate_legs, rank_slips, slip_as_row
+from ceminiparlays.report import PREDICTION_BANNER, fair_card, slip_card
+from ceminiparlays.roster import load_roster, lookup_player
+from ceminiparlays.slips import (
+    EDGE_FIELDS,
+    evaluate_legs,
+    rank_slip_sizes,
+    rank_slips,
+    resolve_slip_sizes,
+    slip_as_row,
+)
 
 UNCONFIRMED_BANNER = "UNCONFIRMED TABLE MULTIPLIER — confirm in-app"
+#: Fill-in slate columns the reader accepts (blank until the operator types).
+SLATE_FIELDS = [
+    "slate_id",
+    "platform",
+    "player_name",
+    "player_key",
+    "team",
+    "opp",
+    "stat_type",
+    "line",
+    "side",
+    "line_type",
+    "captured_at",
+    "injury_status",
+    "book_over",
+    "book_under",
+    "leg_odds",
+    "slip_odds",
+    "slip_multiplier",
+    "ticket_id",
+    "fair_p",
+    "contract_price",
+]
+PLATFORM_CHOICES = [
+    "hardrock",
+    "fanduel",
+    "draftkings",
+    "betmgm",
+    "polymarket",
+    "kalshi",
+    "underdog",
+    "prizepicks",
+]
 
 
 def _add_common(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--platform",
-        default="hardrock",
-        choices=["hardrock", "fanduel", "draftkings", "underdog", "prizepicks"],
-    )
+    parser.add_argument("--platform", default="hardrock", choices=PLATFORM_CHOICES)
     parser.add_argument("--profile-dir", type=Path, default=None)
 
 
 def _add_rank_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--mode", default="standard", choices=["standard", "power", "flex"])
     parser.add_argument("--slip-size", type=int, default=2)
+    parser.add_argument(
+        "--legs",
+        default=None,
+        help="Leg counts to rank: 4 or 2,3,4 or 2-4. Overrides --slip-size when set.",
+    )
+    parser.add_argument(
+        "--min-odds",
+        type=int,
+        default=None,
+        help="Keep slips at least this long (American), e.g. +150",
+    )
+    parser.add_argument(
+        "--max-odds",
+        type=int,
+        default=None,
+        help="Keep slips no longer than this (American), e.g. +400",
+    )
+    parser.add_argument(
+        "--markets",
+        default=None,
+        help="Comma list of market tokens: pass_yds,rush_yds,rec_yds,receptions,"
+        "rush_att,pass_tds,first_td,anytime_td",
+    )
+    parser.add_argument(
+        "--ticket-id",
+        default=None,
+        help="Only rank rows carrying this ticket_id.",
+    )
+    parser.add_argument(
+        "--bankroll",
+        type=float,
+        default=None,
+        help="Optional bankroll for a per-ticket flat / quarter-Kelly note.",
+    )
+    parser.add_argument(
+        "--roster",
+        type=Path,
+        default=None,
+        help="Player-to-team JSON. Default is the packaged NFL roster.",
+    )
+    parser.add_argument(
+        "--no-roster",
+        action="store_true",
+        help="Skip the roster team check (not recommended).",
+    )
     parser.add_argument("--n-sims", type=int, default=20_000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--displayed-multiplier", type=float, default=None)
@@ -101,6 +188,54 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--distributions", type=Path, required=True)
     run.add_argument("--slate-id", default="demo")
     run.add_argument("--out-dir", type=Path, default=None)
+
+    slate = sub.add_parser(
+        "slate", help="Write a fill-in lines CSV from a games file + packaged roster"
+    )
+    slate.add_argument(
+        "--games",
+        type=Path,
+        default=Path("examples/games_sunday_afternoon.csv"),
+    )
+    slate.add_argument("--roster", type=Path, default=None)
+    slate.add_argument("--platform", default="hardrock", choices=PLATFORM_CHOICES)
+    slate.add_argument("--slate-id", default=None)
+    slate.add_argument("--out", type=Path, default=Path("runs/slate/lines_fill_in.csv"))
+
+    compose = sub.add_parser(
+        "compose",
+        help="Pick diversified tickets inside an odds window and write ticket CSVs",
+    )
+    _add_common(compose)
+    compose.add_argument("--lines", type=Path, required=True)
+    compose.add_argument("--distributions", type=Path, default=None)
+    compose.add_argument("--roster", type=Path, default=None)
+    compose.add_argument("--no-roster", action="store_true")
+    compose.add_argument("--auto", action="store_true")
+    compose.add_argument("--markets", default=None)
+    compose.add_argument("--legs", default=None)
+    compose.add_argument("--slip-size", type=int, default=2)
+    compose.add_argument("--min-odds", type=int, default=None)
+    compose.add_argument("--max-odds", type=int, default=None)
+    compose.add_argument("--n-tickets", type=int, default=5)
+    compose.add_argument("--environment", type=Path, default=None)
+    compose.add_argument("--ticket-id", default=None)
+    compose.add_argument("--mode", default="standard", choices=["standard", "power"])
+    compose.add_argument("--devig-method", default="power", choices=["power", "multiplicative", "additive"])
+    compose.add_argument("--bankroll", type=float, default=None)
+    compose.add_argument("--out-dir", type=Path, default=None)
+    compose.add_argument(
+        "--strict",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Abort (exit 2) when any leg is dropped. Default on.",
+    )
+
+    bankroll = sub.add_parser(
+        "bankroll", help="Print flat and quarter-Kelly stake sizes"
+    )
+    bankroll.add_argument("--bankroll", type=float, required=True)
+    bankroll.add_argument("--n-tickets", type=int, default=5)
     return parser
 
 
@@ -148,13 +283,33 @@ def _cli_displayed_multiplier(args: argparse.Namespace) -> float | None:
     return decimal
 
 
+def _bankroll_note(bankroll: float | None, n_tickets: int) -> str | None:
+    if bankroll is None:
+        return None
+    cap = kelly_cap_stake(bankroll)
+    if n_tickets < 1:
+        return f"bankroll ${bankroll:.2f}; quarter-Kelly cap ${cap:.2f} per ticket"
+    flat = flat_stake(bankroll, n_tickets)
+    return (
+        f"bankroll ${bankroll:.2f} over {n_tickets} tickets: flat ${flat:.2f} each; "
+        f"quarter-Kelly cap ${cap:.2f} per ticket"
+    )
+
+
 def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path | None) -> int:
     strict = getattr(args, "strict", True)
     platform = normalize_platform(args.platform)
-    if platform in SPORTSBOOK_PLATFORMS and args.mode.lower() == "flex":
+    priced_venue = platform in SPORTSBOOK_PLATFORMS or platform in PREDICTION_PLATFORMS
+    if priced_venue and args.mode.lower() == "flex":
         raise ValueError(
-            f"{display_name(platform)} Flex Parlay is not modeled. Use --mode standard "
-            "and pass --displayed-odds from the app."
+            f"{display_name(platform)} Flex is not modeled. Use --mode standard "
+            "and pass the displayed price from the app."
+        )
+    sizes = resolve_slip_sizes(args.slip_size, getattr(args, "legs", None))
+    displayed_m = _cli_displayed_multiplier(args)
+    if priced_venue and displayed_m is not None and len(sizes) != 1:
+        raise ValueError(
+            "--displayed-odds prices one ticket. Pass a single --legs / --slip-size."
         )
     lines = read_manual_lines(args.lines, strict=strict)
     lines = [
@@ -162,40 +317,52 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         for row in lines
         if (not row.platform or normalize_platform(row.platform) == platform)
     ]
+    ticket_id = getattr(args, "ticket_id", None)
+    if ticket_id:
+        lines = [row for row in lines if row.ticket_id == str(ticket_id)]
+    market_filter = parse_markets(getattr(args, "markets", None))
+    if market_filter:
+        lines = [row for row in lines if row.stat_type in market_filter]
     if not lines:
         raise ValueError(
-            f"no rows for platform {platform}; set the CSV platform column "
-            "or leave it blank"
+            f"no rows for platform {platform}; set the CSV platform column, clear "
+            "--ticket-id / --markets, or leave the column blank"
         )
     slate_ids = {row.slate_id for row in lines if row.slate_id}
     if len(slate_ids) > 1:
         raise ValueError(f"mixed slate_id values in lines file: {sorted(slate_ids)}")
 
-    displayed_m = _cli_displayed_multiplier(args)
     effective_m, unconfirmed_slate = _effective_multiplier(lines, displayed_m)
-    if unconfirmed_slate and platform not in SPORTSBOOK_PLATFORMS:
+    if unconfirmed_slate and platform in PREDICTION_PLATFORMS:
+        print(PREDICTION_BANNER)
+    elif unconfirmed_slate and platform not in SPORTSBOOK_PLATFORMS:
         print(UNCONFIRMED_BANNER)
-    if unconfirmed_slate and platform in SPORTSBOOK_PLATFORMS:
+    elif unconfirmed_slate:
         print(
             f"{display_name(platform).upper()}: no slate-wide displayed price — ranking "
-            "uses per-row slip_odds / product of leg_odds. Confirm the SGP ticket "
+            "uses per-row slip_odds / product of leg_odds. Confirm the ticket "
             "in-app."
         )
 
     dists = read_distributions(args.distributions)
-    if platform in SPORTSBOOK_PLATFORMS and effective_m is None:
+    banner_size = sizes[0]
+    if priced_venue and effective_m is None:
+        implied = 0.0
+        per_leg = 0.0
+    elif len(sizes) > 1:
         implied = 0.0
         per_leg = 0.0
     else:
         table = resolve_payout(
             platform,
             args.mode,
-            args.slip_size,
+            banner_size,
             displayed_multiplier=effective_m,
             profile_dir=args.profile_dir,
         )
         implied = implied_slip_win(table.all_hit)
-        per_leg = breakeven_per_leg(table.all_hit, args.slip_size)
+        per_leg = breakeven_per_leg(table.all_hit, banner_size)
+    roster = None if getattr(args, "no_roster", False) else load_roster(args.roster)
     live, excluded = evaluate_legs(
         lines,
         dists,
@@ -203,6 +370,7 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         method=args.devig_method,
         allow_integer_lines=args.allow_integer_lines,
         platform=platform,
+        roster=roster,
     )
     dropped = [leg for leg in excluded if leg.warn not in {"scratch"}]
     scratched = [leg for leg in excluded if leg.warn == "scratch"]
@@ -210,8 +378,15 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         f"lines={len(lines)} live={len(live)} dropped={len(dropped)} "
         f"scratched={len(scratched)}"
     )
+    if roster is not None:
+        print(f"roster=NFL {roster.season} ({roster.retrieved})")
     for leg in dropped:
-        print(f"  dropped {leg.line.player_name}: {leg.warn}")
+        extra = ""
+        if roster is not None and leg.warn == "wrong-team":
+            found = lookup_player(leg.line, roster)
+            if found:
+                extra = f" (roster {found.team}, csv {leg.line.team})"
+        print(f"  dropped {leg.line.player_name}: {leg.warn}{extra}")
     for leg in scratched:
         print(f"  scratched {leg.line.player_name}")
 
@@ -220,11 +395,11 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         return 2
 
     notes: list[str] = []
-    slips = rank_slips(
+    slips = rank_slip_sizes(
         live,
         platform=platform,
         mode=args.mode,
-        slip_size=args.slip_size,
+        sizes=sizes,
         n_sims=args.n_sims,
         seed=args.seed,
         displayed_multiplier=displayed_m,
@@ -233,11 +408,14 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         allow_large_enum=args.allow_large_enum,
         shade_pp=args.shade_pp,
         notes=notes,
+        min_odds=getattr(args, "min_odds", None),
+        max_odds=getattr(args, "max_odds", None),
     )
     for note in notes:
         print(f"  {note}")
     write_csv(out_csv, [slip_as_row(slip, i) for i, slip in enumerate(slips, start=1)], EDGE_FIELDS)
-    card = slip_card(slips)
+    bankroll_note = _bankroll_note(getattr(args, "bankroll", None), 1)
+    card = slip_card(slips, bankroll_note=bankroll_note)
     target = report_path or out_csv.with_suffix(".report.txt")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(card + "\n", encoding="utf-8")
@@ -295,6 +473,219 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return _rank_and_write(args, out_dir / "edges.csv", out_dir / "report.txt")
 
 
+def _cmd_slate(args: argparse.Namespace) -> int:
+    platform = normalize_platform(args.platform)
+    games = read_games(args.games)
+    if not games:
+        raise ValueError(f"no games in {args.games}")
+    roster = load_roster(args.roster)
+    slate_id = args.slate_id or next((game.slate_id for game in games if game.slate_id), "")
+    rows: list[dict[str, object]] = []
+    for game in games:
+        for team, opp in ((game.away, game.home), (game.home, game.away)):
+            for player in sorted(
+                (entry for entry in roster.players.values() if entry.team == team),
+                key=lambda entry: entry.name,
+            ):
+                rows.append(
+                    {
+                        "slate_id": slate_id,
+                        "platform": platform,
+                        "player_name": player.name,
+                        "player_key": player.player_key,
+                        "team": player.team,
+                        "opp": opp,
+                        "stat_type": "",
+                        "line": "",
+                        "side": "more",
+                        "line_type": "standard",
+                        "captured_at": "",
+                        "injury_status": "",
+                        "book_over": "",
+                        "book_under": "",
+                        "leg_odds": "",
+                        "slip_odds": "",
+                        "slip_multiplier": "",
+                        "ticket_id": "",
+                        "fair_p": "",
+                        "contract_price": "",
+                    }
+                )
+    if not rows:
+        raise ValueError(
+            "roster has no players on these games; pass --roster or update the games file"
+        )
+    write_csv(args.out, rows, SLATE_FIELDS)
+    print(f"slate rows={len(rows)} games={len(games)} roster=NFL {roster.season}")
+    print(f"wrote {args.out}")
+    print("fill in stat_type, line, side, and your book odds, then run compose/rank")
+    print("do not submit — type the ticket in-app")
+    return 0
+
+
+def _cmd_compose(args: argparse.Namespace) -> int:
+    strict = getattr(args, "strict", True)
+    platform = normalize_platform(args.platform)
+    auto = bool(getattr(args, "auto", False))
+    markets_text = getattr(args, "markets", None)
+    if markets_text is None and auto:
+        markets_text = ",".join(AUTO_MARKETS)
+    market_filter = parse_markets(markets_text) or None
+    legs_text = getattr(args, "legs", None)
+    if legs_text is None and auto:
+        legs_text = "2"
+    sizes = resolve_slip_sizes(args.slip_size, legs_text)
+    min_odds = args.min_odds
+    max_odds = args.max_odds
+    if auto:
+        if min_odds is None:
+            min_odds = 150
+        if max_odds is None:
+            max_odds = 400
+        # One explicit bound must not fight the other default into an empty
+        # window: --min-odds +800 (first-TD longshot) drops the +400 cap,
+        # --max-odds +250 keeps the +150 floor.
+        if (
+            args.min_odds is not None
+            and args.max_odds is None
+            and american_to_decimal(min_odds) > american_to_decimal(max_odds)
+        ):
+            max_odds = None
+        elif (
+            args.max_odds is not None
+            and args.min_odds is None
+            and american_to_decimal(max_odds) < american_to_decimal(min_odds)
+        ):
+            min_odds = None
+    n_tickets = args.n_tickets
+    if n_tickets < 1:
+        raise ValueError("--n-tickets must be at least 1")
+
+    lines = read_manual_lines(args.lines, strict=strict)
+    lines = [
+        row
+        for row in lines
+        if (not row.platform or normalize_platform(row.platform) == platform)
+    ]
+    ticket_id = getattr(args, "ticket_id", None)
+    if ticket_id:
+        lines = [row for row in lines if row.ticket_id == str(ticket_id)]
+    if market_filter:
+        lines = [row for row in lines if row.stat_type in market_filter]
+    if not lines:
+        raise ValueError(
+            f"no rows for platform {platform}; check --lines, --ticket-id, --markets"
+        )
+    slate_ids = {row.slate_id for row in lines if row.slate_id}
+    if len(slate_ids) > 1:
+        raise ValueError(f"mixed slate_id values in lines file: {sorted(slate_ids)}")
+
+    effective_m, unconfirmed_slate = _effective_multiplier(lines, None)
+    if unconfirmed_slate and platform in PREDICTION_PLATFORMS:
+        print(PREDICTION_BANNER)
+    priced_venue = platform in SPORTSBOOK_PLATFORMS or platform in PREDICTION_PLATFORMS
+    if effective_m is not None and priced_venue:
+        table = resolve_payout(
+            platform,
+            args.mode,
+            sizes[0],
+            displayed_multiplier=effective_m,
+            profile_dir=args.profile_dir,
+        )
+        per_leg = breakeven_per_leg(table.all_hit, sizes[0])
+    else:
+        per_leg = 0.0
+    dists = read_distributions(args.distributions) if args.distributions else {}
+    roster = None if getattr(args, "no_roster", False) else load_roster(args.roster)
+    live, excluded = evaluate_legs(
+        lines,
+        dists,
+        implied_p=per_leg,
+        method=args.devig_method,
+        allow_integer_lines=False,
+        platform=platform,
+        roster=roster,
+    )
+    dropped = [leg for leg in excluded if leg.warn not in {"scratch"}]
+    print(
+        f"lines={len(lines)} live={len(live)} dropped={len(dropped)} "
+        f"scratch={len(excluded) - len(dropped)}"
+    )
+    for leg in dropped:
+        print(f"  dropped {leg.line.player_name}: {leg.warn}")
+    if strict and dropped:
+        print("strict mode: refusing to compose with dropped legs; fix the rows")
+        return 2
+
+    environment = read_environment(args.environment)
+    tickets = compose_tickets(
+        live,
+        n_tickets=n_tickets,
+        sizes=sizes,
+        min_odds=min_odds,
+        max_odds=max_odds,
+        markets=market_filter,
+        environment=environment,
+    )
+    out_dir = args.out_dir or Path("runs") / (next(iter(slate_ids), "compose"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    slips = []
+    for index, ticket_legs in enumerate(tickets, start=1):
+        composed_id = f"compose-{index:03d}"
+        write_csv(
+            out_dir / f"ticket-{index:03d}.csv",
+            ticket_rows(ticket_legs, composed_id, platform),
+            TICKET_FIELDS,
+        )
+        estimate, _source, unconfirmed_estimate = estimate_multiplier(ticket_legs)
+        priced = rank_slips(
+            ticket_legs,
+            platform=platform,
+            mode=args.mode,
+            slip_size=len(ticket_legs),
+            displayed_multiplier=estimate,
+            profile_dir=args.profile_dir,
+            priors_path=None,
+            max_slips=1,
+            shade_pp=0.0,
+            notes=[],
+        )
+        if not priced:
+            print(f"  ticket-{index:03d}: no price available; skipped on the card")
+            continue
+        slip = priced[0]
+        if unconfirmed_estimate and slip.multiplier_source == "cli":
+            slip.multiplier_unconfirmed = True
+            slip.kelly = 0.0
+            slip.notes.append(
+                "naive product of typed prices — confirm the ticket price in-app"
+            )
+        slips.append(slip)
+
+    bankroll_note = _bankroll_note(getattr(args, "bankroll", None), len(tickets) or 1)
+    card = slip_card(slips, bankroll_note=bankroll_note)
+    card_path = out_dir / "card.txt"
+    card_path.write_text(card + "\n", encoding="utf-8")
+    print(f"composed={len(tickets)} requested={n_tickets} out={out_dir}")
+    print(card)
+    print(f"wrote {card_path}")
+    print("do not submit — type every ticket in-app")
+    return 0
+
+
+def _cmd_bankroll(args: argparse.Namespace) -> int:
+    flat = flat_stake(args.bankroll, args.n_tickets)
+    cap = kelly_cap_stake(args.bankroll)
+    print(
+        f"bankroll ${args.bankroll:.2f} over {args.n_tickets} tickets: "
+        f"flat ${flat:.2f} each"
+    )
+    print(f"quarter-Kelly cap (5% of bankroll): ${cap:.2f} per ticket")
+    print("pick one size per ticket; never add Kelly fractions across legs")
+    print(STANDARD_DISCLAIMER)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -304,6 +695,9 @@ def main(argv: list[str] | None = None) -> int:
         "grade": _cmd_grade,
         "devig": _cmd_devig,
         "run": _cmd_run,
+        "slate": _cmd_slate,
+        "compose": _cmd_compose,
+        "bankroll": _cmd_bankroll,
     }
     try:
         return handlers[args.command](args)

@@ -120,3 +120,34 @@ def test_missing_prizepicks_power_seven_leg_message() -> None:
     message = str(excinfo.value)
     assert "PrizePicks power has no 7-leg row" in message
     assert "slip-size 2-6" in message
+
+
+def test_betmgm_is_a_sportsbook_with_displayed_price() -> None:
+    assert normalize_platform("mgm") == "betmgm"
+    assert normalize_platform("bet_mgm") == "betmgm"
+    table = resolve_payout("betmgm", "standard", 2, displayed_multiplier=2.6)
+    assert table.platform == "betmgm"
+    assert table.all_hit == 2.6
+
+
+def test_betmgm_requires_a_displayed_price() -> None:
+    with pytest.raises(ValueError, match="no fixed lounge table"):
+        resolve_payout("betmgm", "standard", 2)
+
+
+def test_prediction_platform_requires_a_price() -> None:
+    with pytest.raises(ValueError, match="no fixed table"):
+        resolve_payout("polymarket", "standard", 2)
+    with pytest.raises(ValueError, match="no fixed table"):
+        resolve_payout("kalshi", "standard", 2)
+
+
+def test_prediction_platform_accepts_displayed_combo_price() -> None:
+    table = resolve_payout("kalshi", "standard", 2, displayed_multiplier=4.33)
+    assert table.platform == "kalshi"
+    assert table.all_hit == 4.33
+
+
+def test_prediction_platform_rejects_flex() -> None:
+    with pytest.raises(ValueError, match="COMBOS"):
+        resolve_payout("polymarket", "flex", 3, displayed_multiplier=3.0)

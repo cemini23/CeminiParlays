@@ -8,6 +8,8 @@
     { "stat_a": "pass_yds", "stat_b": "rush_yds", "same_team": true, "rho": -0.33 },
     { "stat_a": "pass_att", "stat_b": "rush_yds", "same_team": true, "rho": -0.33 },
     { "stat_a": "rec_yds", "stat_b": "rec_yds", "same_team": true, "rho": 0.10 },
+    { "stat_a": "rush_yds", "stat_b": "rush_yds", "same_team": true, "rho": 0.08 },
+    { "stat_a": "anytime_td", "stat_b": "anytime_td", "same_team": true, "rho": 0.15 },
     { "stat_a": "rush_yds", "stat_b": "rec_yds", "same_team": true, "rho": -0.12 },
     { "stat_a": "pass_yds", "stat_b": "pass_yds", "opponents": true, "rho": 0.18 },
     { "stat_a": "rec_yds", "stat_b": "rec_yds", "opponents": true, "rho": 0.16 }

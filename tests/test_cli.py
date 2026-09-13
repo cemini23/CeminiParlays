@@ -501,6 +501,107 @@ def test_hardrock_allow_integer_lines_still_drops(tmp_path: Path, capsys) -> Non
     assert "integer-line" in out
 
 
+def test_wrong_team_dj_moore_is_dropped(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [
+            _line_row(player_name="DJ Moore", team="CHI", opp="CAR", stat_type="rec_yds"),
+            _line_row(player_name="A One", team="KC", opp="BUF"),
+        ],
+    )
+    text = lines.read_text(encoding="utf-8").replace(",underdog,", ",hardrock,")
+    lines.write_text(text, encoding="utf-8")
+    dists = _write_distributions(tmp_path)
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "hardrock",
+            "--displayed-odds",
+            "260",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "wrong-team" in out
+    assert "BUF" in out
+
+
+def test_min_odds_filters_short_tickets(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [
+            _line_row(player_name="A One", team="KC", opp="BUF"),
+            _line_row(player_name="B One", team="BUF", opp="KC"),
+        ],
+    )
+    text = lines.read_text(encoding="utf-8").replace(",underdog,", ",hardrock,")
+    lines.write_text(text, encoding="utf-8")
+    dists = _write_distributions(tmp_path)
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "hardrock",
+            "--displayed-odds",
+            "260",
+            "--min-odds",
+            "400",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "odds-filter dropped" in out
+    assert "No slips cleared the filters" in out
+
+
+def test_legs_flag_overrides_slip_size(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [
+            _line_row(player_name="A One", team="KC", opp="BUF"),
+            _line_row(player_name="B One", team="BUF", opp="KC"),
+        ],
+    )
+    text = lines.read_text(encoding="utf-8").replace(",underdog,", ",hardrock,")
+    lines.write_text(text, encoding="utf-8")
+    dists = _write_distributions(tmp_path)
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "hardrock",
+            "--displayed-odds",
+            "260",
+            "--slip-size",
+            "2",
+            "--legs",
+            "3",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    err = capsys.readouterr()
+    assert code == 2
+    assert "one ticket" in err.err or "displayed odds" in err.err or "live legs" in err.err
+
+
 def test_hardrock_flex_exits_two(tmp_path: Path) -> None:
     lines = _write_lines(
         tmp_path,
@@ -530,3 +631,378 @@ def test_hardrock_flex_exits_two(tmp_path: Path) -> None:
         ]
     )
     assert code == 2
+
+
+def test_version_is_0_2_0(capsys) -> None:
+    import pytest
+
+    with pytest.raises(SystemExit):
+        main(["--version"])
+    assert "0.2.0" in capsys.readouterr().out
+
+
+def test_slate_writes_moore_as_buf_with_blank_lines(tmp_path: Path, capsys) -> None:
+    import csv
+
+    out = tmp_path / "slate.csv"
+    code = main(
+        [
+            "slate",
+            "--games",
+            str(ROOT / "examples" / "games_sunday_afternoon.csv"),
+            "--out",
+            str(out),
+        ]
+    )
+    assert code == 0
+    rows = list(csv.DictReader(out.open(encoding="utf-8")))
+    assert rows
+    moore = next(row for row in rows if row["player_name"] == "DJ Moore")
+    assert moore["team"] == "BUF"
+    assert moore["opp"] == "HOU"
+    assert moore["line"] == ""
+    assert {row["line"] for row in rows} == {""}
+    assert "do not submit" in capsys.readouterr().out.lower()
+
+
+def test_rank_blank_line_drops_no_line_and_exits_two(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [_line_row(player_name="Blank Line", team="KC", opp="BUF", line="")],
+    )
+    dists = _write_distributions(tmp_path)
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "underdog",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "no-line" in out
+    assert not (tmp_path / "e.csv").is_file()
+
+
+def test_rank_non_numeric_line_is_no_line(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [_line_row(player_name="Bad Line", team="KC", opp="BUF", line="abc")],
+    )
+    dists = _write_distributions(tmp_path)
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "underdog",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "dropped Bad Line: no-line" in out
+
+
+def test_compose_auto_writes_five_tickets(tmp_path: Path, capsys) -> None:
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--auto",
+            "--lines",
+            str(ROOT / "examples" / "sunday_lines.csv"),
+            "--environment",
+            str(ROOT / "examples" / "environment.csv"),
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "composed=5 requested=5" in out
+    for index in range(1, 6):
+        assert (out_dir / f"ticket-{index:03d}.csv").is_file()
+    card = (out_dir / "card.txt").read_text(encoding="utf-8")
+    assert "do not submit" in card.lower()
+    assert "do not submit" in out.lower()
+
+
+def test_compose_auto_flags_override_defaults(tmp_path: Path, capsys) -> None:
+    import csv
+
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--auto",
+            "--markets",
+            "rush_yds",
+            "--n-tickets",
+            "2",
+            "--lines",
+            str(ROOT / "examples" / "sunday_lines.csv"),
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "composed=2 requested=2" in out
+    rows = list(csv.DictReader((out_dir / "ticket-001.csv").open(encoding="utf-8")))
+    assert {row["stat_type"] for row in rows} == {"rush_yds"}
+
+
+def test_compose_auto_window_can_leave_no_tickets(tmp_path: Path, capsys) -> None:
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--auto",
+            "--min-odds",
+            "1000",
+            "--lines",
+            str(ROOT / "examples" / "sunday_lines.csv"),
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "composed=0 requested=5" in out
+    assert "No slips cleared the filters" in out
+
+
+def test_bankroll_cli_prints_flat_and_kelly(capsys) -> None:
+    assert main(["bankroll", "--bankroll", "25", "--n-tickets", "5"]) == 0
+    out = capsys.readouterr().out
+    assert "flat $5.00" in out
+    assert "$1.25" in out
+
+
+def test_rank_markets_filter_first_td_only(tmp_path: Path, capsys) -> None:
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(ROOT / "examples" / "first_td_ticket.csv"),
+            "--distributions",
+            str(ROOT / "examples" / "distributions.csv"),
+            "--platform",
+            "hardrock",
+            "--markets",
+            "first_td",
+            "--no-roster",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "lines=2 live=2" in out
+    assert "first_td" in out
+    assert "ticket=ftd-001" in out
+
+
+def test_rank_ticket_id_groups_displayed_odds(tmp_path: Path, capsys) -> None:
+    lines = tmp_path / "tickets.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,book_over,book_under,slip_odds,ticket_id\n"
+        "s,hardrock,A One,,CIN,TB,pass_yds,265.5,more,standard,-110,-110,260,t1\n"
+        "s,hardrock,B One,,DET,NO,pass_yds,258.5,more,standard,-110,-110,260,t1\n"
+        "s,hardrock,C One,,BUF,HOU,pass_yds,252.5,more,standard,-110,-110,150,t2\n"
+        "s,hardrock,D One,,PHI,WAS,pass_yds,231.5,more,standard,-110,-110,150,t2\n",
+        encoding="utf-8",
+    )
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(_write_distributions(tmp_path)),
+            "--platform",
+            "hardrock",
+            "--no-roster",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "M=3.6 (+260 slip_odds)" in out
+    assert "M=2.5 (+150 slip_odds)" in out
+    assert "ticket=t1" in out
+    assert "ticket=t2" in out
+
+
+def test_rank_cli_displayed_odds_two_ticket_ids_exits_two(tmp_path: Path, capsys) -> None:
+    lines = tmp_path / "tickets.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,book_over,book_under,ticket_id\n"
+        "s,hardrock,A One,,CIN,TB,pass_yds,265.5,more,standard,-110,-110,t1\n"
+        "s,hardrock,B One,,DET,NO,pass_yds,258.5,more,standard,-110,-110,t1\n"
+        "s,hardrock,C One,,BUF,HOU,pass_yds,252.5,more,standard,-110,-110,t2\n"
+        "s,hardrock,D One,,PHI,WAS,pass_yds,231.5,more,standard,-110,-110,t2\n",
+        encoding="utf-8",
+    )
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(_write_distributions(tmp_path)),
+            "--platform",
+            "hardrock",
+            "--no-roster",
+            "--displayed-odds",
+            "260",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "one ticket" in err
+
+
+def test_rank_cli_displayed_odds_one_ticket_id_still_needs_size(
+    tmp_path: Path, capsys
+) -> None:
+    lines = tmp_path / "ticket.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,book_over,book_under,ticket_id\n"
+        "s,hardrock,A One,,CIN,TB,pass_yds,265.5,more,standard,-110,-110,t1\n"
+        "s,hardrock,B One,,DET,NO,pass_yds,258.5,more,standard,-110,-110,t1\n"
+        "s,hardrock,C One,,BUF,HOU,pass_yds,252.5,more,standard,-110,-110,t1\n",
+        encoding="utf-8",
+    )
+    shared = [
+        "rank",
+        "--lines",
+        str(lines),
+        "--distributions",
+        str(_write_distributions(tmp_path)),
+        "--platform",
+        "hardrock",
+        "--no-roster",
+        "--displayed-odds",
+        "260",
+        "--out",
+        str(tmp_path / "e.csv"),
+    ]
+    assert main(shared) == 2
+    err = capsys.readouterr().err
+    assert "one ticket" in err
+    assert "does not relax" in err
+    assert main([*shared, "--legs", "3"]) == 0
+    out = capsys.readouterr().out
+    assert "M=3.6" in out
+
+
+def test_polymarket_contract_product_is_unconfirmed(tmp_path: Path, capsys) -> None:
+    lines = tmp_path / "pm.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,contract_price\n"
+        "s,polymarket,A One,,CIN,TB,pass_yds,265.5,more,standard,0.42\n"
+        "s,polymarket,B One,,DET,NO,pass_yds,258.5,more,standard,0.55\n",
+        encoding="utf-8",
+    )
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(_write_distributions(tmp_path)),
+            "--platform",
+            "polymarket",
+            "--no-roster",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "contract_product" in out
+    assert "unconfirmed" in out
+    assert "quarter_kelly=0.0000" in out
+    assert "PREDICTION COMBOS" in out
+
+
+def test_polymarket_displayed_odds_is_confirmed(tmp_path: Path, capsys) -> None:
+    lines = tmp_path / "pm.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,contract_price\n"
+        "s,kalshi,A One,,CIN,TB,pass_yds,265.5,more,standard,0.42\n"
+        "s,kalshi,B One,,DET,NO,pass_yds,258.5,more,standard,0.55\n",
+        encoding="utf-8",
+    )
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(_write_distributions(tmp_path)),
+            "--platform",
+            "kalshi",
+            "--no-roster",
+            "--displayed-odds",
+            "400",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "M=5 (" in out
+    assert "contract_product" not in out
+
+
+def test_betmgm_platform_uses_displayed_american(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [
+            _line_row(player_name="A One", team="KC", opp="BUF"),
+            _line_row(player_name="B One", team="BUF", opp="KC"),
+        ],
+    )
+    text = lines.read_text(encoding="utf-8").replace(",underdog,", ",betmgm,")
+    lines.write_text(text, encoding="utf-8")
+    dists = _write_distributions(tmp_path)
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "betmgm",
+            "--displayed-odds",
+            "260",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "betmgm" in out
+    assert "+260" in out

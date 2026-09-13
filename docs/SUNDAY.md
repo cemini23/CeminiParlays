@@ -140,3 +140,6 @@ ceminiparlays compose --auto \
 ```
 
 `first_td` example (cross-game, two tickets): `examples/first_td_ticket.csv`.
+
+Week 1 Sunday $20 Hard Rock card (4-leg rush + anytime TD + 1 p.m. slate):
+[`docs/2026-09-13-hardrock-card.md`](2026-09-13-hardrock-card.md).

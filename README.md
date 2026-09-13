@@ -193,6 +193,7 @@ Output files always say **do not submit**. That line is the product contract. Th
 See `RESEARCH.md` for the wiki, CeminiDFS lessons, Gemini math, and social scan that set v1.
 
 - [`docs/SUNDAY.md`](docs/SUNDAY.md) — the 20-minute Sunday operator path.
+- [`docs/2026-09-13-hardrock-card.md`](docs/2026-09-13-hardrock-card.md) — Week 1 $20 Hard Rock card.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — Phase 1 composer (v0.2), Odds API fetch (v0.3), Phase 2 environment/settlement, Phase 3 more books.
 
 `grade` accepts optional ledger columns `ticket_id`, `market`, and `stake_kind` (`cash` / `bonus`); unknown extra columns are ignored. Sportsbook void + miss still settles at `0×`.

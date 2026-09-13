@@ -1,0 +1,5 @@
+slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,line_type,captured_at,injury_status,book_over,book_under,leg_odds,slip_odds,slip_multiplier,ticket_id,fair_p,contract_price
+2026-w01-sun,hardrock,Derrick Henry,derrick_henry,BAL,IND,rush_yds,78.5,more,standard,2026-09-13T13:18:45Z,,-115,-115,,,,A-10,,
+2026-w01-sun,hardrock,Chase Brown,chase_brown,CIN,TB,rush_yds,57.5,more,standard,2026-09-13T13:18:45Z,,-115,-115,,,,A-10,,
+2026-w01-sun,hardrock,James Cook,james_cook,BUF,HOU,rush_yds,74.5,more,standard,2026-09-13T13:18:45Z,,-115,-115,,,,A-10,,
+2026-w01-sun,hardrock,D'Andre Swift,dandre_swift,CHI,CAR,rush_yds,60.5,more,standard,2026-09-13T13:18:45Z,,-115,-115,,,,A-10,,

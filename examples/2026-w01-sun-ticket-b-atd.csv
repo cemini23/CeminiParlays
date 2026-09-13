@@ -1,0 +1,4 @@
+slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,line_type,captured_at,injury_status,book_over,book_under,leg_odds,slip_odds,slip_multiplier,ticket_id,fair_p,contract_price
+2026-w01-sun,hardrock,Jahmyr Gibbs,jahmyr_gibbs,DET,NO,anytime_td,,more,standard,2026-09-13T13:18:45Z,,,,-300,,,B-5,0.75,
+2026-w01-sun,hardrock,Chase Brown,chase_brown,CIN,TB,anytime_td,,more,standard,2026-09-13T13:18:45Z,,,,-130,,,B-5,0.565217,
+2026-w01-sun,hardrock,Omarion Hampton,omarion_hampton,LAC,ARI,anytime_td,,more,standard,2026-09-13T13:18:45Z,,,,-155,,,B-5,0.607843,

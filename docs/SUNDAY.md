@@ -1,7 +1,8 @@
 # Sunday in 20 minutes
 
-The operator path for one afternoon slate. No scrapers, no auto-submit. You type
-the ticket in the app; this CLI only picks and prices.
+The operator path for one afternoon slate. Licensed Odds API fetch is allowed.
+Book-site scrapers and auto-submit are not. You type the ticket in the app; this
+CLI only fetches two-way lines, picks, and prices.
 
 **Rule for every step:** if a command exits `2`, read the named `dropped` /
 `no-line` rows and fix the CSV. Do not pass `--no-strict` on a money slate.
@@ -13,7 +14,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-## 1. Build the fill-in slate (2 min)
+## 1. Build the fill-in slate (optional, 2 min)
 
 ```bash
 ceminiparlays slate
@@ -21,36 +22,46 @@ ceminiparlays slate
 # + the packaged roster. Team comes from the roster (DJ Moore = BUF).
 ```
 
-Swap `--games` for the current week's game file. `line` is blank on purpose:
-nothing is priced until you type it.
+Swap `--games` for the current week's game file. Use this only when you want a
+blank roster sheet. Prefer `fetch` for posted two-way prices.
 
-## 2. Type lines + prices (8 min)
+## 2. Fetch two-way lines (2 min)
 
-Open the slate CSV and, for each player you want, fill:
+`THE_ODDS_API_KEY` must already be in the environment. This CLI reads
+`os.environ` only. It never prints the key.
 
-- `stat_type` — `pass_yds`, `rush_yds`, `rec_yds`, `receptions`, `rush_att`,
-  `pass_tds`, `first_td`, `anytime_td`
-- `line` and `side` (`more` / `less`)
-- `book_over` / `book_under` — the posted **two-way** odds (never SGP screen
-  prices). Fair P is de-vigged from these.
-- `leg_odds` — each leg's posted American, a screen only
-- `ticket_id` — optional; rows with the same id are one ticket and share one
-  displayed American. Put the in-app price in `slip_odds` on those rows, or pass
-  `--displayed-odds` when all live rows are that one ticket.
+```bash
+ceminiparlays fetch --out runs/slate/lines.csv
+# defaults: --books hardrock,fanduel,draftkings
+#           --markets pass_yds,rush_yds,rec_yds,first_td,anytime_td
+# writes SLATE_FIELDS CSV: line + book_over/book_under for yard props;
+# TD rows leave line blank and set leg_odds + raw implied fair_p.
+# prints x-requests-remaining / x-requests-used, then
+# do not submit — type the ticket in-app
 
-TD markets (`first_td`, `anytime_td`) have no yard line. Leave `line` blank and
-type `fair_p` (0–1) or `leg_odds`. Two `first_td` legs in the same game are
-skipped as `same-game-first-td`.
+# Narrower card (overwrites only with --force)
+ceminiparlays fetch --date 2026-09-13 --books hardrock --markets first_td \
+  --out runs/slate/ftd.csv
+```
 
-Prediction venues (`polymarket`, `kalshi`): each leg needs `contract_price`
-between 0 and 1. Leave `book_over` / `book_under` blank; the combo is the
-product of binary prices, always paper-only and unconfirmed.
+Offline check (no network, no key):
+
+```bash
+ceminiparlays fetch --fixture tests/fixtures/odds_api_nfl.json --out /tmp/lines.csv
+```
+
+Fetch is **not** an SGP quote. Do not type a product of legs into `slip_odds`.
+The displayed American is still one in-app price per ticket (`--displayed-odds`
+in step 4). Existing `--out` is refused unless you pass `--force`.
+
+Roster still wins team codes: DJ Moore is BUF, never invented CHI. Unknown Odds
+API markets are skipped with a `no-odds-api-market` note.
 
 ## 3. Compose the card (4 min)
 
 ```bash
 ceminiparlays compose --auto \
-  --lines runs/slate/lines_fill_in.csv \
+  --lines runs/slate/lines.csv \
   --environment examples/environment.csv \
   --out-dir runs/2026-w01-sun/compose
 ```
@@ -70,14 +81,14 @@ Want a different card?
 ```bash
 # A first-TD longshot
 ceminiparlays compose --auto --markets first_td --legs 4 --min-odds +800 \
-  --lines runs/slate/lines_fill_in.csv --out-dir runs/ftd
+  --lines runs/slate/lines.csv --out-dir runs/ftd
 
 # A shorter rush card
 ceminiparlays compose --auto --markets rush_yds --legs 3 --max-odds +250 \
-  --lines runs/slate/lines_fill_in.csv --out-dir runs/rush
+  --lines runs/slate/lines.csv --out-dir runs/rush
 
 # FanDuel / DraftKings / BetMGM use the same displayed-American path
-ceminiparlays compose --auto --platform betmgm --lines runs/slate/lines_fill_in.csv
+ceminiparlays compose --auto --platform betmgm --lines runs/slate/lines.csv
 ```
 
 ## 4. Price one ticket before you build it (2 min)

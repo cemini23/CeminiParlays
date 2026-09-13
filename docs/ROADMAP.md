@@ -1,7 +1,7 @@
 # CeminiParlays product plan
 
-**Status:** Phase 1 is the v0.2 implement. Phases 2–3 stay specified here so we do not invent scope mid-route.  
-**Contract (unchanged):** no scrapers, no auto-submit, no book/PM API keys in this repo, no network in CI. The operator types the ticket. `compose --auto` **picks** tickets; it does **not** place them.
+**Status:** Phase 1 composer shipped (v0.2). Odds API ingest shipped (v0.3). Phases 2–3 stay specified here so we do not invent scope mid-route.  
+**Contract:** no book-site scrapers, no auto-submit, no book/PM API keys in this repo (Odds API key is env-only: `THE_ODDS_API_KEY`), no network in CI. The operator types the ticket. `fetch` writes a CSV; `compose --auto` **picks** tickets; neither places them.
 
 Sources: CeminiDFS GPP/env stack (`docs/GPP-WORKFLOW.md`, weather/vegas/stadiums), Gambling wiki `@concepts/parlay-and-correlated-bets.md` (SGP tax, DKeX COMBOS = product of binaries), `@briefs/2026-09-12_ceminidfs-lessons-pickem-parlay-cli.md`, world-cup-bot (shadow-first, DRY_RUN, paper ledger — steal the **gates**, not the CLOB).
 
@@ -23,7 +23,7 @@ Legal `--markets` tokens: `pass_yds`, `rush_yds`, `rec_yds`, `receptions`, `rush
 
 ## Variables the card must see (CeminiDFS borrow)
 
-Operator-typed or local CSV — never scraped in CI.
+Operator-typed CSV, local files, or `ceminiparlays fetch` (Odds API). Never scraped in CI.
 
 | Variable | Why it changes a parlay | Ingest |
 |----------|-------------------------|--------|
@@ -33,7 +33,7 @@ Operator-typed or local CSV — never scraped in CI.
 | Roof / weather_exposed | Dome skip; retractable outdoor until roof call; SoFi not wind-exposed | `environment.csv` |
 | Wind ≥10 / ≥15, precip | Pass yards down, rush up | `environment.csv` |
 | Pace / implied plays | Attempt props | optional env columns |
-| Two-way book odds | Fair P (never SGP-screen quotes) | `book_over` / `book_under` |
+| Two-way book odds | Fair P (never SGP-screen quotes) | `fetch` → `book_over` / `book_under`, or typed |
 | Displayed American | Ticket identity | `ticket_id` + `--displayed-odds` |
 | Correlation | QB+WR, rush vs pass, first-TD same game = illegal | priors JSON |
 | Stake kind | Cash vs $2 bonus | ledger `stake_kind` |
@@ -41,7 +41,7 @@ Operator-typed or local CSV — never scraped in CI.
 
 Prediction markets (Polymarket / Kalshi): **combo = product of independently settled binaries** (DKeX COMBOS). Correlated NFL legs paid at the product of mids are the same naive-SGP error. Paper only. No CLOB, no LP canary, no WC auto-exec.
 
-## Phase 1 — compose product (this implement)
+## Phase 1 — compose product (shipped, v0.2)
 
 1. **`slate`** — write fill-in `lines.csv` from `games.csv` + roster + optional injury file. Team comes from roster (DJ Moore = BUF). Blank `line` / odds until typed. `rank` refuses a blank line.
 2. **`first_td` / `anytime_td`** — discrete markets. Two `first_td` legs in the **same game** skip (`same-game-first-td`). Cross-game first TD uses ρ = 0 in v1. Anytime TD same-game gets a prior row. Fair P from operator `leg_odds` or a typed `fair_p` column; no fake Gaussian median.
@@ -61,6 +61,7 @@ Also in Phase 1:
 
 ## Phase 2 — environment + settlement
 
+- **Odds API ingest (shipped, v0.3):** `ceminiparlays fetch` pulls two-way player props from The Odds API (licensed REST, stdlib `urllib.request` only). Still no FanDuel / DraftKings / Hard Rock / BetMGM site clients, unofficial GitHub “book APIs”, or auto-submit. A fetched two-way price is not a confirmed SGP.
 - Import a **local** CeminiDFS week cache / projection CSV (`--from-ceminidfs path`) if the file exists; otherwise skip with a named note.
 - Model push / reduced sportsbook tickets only when the ledger has a **settled** multiplier (already required). Optional `--allow-integer-lines` on books stays off.
 - Roster refresh script that reads a **local** nflverse players parquet (no download).
@@ -72,7 +73,7 @@ Also in Phase 1:
 
 ## Never
 
-- Scrape Hard Rock, FanDuel, DraftKings, Kalshi, or Polymarket.
+- Scrape Hard Rock, FanDuel, DraftKings, Kalshi, or Polymarket (Odds API ingest is not a book-site scrape).
 - Auto-submit, Chrome fill, or WC-bot live POST.
 - Treat FanDuel FPPG as a prop fair.
 - Two first-TD legs from one game.

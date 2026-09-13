@@ -2,6 +2,8 @@
 
 v1 follows Fable verdict **C′**: K147 CLI surface + offline Gemini math. No live polling.
 
+**v0.3:** `ceminiparlays fetch` is licensed The Odds API ingest (stdlib `urllib`, env key only). CI still uses `--fixture` and never hits the network. Book-site scrapers stay NO-GO.
+
 **v0.1.3 product:** sportsbook parlays are the v1 product (Hard Rock primary; FanDuel / DraftKings same math). Pick'em (Underdog / PrizePicks) is the lounge addon.
 
 ## Internal
@@ -40,7 +42,7 @@ OpenCLI + Brave social scan:
 
 ## v1 product bar
 
-Working tested public repo. Manual CSV in. `edges.csv` + report out. CI on 3.11 and 3.12. No network imports.
+Working tested public repo. Fetch or manual CSV in. `edges.csv` + report out. CI on 3.11 and 3.12. Network only in `odds_api.py`; tests use a fixture.
 
 ## 2026-09-12 super-audit
 

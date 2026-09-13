@@ -633,12 +633,38 @@ def test_hardrock_flex_exits_two(tmp_path: Path) -> None:
     assert code == 2
 
 
-def test_version_is_0_2_0(capsys) -> None:
+def test_version_is_0_3_0(capsys) -> None:
     import pytest
 
     with pytest.raises(SystemExit):
         main(["--version"])
-    assert "0.2.0" in capsys.readouterr().out
+    assert "0.3.0" in capsys.readouterr().out
+
+
+def test_fetch_fixture_cli_prints_credits(tmp_path: Path, capsys) -> None:
+    import csv
+
+    from ceminiparlays.cli import SLATE_FIELDS
+
+    out = tmp_path / "lines.csv"
+    code = main(
+        [
+            "fetch",
+            "--fixture",
+            str(ROOT / "tests" / "fixtures" / "odds_api_nfl.json"),
+            "--out",
+            str(out),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "x-requests-remaining=472" in captured.out
+    assert "do not submit" in captured.out.lower()
+    rows = list(csv.DictReader(out.open(encoding="utf-8")))
+    assert csv.DictReader(out.open(encoding="utf-8")).fieldnames == SLATE_FIELDS
+    stats = {row["stat_type"] for row in rows}
+    assert "pass_yds" in stats
+    assert "anytime_td" in stats or "first_td" in stats
 
 
 def test_slate_writes_moore_as_buf_with_blank_lines(tmp_path: Path, capsys) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ceminiparlays import STANDARD_DISCLAIMER, __version__
@@ -10,9 +11,21 @@ from ceminiparlays.bankroll import flat_stake, kelly_cap_stake
 from ceminiparlays.compose import TICKET_FIELDS, compose_tickets, estimate_multiplier, ticket_rows
 from ceminiparlays.environment import read_environment
 from ceminiparlays.fair import p_over_line, side_probability
+from ceminiparlays.fetch import load_fixture, rows_from_events, write_fetch_csv
 from ceminiparlays.grade import grade_ledger, write_grade
 from ceminiparlays.io import read_distributions, read_games, read_manual_lines, write_csv
 from ceminiparlays.markets import AUTO_MARKETS, parse_markets
+from ceminiparlays.odds_api import (
+    DEFAULT_REGIONS,
+    STAT_TO_MARKET,
+    bookmakers_for_platforms,
+    parse_books,
+    parse_fetch_date,
+    pull_event_odds,
+    resolve_api_key,
+    sport_key_for,
+    utc_day_window,
+)
 from ceminiparlays.odds import american_to_decimal, devig_spread, devig_two_way
 from ceminiparlays.payouts import (
     PREDICTION_PLATFORMS,
@@ -148,7 +161,10 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ceminiparlays",
-        description="Local sportsbook parlay / pick'em research CLI. Operator submits. No scrapers.",
+        description=(
+            "Local sportsbook parlay / pick'em research CLI. "
+            "Licensed Odds API fetch is allowed; book-site scrapers and auto-submit are not."
+        ),
     )
     parser.add_argument("--version", action="version", version=f"ceminiparlays {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -236,6 +252,39 @@ def build_parser() -> argparse.ArgumentParser:
     )
     bankroll.add_argument("--bankroll", type=float, required=True)
     bankroll.add_argument("--n-tickets", type=int, default=5)
+
+    fetch = sub.add_parser(
+        "fetch",
+        help="Pull two-way player-prop odds from The Odds API into a lines CSV",
+    )
+    fetch.add_argument("--sport", default="nfl")
+    fetch.add_argument(
+        "--date",
+        default=None,
+        help="UTC calendar day (YYYY-MM-DD). Default is today UTC.",
+    )
+    fetch.add_argument(
+        "--books",
+        default="hardrock,fanduel,draftkings",
+        help="Comma list of platforms: hardrock,fanduel,draftkings,betmgm",
+    )
+    fetch.add_argument(
+        "--markets",
+        default="pass_yds,rush_yds,rec_yds,first_td,anytime_td",
+        help="Comma list of market tokens (same as compose/rank)",
+    )
+    fetch.add_argument("--regions", default=DEFAULT_REGIONS)
+    fetch.add_argument("--slate-id", default=None)
+    fetch.add_argument("--out", type=Path, default=Path("runs/slate/lines.csv"))
+    fetch.add_argument(
+        "--fixture",
+        type=Path,
+        default=None,
+        help="Local Odds API JSON. Skips HTTP. No API key required.",
+    )
+    fetch.add_argument("--force", action="store_true", help="Overwrite --out if it exists")
+    fetch.add_argument("--roster", type=Path, default=None)
+    fetch.add_argument("--no-roster", action="store_true")
     return parser
 
 
@@ -673,6 +722,57 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_fetch(args: argparse.Namespace) -> int:
+    notes: list[str] = []
+    captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    day = parse_fetch_date(args.date)
+    slate_id = args.slate_id or day.isoformat()
+    platforms = parse_books(args.books)
+    stats = parse_markets(args.markets)
+    roster = None if args.no_roster else load_roster(args.roster)
+    meta: dict[str, str] = {}
+
+    if args.fixture:
+        events, meta = load_fixture(args.fixture)
+    else:
+        api_key = resolve_api_key()
+        commence_from, commence_to = utc_day_window(day)
+        events, meta = pull_event_odds(
+            sport_key_for(args.sport),
+            commence_from=commence_from,
+            commence_to=commence_to,
+            regions=args.regions,
+            markets=",".join(STAT_TO_MARKET[stat] for stat in stats),
+            bookmakers=",".join(bookmakers_for_platforms(platforms)),
+            api_key=api_key,
+        )
+        remaining = meta.get("x-requests-remaining", "")
+        used = meta.get("x-requests-used", "")
+        print(f"host=api.the-odds-api.com remaining={remaining} used={used}")
+
+    rows = rows_from_events(
+        events,
+        platform_filter=set(platforms),
+        roster=roster,
+        slate_id=slate_id,
+        captured_at=captured_at,
+        notes=notes,
+    )
+    if stats:
+        rows = [row for row in rows if row["stat_type"] in stats]
+    write_fetch_csv(args.out, rows, force=args.force)
+    remaining = meta.get("x-requests-remaining", "")
+    used = meta.get("x-requests-used", "")
+    if remaining or used:
+        print(f"x-requests-remaining={remaining} x-requests-used={used}")
+    for note in notes:
+        print(f"  {note}")
+    print(f"rows={len(rows)} events={len(events)} remaining={remaining}")
+    print(f"wrote {args.out}")
+    print("do not submit — type the ticket in-app")
+    return 0
+
+
 def _cmd_bankroll(args: argparse.Namespace) -> int:
     flat = flat_stake(args.bankroll, args.n_tickets)
     cap = kelly_cap_stake(args.bankroll)
@@ -698,6 +798,7 @@ def main(argv: list[str] | None = None) -> int:
         "slate": _cmd_slate,
         "compose": _cmd_compose,
         "bankroll": _cmd_bankroll,
+        "fetch": _cmd_fetch,
     }
     try:
         return handlers[args.command](args)

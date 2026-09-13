@@ -26,15 +26,19 @@ def test_source_has_no_network_clients() -> None:
             elif isinstance(node, ast.ImportFrom) and node.module:
                 names = [node.module]
             for name in names:
-                if name in BANNED or name.split(".")[0] in {item.split(".")[0] for item in BANNED}:
-                    if name.startswith("urllib") and name != "urllib.request":
-                        continue
-                    if name in BANNED or name.split(".")[0] in {
-                        "requests",
-                        "httpx",
-                        "aiohttp",
-                        "selenium",
-                        "playwright",
-                    }:
+                root = name.split(".")[0]
+                if name == "urllib.request":
+                    if path.name != "odds_api.py":
                         offenders.append(f"{path.name}:{name}")
+                    continue
+                if name.startswith("urllib"):
+                    continue
+                if name in BANNED or root in {
+                    "requests",
+                    "httpx",
+                    "aiohttp",
+                    "selenium",
+                    "playwright",
+                }:
+                    offenders.append(f"{path.name}:{name}")
     assert offenders == []

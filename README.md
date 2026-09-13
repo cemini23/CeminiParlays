@@ -2,11 +2,9 @@
 
 Local CLI for NFL **sportsbook parlays**. Pick'em (Underdog / PrizePicks) is a second profile.
 
-You type posted lines and the **displayed American parlay / SGP price**. The tool ranks EV with a copula. **You type the ticket in Hard Rock (or FanDuel / DraftKings).**
+`fetch` pulls two-way player-prop lines from [The Odds API](https://the-odds-api.com). You still type the ticket in Hard Rock / FanDuel / DraftKings / BetMGM and pass the **displayed American parlay / SGP price**. The tool ranks EV with a copula. It does not submit slips and it does not scrape book sites.
 
-This is not a bot. It does not scrape Hard Rock, FanDuel, DraftKings, BetMGM, PrizePicks, Underdog, Polymarket, or Kalshi. It does not submit slips.
-
-**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute operator path (slate → type lines → compose → price → size → grade). [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (Phase 1 = this composer).
+**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3).
 
 ## Install
 
@@ -71,14 +69,26 @@ ceminiparlays rank --lines examples/hardrock_lines.csv \
 ceminiparlays slate
 # -> runs/slate/lines_fill_in.csv (DJ Moore is BUF, per the roster)
 
+# Pull two-way player props (licensed Odds API; no book-site scrape).
+# Key: THE_ODDS_API_KEY in the environment. This CLI only reads os.environ.
+# Defaults: --books hardrock,fanduel,draftkings
+#           --markets pass_yds,rush_yds,rec_yds,first_td,anytime_td
+ceminiparlays fetch --out runs/slate/lines.csv
+ceminiparlays fetch --date 2026-09-13 --books hardrock --markets first_td,anytime_td \
+  --out runs/slate/ftd.csv --force
+# Offline / CI: --fixture skips HTTP and does not need a key
+ceminiparlays fetch --fixture tests/fixtures/odds_api_nfl.json --out /tmp/lines.csv
+# Fetch fills line + book_over/book_under (or TD leg_odds / fair_p).
+# The displayed SGP American is still typed once per ticket (--displayed-odds).
+
 # Compose 5 tickets with the auto defaults (2-leg, +150..+400, yards markets)
-ceminiparlays compose --auto --lines examples/sunday_lines.csv \
+ceminiparlays compose --auto --lines runs/slate/lines.csv \
   --environment examples/environment.csv --out-dir runs/2026-w01-sun
 # -> runs/2026-w01-sun/ticket-001.csv .. ticket-005.csv + card.txt
 
-# A first-TD longshot card (needs 4+ first_td rows on the fill-in slate)
+# A first-TD longshot card (needs 4+ first_td rows — use a fetched slate)
 ceminiparlays compose --auto --markets first_td --legs 4 --min-odds +800 \
-  --lines runs/slate/lines_fill_in.csv --out-dir runs/ftd
+  --lines runs/slate/lines.csv --out-dir runs/ftd
 
 # Flat vs quarter-Kelly stake for a 5-ticket card
 ceminiparlays bankroll --bankroll 25 --n-tickets 5
@@ -164,12 +174,13 @@ Always confirm the American price or multiplier on the submit screen.
 
 ## What it will not do
 
-- Scrape lounge, book, Polymarket, or Kalshi boards
+- Scrape lounge, book, Polymarket, or Kalshi boards (licensed Odds API ingest is the only HTTP path)
 - Auto-fill or auto-submit slips or prediction COMBOS
 - Hit the network in tests or CI
 - Treat FanDuel fantasy points as a prop fair value
-- Invent reduced-SGP step-down tables (Phase 2)
+- Invent reduced-SGP step-down tables
 - Size each leg with Kelly and then add the fractions
+- Invent a displayed parlay / SGP price from the product of fetched legs
 
 ## Responsible use
 
@@ -182,7 +193,7 @@ Output files always say **do not submit**. That line is the product contract. Th
 See `RESEARCH.md` for the wiki, CeminiDFS lessons, Gemini math, and social scan that set v1.
 
 - [`docs/SUNDAY.md`](docs/SUNDAY.md) — the 20-minute Sunday operator path.
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Phase 1 (this composer), Phase 2 (environment + settlement), Phase 3 (more books).
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Phase 1 composer (v0.2), Odds API fetch (v0.3), Phase 2 environment/settlement, Phase 3 more books.
 
 `grade` accepts optional ledger columns `ticket_id`, `market`, and `stake_kind` (`cash` / `bonus`); unknown extra columns are ignored. Sportsbook void + miss still settles at `0×`.
 

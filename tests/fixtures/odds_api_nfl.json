@@ -1,0 +1,134 @@
+{
+  "meta": {
+    "x-requests-remaining": "472",
+    "x-requests-used": "28"
+  },
+  "events": [
+    {
+      "id": "chi-car-demo",
+      "sport_key": "americanfootball_nfl",
+      "commence_time": "2026-09-13T17:00:00Z",
+      "home_team": "Chicago Bears",
+      "away_team": "Carolina Panthers",
+      "bookmakers": [
+        {
+          "key": "hardrockbet",
+          "title": "Hard Rock Bet",
+          "markets": [
+            {
+              "key": "player_pass_yds",
+              "outcomes": [
+                {
+                  "name": "Over",
+                  "description": "Caleb Williams",
+                  "price": -115,
+                  "point": 224.5
+                },
+                {
+                  "name": "Under",
+                  "description": "Caleb Williams",
+                  "price": -105,
+                  "point": 224.5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "hardrockbet_fl",
+          "title": "Hard Rock Bet Florida",
+          "markets": [
+            {
+              "key": "player_pass_yds",
+              "outcomes": [
+                {
+                  "name": "Over",
+                  "description": "Caleb Williams",
+                  "price": -110,
+                  "point": 224.5
+                },
+                {
+                  "name": "Under",
+                  "description": "Caleb Williams",
+                  "price": -110,
+                  "point": 224.5
+                }
+              ]
+            },
+            {
+              "key": "player_anytime_td",
+              "outcomes": [
+                {
+                  "name": "Yes",
+                  "description": "Jahmyr Gibbs",
+                  "price": 145
+                }
+              ]
+            },
+            {
+              "key": "player_reception_yds",
+              "outcomes": [
+                {
+                  "name": "Over",
+                  "description": "DJ Moore",
+                  "price": -112,
+                  "point": 52.5
+                },
+                {
+                  "name": "Under",
+                  "description": "DJ Moore",
+                  "price": -108,
+                  "point": 52.5
+                }
+              ]
+            },
+            {
+              "key": "player_sacks",
+              "outcomes": [
+                {
+                  "name": "Over",
+                  "description": "Someone Else",
+                  "price": -110,
+                  "point": 0.5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "fanduel",
+          "title": "FanDuel",
+          "markets": [
+            {
+              "key": "player_pass_yds",
+              "outcomes": [
+                {
+                  "name": "Over",
+                  "description": "Caleb Williams",
+                  "price": -108,
+                  "point": 225.5
+                },
+                {
+                  "name": "Under",
+                  "description": "Caleb Williams",
+                  "price": -112,
+                  "point": 225.5
+                }
+              ]
+            },
+            {
+              "key": "player_anytime_td",
+              "outcomes": [
+                {
+                  "name": "Yes",
+                  "description": "Jahmyr Gibbs",
+                  "price": 150
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

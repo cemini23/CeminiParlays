@@ -5,10 +5,17 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from ceminiparlays import STANDARD_DISCLAIMER, __version__
 from ceminiparlays.bankroll import flat_stake, kelly_cap_stake
-from ceminiparlays.compose import TICKET_FIELDS, compose_tickets, estimate_multiplier, ticket_rows
+from ceminiparlays.compose import (
+    TICKET_FIELDS,
+    compose_tickets,
+    concentration_warnings,
+    estimate_multiplier,
+    ticket_rows,
+)
 from ceminiparlays.environment import read_environment
 from ceminiparlays.fair import p_over_line, side_probability
 from ceminiparlays.fetch import load_fixture, rows_from_events, write_fetch_csv
@@ -19,6 +26,7 @@ from ceminiparlays.odds_api import (
     DEFAULT_REGIONS,
     STAT_TO_MARKET,
     bookmakers_for_platforms,
+    et_slate_window,
     parse_books,
     parse_fetch_date,
     pull_event_odds,
@@ -112,7 +120,7 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
         "--markets",
         default=None,
         help="Comma list of market tokens: pass_yds,rush_yds,rec_yds,receptions,"
-        "rush_att,pass_tds,first_td,anytime_td",
+        "rush_att,pass_tds,first_td,anytime_td,h2h,spreads,totals",
     )
     parser.add_argument(
         "--ticket-id",
@@ -261,7 +269,16 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument(
         "--date",
         default=None,
-        help="UTC calendar day (YYYY-MM-DD). Default is today UTC.",
+        help=(
+            "America/New_York slate day (YYYY-MM-DD). Midnight ET to next midnight ET, "
+            "converted to UTC (DST from zoneinfo). Default is today in America/New_York. "
+            "Sunday includes SNF."
+        ),
+    )
+    fetch.add_argument(
+        "--utc-date",
+        default=None,
+        help="UTC calendar day (YYYY-MM-DD). Uses utc_day_window instead of the ET slate.",
     )
     fetch.add_argument(
         "--books",
@@ -271,7 +288,11 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument(
         "--markets",
         default="pass_yds,rush_yds,rec_yds,first_td,anytime_td",
-        help="Comma list of market tokens (same as compose/rank)",
+        help=(
+            "Comma list of market tokens (same as compose/rank). "
+            "Game markets: h2h,spreads,totals (aliases moneyline,spread,total). "
+            "Default stays player props."
+        ),
     )
     fetch.add_argument("--regions", default=DEFAULT_REGIONS)
     fetch.add_argument("--slate-id", default=None)
@@ -716,6 +737,8 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     card_path = out_dir / "card.txt"
     card_path.write_text(card + "\n", encoding="utf-8")
     print(f"composed={len(tickets)} requested={n_tickets} out={out_dir}")
+    for warning in concentration_warnings(tickets):
+        print(f"warning: {warning}")
     print(card)
     print(f"wrote {card_path}")
     print("do not submit — type every ticket in-app")
@@ -725,7 +748,11 @@ def _cmd_compose(args: argparse.Namespace) -> int:
 def _cmd_fetch(args: argparse.Namespace) -> int:
     notes: list[str] = []
     captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    day = parse_fetch_date(args.date)
+    utc_date = getattr(args, "utc_date", None)
+    if utc_date:
+        day = parse_fetch_date(utc_date)
+    else:
+        day = parse_fetch_date(args.date, tzinfo=ZoneInfo("America/New_York"))
     slate_id = args.slate_id or day.isoformat()
     platforms = parse_books(args.books)
     stats = parse_markets(args.markets)
@@ -736,7 +763,10 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
         events, meta = load_fixture(args.fixture)
     else:
         api_key = resolve_api_key()
-        commence_from, commence_to = utc_day_window(day)
+        if utc_date:
+            commence_from, commence_to = utc_day_window(day)
+        else:
+            commence_from, commence_to = et_slate_window(day)
         events, meta = pull_event_odds(
             sport_key_for(args.sport),
             commence_from=commence_from,

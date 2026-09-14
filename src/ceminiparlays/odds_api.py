@@ -15,6 +15,7 @@ from collections.abc import Iterable
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from zoneinfo import ZoneInfo
 
 from ceminiparlays.payouts import normalize_platform
 from ceminiparlays.resources import read_config_text
@@ -40,6 +41,9 @@ MARKET_TO_STAT = {
     "player_pass_tds": "pass_tds",
     "player_1st_td": "first_td",
     "player_anytime_td": "anytime_td",
+    "h2h": "moneyline",
+    "spreads": "spread",
+    "totals": "total",
 }
 STAT_TO_MARKET = {stat: market for market, stat in MARKET_TO_STAT.items()}
 FETCH_BOOKS = ("hardrock", "fanduel", "draftkings", "betmgm")
@@ -118,15 +122,32 @@ def parse_books(value: str | None) -> list[str]:
     return tokens
 
 
-def parse_fetch_date(value: str | None) -> date:
+def parse_fetch_date(value: str | None, *, tzinfo: timezone | ZoneInfo | None = None) -> date:
     if not value:
-        return datetime.now(timezone.utc).date()
+        return datetime.now(tzinfo or timezone.utc).date()
     return date.fromisoformat(value)
 
 
 def utc_day_window(day: date) -> tuple[str, str]:
     start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
     end = start + timedelta(days=1)
+    return (
+        start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+
+
+def et_slate_window(day: date) -> tuple[str, str]:
+    """America/New_York midnight→midnight for ``day``, formatted as UTC ``...Z``.
+
+    DST offset comes from ``zoneinfo``, not a hard-coded −4/−5.
+    """
+
+    eastern = ZoneInfo("America/New_York")
+    start_et = datetime(day.year, day.month, day.day, tzinfo=eastern)
+    end_et = start_et + timedelta(days=1)
+    start = start_et.astimezone(timezone.utc)
+    end = end_et.astimezone(timezone.utc)
     return (
         start.strftime("%Y-%m-%dT%H:%M:%SZ"),
         end.strftime("%Y-%m-%dT%H:%M:%SZ"),

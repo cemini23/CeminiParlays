@@ -124,6 +124,76 @@ def test_grade_sportsbook_void_all_hits_without_multiplier_raises(tmp_path) -> N
         grade_ledger(path)
 
 
+def test_grade_week1_hardrock_ledger() -> None:
+    summary = grade_ledger(ROOT / "examples" / "ledger_week1_hardrock.csv")
+    assert summary.n_slips == 5
+    assert summary.hits == 2
+    assert summary.stake == 40.0
+    assert abs(summary.pnl - 26.07) < 0.02
+    assert round(summary.pnl, 2) == 26.07
+
+
+def test_grade_atd_yes_yes_american_is_hit_not_void(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,3,yes|yes|yes,yes|yes|yes,yes|yes|yes,5,+288\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert summary.hits == 1
+    assert abs(summary.pnl - 14.40) < 1e-9
+    assert abs(summary.pnl - 1435.0) > 1.0
+
+
+def test_grade_atd_yes_yes_paid_is_hit(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier,paid\n"
+        "hardrock,standard,3,yes|yes|yes,yes|yes|yes,yes|yes|yes,5,,19.40\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert summary.hits == 1
+    assert abs(summary.pnl - 14.40) < 1e-9
+
+
+def test_grade_ml_and_under_is_hit(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,3,ml|ml|under,-175|-180|39,win|win|33,10,+367\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert summary.hits == 1
+    assert abs(summary.pnl - 36.70) < 1e-9
+
+
+def test_grade_numeric_half_point_is_hit_not_void(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,1,over,47.5,48,5,2.0\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert summary.hits == 1
+    assert abs(summary.pnl - 5.0) < 1e-9
+
+
+def test_grade_win_vs_win_is_hit_not_void(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,1,ml,-175,win,5,2.0\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert summary.hits == 1
+    assert abs(summary.pnl - 5.0) < 1e-9
+
+
 def test_grade_accepts_optional_ticket_market_stake_kind(tmp_path) -> None:
     path = tmp_path / "ledger.csv"
     path.write_text(

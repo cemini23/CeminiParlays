@@ -3,11 +3,14 @@ import json
 import urllib.error
 from urllib.parse import parse_qs, urlparse
 
+from datetime import date
+
 from ceminiparlays.odds_api import (
     BOOKMAKER_TO_PLATFORM,
     MARKET_TO_STAT,
     TEAM_NAMES,
     bookmakers_for_platforms,
+    et_slate_window,
     event_odds_url,
     events_url,
     get_json,
@@ -15,6 +18,7 @@ from ceminiparlays.odds_api import (
     resolve_api_key,
     select_bookmakers,
     team_code,
+    utc_day_window,
 )
 
 
@@ -27,6 +31,9 @@ def test_market_and_book_maps() -> None:
     assert MARKET_TO_STAT["player_pass_tds"] == "pass_tds"
     assert MARKET_TO_STAT["player_1st_td"] == "first_td"
     assert MARKET_TO_STAT["player_anytime_td"] == "anytime_td"
+    assert MARKET_TO_STAT["h2h"] == "moneyline"
+    assert MARKET_TO_STAT["spreads"] == "spread"
+    assert MARKET_TO_STAT["totals"] == "total"
     assert BOOKMAKER_TO_PLATFORM["fanduel"] == "fanduel"
     assert BOOKMAKER_TO_PLATFORM["draftkings"] == "draftkings"
     assert BOOKMAKER_TO_PLATFORM["betmgm"] == "betmgm"
@@ -141,6 +148,14 @@ def test_get_json_retries_once_on_http_429() -> None:
     assert slept == [2]
     assert payload == {"id": "evt"}
     assert headers["x-requests-remaining"] == "10"
+
+
+def test_et_slate_window_includes_snf_kickoff() -> None:
+    kick = "2026-09-14T00:20:00Z"
+    start, end = et_slate_window(date(2026, 9, 13))
+    assert start <= kick < end
+    utc_start, utc_end = utc_day_window(date(2026, 9, 13))
+    assert not (utc_start <= kick < utc_end)
 
 
 def test_resolve_api_key_unset(monkeypatch) -> None:

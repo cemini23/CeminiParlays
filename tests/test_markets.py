@@ -2,6 +2,7 @@ import pytest
 
 from ceminiparlays.markets import (
     AUTO_MARKETS,
+    GAME_STATS,
     TD_STATS,
     YARDS_STATS,
     is_first_td,
@@ -36,3 +37,10 @@ def test_parse_markets_dedupes_and_strips() -> None:
 def test_parse_markets_refuses_unknown_token() -> None:
     with pytest.raises(ValueError, match="unknown --markets token"):
         parse_markets("pass_yds,nonsense")
+
+
+def test_parse_markets_accepts_game_aliases() -> None:
+    assert parse_markets("h2h,spreads,totals") == ["moneyline", "spread", "total"]
+    assert parse_markets("moneyline,spread,total") == ["moneyline", "spread", "total"]
+    assert GAME_STATS == {"moneyline", "spread", "total"}
+    assert not (set(AUTO_MARKETS) & GAME_STATS)

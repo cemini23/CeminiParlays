@@ -4,7 +4,7 @@ Local CLI for NFL **sportsbook parlays**. Pick'em (Underdog / PrizePicks) is a s
 
 `fetch` pulls two-way player-prop lines from [The Odds API](https://the-odds-api.com). You still type the ticket in Hard Rock / FanDuel / DraftKings / BetMGM and pass the **displayed American parlay / SGP price**. The tool ranks EV with a copula. It does not submit slips and it does not scrape book sites.
 
-**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3).
+**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3; grade + ET fetch + game markets = v0.4).
 
 ## Install
 
@@ -71,14 +71,17 @@ ceminiparlays slate
 
 # Pull two-way player props (licensed Odds API; no book-site scrape).
 # Key: THE_ODDS_API_KEY in the environment. This CLI only reads os.environ.
+# --date is America/New_York midnight→midnight (UTC converted; includes SNF).
+# --utc-date keeps the old UTC calendar window.
 # Defaults: --books hardrock,fanduel,draftkings
 #           --markets pass_yds,rush_yds,rec_yds,first_td,anytime_td
+# Game markets: --markets h2h,spreads,totals (aliases moneyline,spread,total)
 ceminiparlays fetch --out runs/slate/lines.csv
 ceminiparlays fetch --date 2026-09-13 --books hardrock --markets first_td,anytime_td \
   --out runs/slate/ftd.csv --force
 # Offline / CI: --fixture skips HTTP and does not need a key
 ceminiparlays fetch --fixture tests/fixtures/odds_api_nfl.json --out /tmp/lines.csv
-# Fetch fills line + book_over/book_under (or TD leg_odds / fair_p).
+# Fetch fills line + book_over/book_under (or TD / h2h leg_odds / fair_p).
 # The displayed SGP American is still typed once per ticket (--displayed-odds).
 
 # Compose 5 tickets with the auto defaults (2-leg, +150..+400, yards markets)
@@ -109,7 +112,7 @@ Default `--platform` is **hardrock**. Choices: `hardrock`, `fanduel`, `draftking
 
 `ticket_id` groups rows: when any row carries one, a combo only combines rows that share that id (or all-blank rows). Type the in-app American in `slip_odds` on those rows. `--ticket-id <id>` filters the CSV to one ticket; then pass `--legs` matching that ticket before `--displayed-odds`.
 
-`--markets` keeps only the named market families (`pass_yds`, `rush_yds`, `rec_yds`, `receptions`, `rush_att`, `pass_tds`, `first_td`, `anytime_td`). `first_td` and `anytime_td` are discrete: fair P comes from a typed `fair_p` or from `leg_odds` implied, never from a fake Gaussian. Two `first_td` legs in the same game never rank (`same-game-first-td`). Cross-game first TD uses ρ = 0; `anytime_td` same-team carries a 0.15 prior.
+`--markets` keeps only the named market families (`pass_yds`, `rush_yds`, `rec_yds`, `receptions`, `rush_att`, `pass_tds`, `first_td`, `anytime_td`, plus game markets `h2h`/`spreads`/`totals`). `compose --auto` still uses yards only and skips game rows. `first_td` and `anytime_td` are discrete: fair P comes from a typed `fair_p` or from `leg_odds` implied, never from a fake Gaussian. Two `first_td` legs in the same game never rank (`same-game-first-td`). Cross-game first TD uses ρ = 0; `anytime_td` same-team carries a 0.15 prior. Compose prints a warning (exit 0) when the same player appears on two tickets in the same `stat_type`; yards + ATD on one player does not warn.
 
 If you only type per-leg `leg_odds`, the tool multiplies those decimals as an **unconfirmed screen** (`leg_odds_naive`, Kelly = 0) until you pass `--displayed-odds` or type the same `slip_odds` on every combo leg. That product **overstates** same-game SGP payout. Rebuild the ticket in-app and pass the displayed price before you size.
 
@@ -193,10 +196,11 @@ Output files always say **do not submit**. That line is the product contract. Th
 See `RESEARCH.md` for the wiki, CeminiDFS lessons, Gemini math, and social scan that set v1.
 
 - [`docs/SUNDAY.md`](docs/SUNDAY.md) — the 20-minute Sunday operator path.
+- [`docs/GROK-BOTS.md`](docs/GROK-BOTS.md) — Parlays Slate Desk + Recap Desk (paste into Grok Bot.app).
 - [`docs/2026-09-13-hardrock-card.md`](docs/2026-09-13-hardrock-card.md) — Week 1 $20 Hard Rock card.
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Phase 1 composer (v0.2), Odds API fetch (v0.3), Phase 2 environment/settlement, Phase 3 more books.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Phase 1 composer (v0.2), Odds API fetch (v0.3), grade + ET fetch + game markets (v0.4), Phase 2 environment/settlement, Phase 3 more books.
 
-`grade` accepts optional ledger columns `ticket_id`, `market`, and `stake_kind` (`cash` / `bonus`); unknown extra columns are ignored. Sportsbook void + miss still settles at `0×`.
+`grade` accepts optional ledger columns `ticket_id`, `market`, `stake_kind` (`cash` / `bonus`), and `paid` (Won-tab cash; that row is `paid - stake`). Discrete ATD `yes`/`yes` and ML `win`/`win` are hits, never voids. Numeric `actual == line` still voids on yardage/totals/spreads. Ledger `multiplier` `+288` is American, not 288×. Unknown extra columns are ignored. Sportsbook void + miss still settles at `0×`. HIT with an empty multiplier still fails closed.
 
 ## Support
 

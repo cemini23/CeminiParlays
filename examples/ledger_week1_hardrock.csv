@@ -1,0 +1,6 @@
+platform,mode,legs,sides,lines,actuals,stake,multiplier,ticket_id,market,stake_kind,paid
+hardrock,parlay,Jahmyr Gibbs|Chase Brown,over|over,85.5|57.5,156|56,10,,A-2leg,rush_yds|rush_yds,cash,
+hardrock,parlay,Derrick Henry|Chase Brown|James Cook|D'Andre Swift,over|over|over|over,78.5|57.5|74.5|60.5,144|56|57|124,10,,A-4leg,rush_yds|rush_yds|rush_yds|rush_yds,cash,
+hardrock,parlay,Jahmyr Gibbs|Chase Brown|Omarion Hampton,yes|yes|yes,yes|yes|yes,yes|yes|yes,5,+288,B,anytime_td|anytime_td|anytime_td,cash,19.40
+hardrock,parlay,CHI|BAL|NYJ@TEN total,ml|ml|under,-175|-180|39,win|win|33,10,+367,C,moneyline|moneyline|total,cash,46.67
+hardrock,parlay,Dak Prescott|Jake Ferguson|Jaxson Dart|Cam Skattebo|DAL@NYG total,over|over|over|yes|over,262.5|29.5|31.5|yes|47.5,175|6|54|yes|48,5,,3,pass_yds|rec_yds|rush_yds|anytime_td|total,cash,

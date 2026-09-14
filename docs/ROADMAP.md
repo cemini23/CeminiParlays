@@ -1,6 +1,6 @@
 # CeminiParlays product plan
 
-**Status:** Phase 1 composer shipped (v0.2). Odds API ingest shipped (v0.3). Phases 2–3 stay specified here so we do not invent scope mid-route.  
+**Status:** Phase 1 composer shipped (v0.2). Odds API ingest shipped (v0.3). Grade + ET fetch + game markets shipped (v0.4). Phases 2–3 stay specified here so we do not invent scope mid-route.  
 **Contract:** no book-site scrapers, no auto-submit, no book/PM API keys in this repo (Odds API key is env-only: `THE_ODDS_API_KEY`), no network in CI. The operator types the ticket. `fetch` writes a CSV; `compose --auto` **picks** tickets; neither places them.
 
 Sources: CeminiDFS GPP/env stack (`docs/GPP-WORKFLOW.md`, weather/vegas/stadiums), Gambling wiki `@concepts/parlay-and-correlated-bets.md` (SGP tax, DKeX COMBOS = product of binaries), `@briefs/2026-09-12_ceminidfs-lessons-pickem-parlay-cli.md`, world-cup-bot (shadow-first, DRY_RUN, paper ledger — steal the **gates**, not the CLOB).
@@ -17,7 +17,7 @@ Sources: CeminiDFS GPP/env stack (`docs/GPP-WORKFLOW.md`, weather/vegas/stadiums
 | Bankroll / stake | `--bankroll` `--stake` | print flat vs ¼-Kelly; do not invent a sixth ticket |
 | Control | omit knobs + `--auto` | composer fills the table above |
 
-Legal `--markets` tokens: `pass_yds`, `rush_yds`, `rec_yds`, `receptions`, `rush_att`, `pass_tds`, `first_td`, `anytime_td`.  
+Legal `--markets` tokens: `pass_yds`, `rush_yds`, `rec_yds`, `receptions`, `rush_att`, `pass_tds`, `first_td`, `anytime_td`, plus game markets `h2h`/`spreads`/`totals` (aliases `moneyline`/`spread`/`total`). `compose --auto` still uses yards only.  
 `--markets first_td --legs 4 --min-odds +800` is a first-TD longshot.  
 `--markets rush_yds --legs 3 --max-odds +250` is a shorter rush card.
 
@@ -59,12 +59,22 @@ Also in Phase 1:
 - **Platforms:** keep `hardrock` `fanduel` `draftkings`. Add `betmgm` as another sportsbook (same displayed-American path). Add `polymarket` `kalshi` as prediction venues: each leg is a 0–1 contract price (`contract_price`); combo M = 1 / product of prices if they type `--displayed-odds`, else **unconfirmed product** (Kelly 0), same as `leg_odds_naive`.
 - **Steal from WC bot / PM canary:** shadow banner, paper ledger fields, DRY_RUN language. Do **not** copy API clients, keys, or auto-exec.
 
+## v0.4 — grade Week 1 + ET fetch + game markets (shipped)
+
+- `grade` parses ATD `yes`/`no` and ML `win`/`loss` without voiding discrete matches. Numeric `actual == line` still voids on yardage/totals/spreads.
+- Ledger `multiplier` `+288` is American via `american_to_decimal`. Optional `paid` (Won-tab) is `paid - stake` when present. HIT with an empty multiplier still fails closed.
+- `fetch --date` is the America/New_York slate day (DST from `zoneinfo`). `--utc-date` keeps the old UTC window. Sunday includes SNF.
+- `fetch --markets` accepts `h2h`, `spreads`, `totals`. `compose --auto` still skips game rows.
+- `compose` warns when the same `player_key` appears on two tickets in the same `stat_type`. Warning only (exit 0). Yards + ATD on the same player does not warn.
+
 ## Phase 2 — environment + settlement
 
-- **Odds API ingest (shipped, v0.3):** `ceminiparlays fetch` pulls two-way player props from The Odds API (licensed REST, stdlib `urllib.request` only). Still no FanDuel / DraftKings / Hard Rock / BetMGM site clients, unofficial GitHub “book APIs”, or auto-submit. A fetched two-way price is not a confirmed SGP.
+- **Odds API ingest (shipped, v0.3):** `ceminiparlays fetch` pulls two-way player props from The Odds API (licensed REST, stdlib `urllib.request` only). Still no FanDuel / DraftKings / Hard Rock / BetMGM site clients, unofficial GitHub “book APIs”, or auto-submit. A fetched two-way price is not a confirmed SGP. Game markets (`h2h`/`spreads`/`totals`) shipped in v0.4.
+- **P2 still specified, not built:** TG-02 ITT snapshot, TG-03 late-active alert, TG-05 stadium prior. Do not auto-apply. Do not rewrite historical ITT.
 - Import a **local** CeminiDFS week cache / projection CSV (`--from-ceminidfs path`) if the file exists; otherwise skip with a named note.
 - Model push / reduced sportsbook tickets only when the ledger has a **settled** multiplier (already required). Optional `--allow-integer-lines` on books stays off.
 - Roster refresh script that reads a **local** nflverse players parquet (no download).
+- **Grok Bot desks (operator, not CLI):** Parlays Slate Desk writes `environment.csv` + scheme notes; Recap Desk fills `ledger.csv` for `grade`. Paste: [`docs/GROK-BOTS.md`](GROK-BOTS.md). No book scrape, no submit, no Odds API key on the Bot VM.
 
 ## Phase 3 — more sports / more books
 

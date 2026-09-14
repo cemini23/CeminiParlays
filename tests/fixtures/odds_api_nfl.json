@@ -92,6 +92,34 @@
                   "point": 0.5
                 }
               ]
+            },
+            {
+              "key": "h2h",
+              "outcomes": [
+                {
+                  "name": "Chicago Bears",
+                  "price": -175
+                },
+                {
+                  "name": "Carolina Panthers",
+                  "price": 145
+                }
+              ]
+            },
+            {
+              "key": "totals",
+              "outcomes": [
+                {
+                  "name": "Over",
+                  "price": -110,
+                  "point": 46.5
+                },
+                {
+                  "name": "Under",
+                  "price": -110,
+                  "point": 46.5
+                }
+              ]
             }
           ]
         },

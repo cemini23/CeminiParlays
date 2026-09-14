@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from ceminiparlays.compose import compose_tickets, estimate_multiplier
+from ceminiparlays.compose import compose_tickets, concentration_warnings, estimate_multiplier
 from ceminiparlays.environment import read_environment
-from ceminiparlays.io import read_manual_lines
-from ceminiparlays.slips import evaluate_legs
+from ceminiparlays.io import LineRow, read_manual_lines
+from ceminiparlays.slips import EvaluatedLeg, evaluate_legs
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTO_MARKETS = ["pass_yds", "rush_yds", "rec_yds"]
@@ -115,6 +115,61 @@ def test_n_tickets_must_be_positive() -> None:
             markets=None,
             environment=None,
         )
+
+
+def _eval_leg(name: str, key: str, stat: str) -> EvaluatedLeg:
+    line = LineRow(
+        slate_id="s",
+        platform="hardrock",
+        player_name=name,
+        player_key=key,
+        team="CIN",
+        opponent="CLE",
+        stat_type=stat,
+        line=57.5,
+        side="more",
+        line_type="standard",
+        captured_at="",
+        displayed_multiplier=None,
+        injury_status="",
+        book_over=-110,
+        book_under=-110,
+    )
+    return EvaluatedLeg(
+        line=line,
+        fair_p=0.55,
+        implied_p=0.5,
+        edge=0.05,
+        source="book",
+        family="normal",
+        median=60.0,
+        warn="",
+    )
+
+
+def test_concentration_warns_same_player_same_stat() -> None:
+    tickets = [
+        [
+            _eval_leg("Chase Brown", "chase_brown", "rush_yds"),
+            _eval_leg("Gibbs", "jahmyr_gibbs", "rush_yds"),
+        ],
+        [
+            _eval_leg("Chase Brown", "chase_brown", "rush_yds"),
+            _eval_leg("Henry", "derrick_henry", "rush_yds"),
+        ],
+    ]
+    warnings = concentration_warnings(tickets)
+    assert len(warnings) == 1
+    assert "chase_brown" in warnings[0]
+    assert "rush_yds" in warnings[0]
+
+
+def test_concentration_skips_yards_plus_atd() -> None:
+    tickets = [
+        [_eval_leg("Chase Brown", "chase_brown", "rush_yds")],
+        [_eval_leg("Chase Brown", "chase_brown", "anytime_td")],
+    ]
+    assert concentration_warnings(tickets) == []
 
 
 def test_estimate_multiplier_from_leg_odds_product() -> None:

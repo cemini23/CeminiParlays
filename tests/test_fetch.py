@@ -74,6 +74,18 @@ def test_rows_from_fixture_maps_two_way_and_td() -> None:
     assert moore["opp"] != "CHI"
     assert moore["stat_type"] == "rec_yds"
 
+    ml = next(row for row in rows if row["stat_type"] == "moneyline")
+    assert ml["player_name"] in {"Chicago Bears", "Carolina Panthers"}
+    assert ml["line"] == ""
+    assert ml["leg_odds"] in {-175, 145}
+    assert ml["slip_odds"] == ""
+    total = next(row for row in rows if row["stat_type"] == "total")
+    assert "total" in str(total["player_name"]).lower()
+    assert total["line"] == 46.5
+    assert total["book_over"] == -110
+    assert total["book_under"] == -110
+    assert total["slip_odds"] == ""
+
 
 def test_write_fetch_csv_refuses_existing(tmp_path: Path) -> None:
     path = tmp_path / "lines.csv"
@@ -145,6 +157,27 @@ def test_fetch_cli_refuses_overwrite(tmp_path: Path, capsys) -> None:
     assert code == 2
     assert "force" in err.lower() or "exists" in err.lower()
     assert out.read_text(encoding="utf-8") == "nope\n"
+
+
+def test_fetch_cli_game_markets(tmp_path: Path, capsys) -> None:
+    out = tmp_path / "lines.csv"
+    code = main(
+        [
+            "fetch",
+            "--fixture",
+            str(FIXTURE),
+            "--markets",
+            "h2h,totals",
+            "--out",
+            str(out),
+        ]
+    )
+    assert code == 0
+    assert "do not submit" in capsys.readouterr().out.lower()
+    rows = list(csv.DictReader(out.open(encoding="utf-8")))
+    stats = {row["stat_type"] for row in rows}
+    assert "moneyline" in stats or "total" in stats
+    assert "pass_yds" not in stats
 
 
 def test_load_fixture_rejects_garbage(tmp_path: Path) -> None:

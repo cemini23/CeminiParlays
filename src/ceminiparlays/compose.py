@@ -10,7 +10,7 @@ from __future__ import annotations
 from itertools import combinations
 
 from ceminiparlays.environment import Environment, env_for
-from ceminiparlays.markets import is_first_td
+from ceminiparlays.markets import GAME_STATS, is_first_td
 from ceminiparlays.odds import american_to_decimal
 from ceminiparlays.slips import EvaluatedLeg
 
@@ -139,10 +139,12 @@ def compose_tickets(
     if n_tickets < 1:
         raise ValueError("n_tickets must be at least 1")
     market_set = set(markets) if markets else None
+    skip_games = bool(market_set) and market_set.isdisjoint(GAME_STATS)
     pool = [
         leg
         for leg in live
-        if market_set is None or leg.line.stat_type in market_set
+        if (market_set is None or leg.line.stat_type in market_set)
+        and not (skip_games and leg.line.stat_type in GAME_STATS)
     ]
     if not pool:
         return []
@@ -193,6 +195,36 @@ def compose_tickets(
             tickets.append(list(combo))
             chosen.add(keys)
     return tickets
+
+
+def concentration_warnings(tickets: list[list[EvaluatedLeg]]) -> list[str]:
+    """Warn when the same player appears on two tickets in the same ``stat_type``.
+
+    Yards + ATD on one player is not the same family. Warning only.
+    """
+
+    seen: dict[tuple[str, str], str] = {}
+    warnings: list[str] = []
+    emitted: set[tuple[str, str]] = set()
+    for index, ticket in enumerate(tickets, start=1):
+        ticket_keys: set[tuple[str, str]] = set()
+        for leg in ticket:
+            player = (leg.line.player_key or leg.line.player_name).strip()
+            if not player:
+                continue
+            ticket_keys.add((player, leg.line.stat_type))
+        for key in ticket_keys:
+            prior = seen.get(key)
+            if prior is not None and key not in emitted:
+                player, stat = key
+                warnings.append(
+                    f"same-family concentration: {player} {stat} appears on "
+                    f"ticket {prior} and ticket {index}"
+                )
+                emitted.add(key)
+            else:
+                seen.setdefault(key, str(index))
+    return warnings
 
 
 #: Fill-in ticket CSV columns (a legal lines file for ``rank``).

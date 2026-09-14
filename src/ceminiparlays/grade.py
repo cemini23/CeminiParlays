@@ -5,12 +5,19 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from ceminiparlays.odds import american_to_decimal
 from ceminiparlays.payouts import SPORTSBOOK_PLATFORMS, normalize_platform, resolve_payout
 
 MORE_SIDES = {"more", "over", "higher", "o"}
 LESS_SIDES = {"less", "under", "lower", "u"}
+YES_NO_SIDES = {"yes", "no", "atd"}
+ML_SIDES = {"ml", "moneyline", "h2h"}
+YES_TOKENS = {"yes", "y"}
+NO_TOKENS = {"no", "n"}
+WIN_TOKENS = {"win", "won", "w"}
+LOSS_TOKENS = {"loss", "lose", "lost", "l"}
 #: Optional ledger columns. Unknown extra columns are ignored, never fatal.
-OPTIONAL_LEDGER_COLUMNS = ("ticket_id", "market", "stake_kind")
+OPTIONAL_LEDGER_COLUMNS = ("ticket_id", "market", "stake_kind", "paid")
 
 
 @dataclass
@@ -27,30 +34,116 @@ class GradeSummary:
     stake_kinds: list[str] = field(default_factory=list)
 
 
+def _canonical_discrete(token: str) -> str | None:
+    text = token.strip().lower()
+    if text in YES_TOKENS:
+        return "yes"
+    if text in NO_TOKENS:
+        return "no"
+    if text in WIN_TOKENS:
+        return "win"
+    if text in LOSS_TOKENS:
+        return "loss"
+    return None
+
+
+def _parse_leg_token(part: str) -> str | float:
+    discrete = _canonical_discrete(part)
+    if discrete is not None:
+        return discrete
+    return float(part)
+
+
+def _looks_american(text: str) -> bool:
+    """True for +288 / -110 / 288 (integer, abs >= 100, no decimal point)."""
+
+    if "." in text or "e" in text.lower():
+        return False
+    try:
+        value = int(text)
+    except ValueError:
+        return False
+    return abs(value) >= 100
+
+
+def _parse_multiplier(raw: str | None) -> float | None:
+    """Parse a ledger multiplier: American (+288) or decimal (3.88, 5.0)."""
+
+    text = (raw or "").strip()
+    if not text:
+        return None
+    if _looks_american(text):
+        return american_to_decimal(int(text))
+    return float(text)
+
+
+def _parse_paid(raw: str | None) -> float | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    return float(text)
+
+
+def _discrete_expected(side: str) -> str | None:
+    if side in ML_SIDES:
+        return "win"
+    if side in {"yes", "atd"}:
+        return "yes"
+    if side == "no":
+        return "no"
+    return None
+
+
+def _grade_leg(side: str, actual: str | float, line: str | float) -> str:
+    """Return 'hit', 'miss', or 'void' for one leg. Discrete equality is never a void."""
+
+    expected = _discrete_expected(side)
+    actual_discrete = isinstance(actual, str)
+    line_discrete = isinstance(line, str)
+    if expected is not None:
+        if actual_discrete and actual == expected:
+            return "hit"
+        if actual_discrete and line_discrete and actual == line:
+            return "hit"
+        return "miss"
+    if actual_discrete or line_discrete:
+        if actual_discrete and line_discrete and actual == line:
+            return "hit"
+        return "miss"
+    if actual == line:
+        return "void"
+    if side in MORE_SIDES and actual > line:
+        return "hit"
+    if side in LESS_SIDES and actual < line:
+        return "hit"
+    return "miss"
+
+
 def _leg_outcomes(raw: dict[str, str]) -> tuple[int, int, int]:
     """Return (hits, misses, voids) for one ledger row.
 
-    ``actual == line`` is a void, not a miss (I-09). A push refunds or drops the
-    slip onto the smaller payout row.
+    Numeric ``actual == line`` is a void (yardage / totals / spreads). Discrete
+    yes/no and ML win/loss matching tokens are hits, never voids.
     """
 
     if raw.get("hits"):
         hits = int(raw["hits"])
         n_legs = int(raw.get("n_legs") or raw.get("legs") or hits)
         return hits, max(n_legs - hits, 0), 0
-    sides = [part.strip() for part in raw.get("sides", "").split("|") if part.strip()]
-    actuals = [float(part) for part in raw.get("actuals", "").split("|") if part.strip()]
-    lines = [float(part) for part in raw.get("lines", "").split("|") if part.strip()]
-    if len(actuals) != len(sides) or len(lines) != len(sides):
+    sides = [part.strip().lower() for part in raw.get("sides", "").split("|") if part.strip()]
+    actual_parts = [part.strip() for part in raw.get("actuals", "").split("|") if part.strip()]
+    line_parts = [part.strip() for part in raw.get("lines", "").split("|") if part.strip()]
+    if len(actual_parts) != len(sides) or len(line_parts) != len(sides):
         raise ValueError("sides, lines, and actuals must have the same length")
     hits = misses = voids = 0
-    for side, actual, line in zip(sides, actuals, lines, strict=True):
-        if actual == line:
+    for side, actual_raw, line_raw in zip(sides, actual_parts, line_parts, strict=True):
+        actual = _parse_leg_token(actual_raw)
+        line = _parse_leg_token(line_raw)
+        result = _grade_leg(side, actual, line)
+        if result == "hit":
+            hits += 1
+        elif result == "void":
             voids += 1
-        elif side in MORE_SIDES and actual > line:
-            hits += 1
-        elif side in LESS_SIDES and actual < line:
-            hits += 1
         else:
             misses += 1
     return hits, misses, voids
@@ -98,10 +191,14 @@ def grade_ledger(
                 raw_platform or default_platform or "underdog"
             )
             mode = raw.get("mode") or "standard"
-            displayed = float(raw["multiplier"]) if raw.get("multiplier") else None
+            displayed = _parse_multiplier(raw.get("multiplier"))
+            paid_value = _parse_paid(raw.get("paid"))
             hit_count, miss_count, void_count = _leg_outcomes(raw)
             if hit_count == n_legs:
                 hits += 1
+            if paid_value is not None:
+                pnl += paid_value - stake
+                continue
             sportsbook = platform in SPORTSBOOK_PLATFORMS
             row_label = raw.get("legs") or raw.get("slip_id") or f"row {row_index}"
             if void_count:

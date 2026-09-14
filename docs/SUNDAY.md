@@ -4,6 +4,10 @@ The operator path for one afternoon slate. Licensed Odds API fetch is allowed.
 Book-site scrapers and auto-submit are not. You type the ticket in the app; this
 CLI only fetches two-way lines, picks, and prices.
 
+**Grok Bot desks:** before lock, Parlays Slate Desk can write `environment.csv` and
+scheme notes. After the games, Parlays Recap Desk fills a ledger for step 7.
+Paste: [`GROK-BOTS.md`](GROK-BOTS.md). The Bot does not fetch or submit.
+
 **Rule for every step:** if a command exits `2`, read the named `dropped` /
 `no-line` rows and fix the CSV. Do not pass `--no-strict` on a money slate.
 
@@ -34,8 +38,12 @@ blank roster sheet. Prefer `fetch` for posted two-way prices.
 ceminiparlays fetch --out runs/slate/lines.csv
 # defaults: --books hardrock,fanduel,draftkings
 #           --markets pass_yds,rush_yds,rec_yds,first_td,anytime_td
+# --date is the America/New_York slate day (midnight ET → next midnight ET,
+# converted to UTC; DST from zoneinfo). Sunday includes SNF.
+# --utc-date YYYY-MM-DD keeps the old UTC calendar window.
+# Game markets: add --markets h2h,spreads,totals if you want ML/spread/total rows.
 # writes SLATE_FIELDS CSV: line + book_over/book_under for yard props;
-# TD rows leave line blank and set leg_odds + raw implied fair_p.
+# TD / h2h rows leave line blank and set leg_odds + raw implied fair_p.
 # prints x-requests-remaining / x-requests-used, then
 # do not submit — type the ticket in-app
 
@@ -127,8 +135,12 @@ line and the displayed American. The CLI never submits.
 ceminiparlays grade --ledger my_ledger.csv --out runs/grade.json
 ```
 
-Optional ledger columns `ticket_id`, `market`, `stake_kind` (`cash` / `bonus`)
-are accepted; unknown extra columns are ignored. Sportsbook void + miss = `0×`.
+Optional ledger columns `ticket_id`, `market`, `stake_kind` (`cash` / `bonus`),
+and `paid` (Won-tab cash → that row is `paid - stake`) are accepted; unknown
+extra columns are ignored. Discrete ATD `yes`/`yes` and ML `win`/`win` are hits,
+never voids. Numeric `actual == line` still voids on yardage/totals/spreads.
+`multiplier` `+288` is American (`american_to_decimal`), not 288×. Sportsbook
+void + miss = `0×`. HIT with an empty multiplier still fails closed.
 
 ## Full auto example (one command)
 

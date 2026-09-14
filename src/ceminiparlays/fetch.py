@@ -137,6 +137,135 @@ def _pair_two_way(outcomes: list[dict[str, Any]]) -> list[tuple[str, float, int,
     return paired
 
 
+def _team_side(name: str, home: str, away: str) -> tuple[str, str] | None:
+    team = team_code(name)
+    if team == home:
+        return home, away
+    if team == away:
+        return away, home
+    return None
+
+
+def _h2h_rows(
+    outcomes: list[dict[str, Any]],
+    *,
+    home: str,
+    away: str,
+    slate_id: str,
+    platform: str,
+    captured_at: str,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for outcome in outcomes:
+        name = str(outcome.get("name") or "").strip()
+        price = _int_price(outcome.get("price"))
+        if not name or price is None:
+            continue
+        sides = _team_side(name, home, away)
+        if sides is None:
+            continue
+        team, opp = sides
+        row = _blank_row(
+            slate_id=slate_id,
+            platform=platform,
+            player_name=name,
+            player_key=fold_name(name),
+            team=team,
+            opp=opp,
+            stat_type="moneyline",
+            captured_at=captured_at,
+        )
+        row["leg_odds"] = price
+        row["fair_p"] = round(american_to_implied(price), 6)
+        rows.append(row)
+    return rows
+
+
+def _spread_rows(
+    outcomes: list[dict[str, Any]],
+    *,
+    home: str,
+    away: str,
+    slate_id: str,
+    platform: str,
+    captured_at: str,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for outcome in outcomes:
+        name = str(outcome.get("name") or "").strip()
+        point = outcome.get("point")
+        price = _int_price(outcome.get("price"))
+        if not name or point is None or price is None:
+            continue
+        sides = _team_side(name, home, away)
+        if sides is None:
+            continue
+        team, opp = sides
+        row = _blank_row(
+            slate_id=slate_id,
+            platform=platform,
+            player_name=name,
+            player_key=fold_name(name),
+            team=team,
+            opp=opp,
+            stat_type="spread",
+            captured_at=captured_at,
+        )
+        row["line"] = float(point)
+        row["leg_odds"] = price
+        rows.append(row)
+    return rows
+
+
+def _pair_totals(outcomes: list[dict[str, Any]]) -> list[tuple[float, int, int]]:
+    buckets: dict[float, dict[str, int]] = {}
+    for outcome in outcomes:
+        point = outcome.get("point")
+        price = _int_price(outcome.get("price"))
+        name = str(outcome.get("name") or "").strip().lower()
+        if point is None or price is None:
+            continue
+        bucket = buckets.setdefault(float(point), {})
+        if name in {"over", "more"}:
+            bucket["over"] = price
+        elif name in {"under", "less"}:
+            bucket["under"] = price
+    paired: list[tuple[float, int, int]] = []
+    for point, sides in buckets.items():
+        if "over" in sides and "under" in sides:
+            paired.append((point, sides["over"], sides["under"]))
+    return paired
+
+
+def _total_rows(
+    outcomes: list[dict[str, Any]],
+    *,
+    home: str,
+    away: str,
+    slate_id: str,
+    platform: str,
+    captured_at: str,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    player_name = f"{away}@{home} total"
+    for point, over_price, under_price in _pair_totals(outcomes):
+        row = _blank_row(
+            slate_id=slate_id,
+            platform=platform,
+            player_name=player_name,
+            player_key=fold_name(player_name),
+            team=home,
+            opp=away,
+            stat_type="total",
+            captured_at=captured_at,
+        )
+        row["line"] = point
+        row["book_over"] = over_price
+        row["book_under"] = under_price
+        rows.append(row)
+    return rows
+
+
 def _td_yes(outcomes: list[dict[str, Any]]) -> list[tuple[str, int]]:
     found: dict[str, int] = {}
     for outcome in outcomes:
@@ -181,6 +310,42 @@ def rows_from_events(
                         notes.append(f"no-odds-api-market:{market_key}")
                     continue
                 outcomes = [item for item in (market.get("outcomes") or []) if isinstance(item, dict)]
+                if stat == "moneyline":
+                    rows.extend(
+                        _h2h_rows(
+                            outcomes,
+                            home=home,
+                            away=away,
+                            slate_id=slate_id,
+                            platform=platform,
+                            captured_at=captured_at,
+                        )
+                    )
+                    continue
+                if stat == "spread":
+                    rows.extend(
+                        _spread_rows(
+                            outcomes,
+                            home=home,
+                            away=away,
+                            slate_id=slate_id,
+                            platform=platform,
+                            captured_at=captured_at,
+                        )
+                    )
+                    continue
+                if stat == "total":
+                    rows.extend(
+                        _total_rows(
+                            outcomes,
+                            home=home,
+                            away=away,
+                            slate_id=slate_id,
+                            platform=platform,
+                            captured_at=captured_at,
+                        )
+                    )
+                    continue
                 if is_td_market(stat):
                     for player_name, yes_price in _td_yes(outcomes):
                         player_key, team, opp = _team_opp(player_name, home, away, roster)

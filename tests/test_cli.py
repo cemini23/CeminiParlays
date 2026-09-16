@@ -633,12 +633,12 @@ def test_hardrock_flex_exits_two(tmp_path: Path) -> None:
     assert code == 2
 
 
-def test_version_is_0_4_0(capsys) -> None:
+def test_version_is_0_5_0(capsys) -> None:
     import pytest
 
     with pytest.raises(SystemExit):
         main(["--version"])
-    assert "0.4.0" in capsys.readouterr().out
+    assert "0.5.0" in capsys.readouterr().out
 
 
 def test_fetch_fixture_cli_prints_credits(tmp_path: Path, capsys) -> None:
@@ -762,6 +762,66 @@ def test_compose_auto_writes_five_tickets(tmp_path: Path, capsys) -> None:
     card = (out_dir / "card.txt").read_text(encoding="utf-8")
     assert "do not submit" in card.lower()
     assert "do not submit" in out.lower()
+    itt = json.loads((out_dir / "compose_itt.json").read_text(encoding="utf-8"))
+    assert itt["captured_at"].endswith("Z")
+    assert itt["source"] == "environment.csv"
+    assert itt["rows"]
+    used_games = {
+        tuple(sorted({row["team"], row["opp"]}))
+        for row in itt["rows"]
+    }
+    ticket_games: set[tuple[str, ...]] = set()
+    import csv
+
+    for index in range(1, 6):
+        for row in csv.DictReader((out_dir / f"ticket-{index:03d}.csv").open(encoding="utf-8")):
+            ticket_games.add(tuple(sorted({row["team"], row["opp"]})))
+    assert used_games == ticket_games
+    for row in itt["rows"]:
+        assert "implied_total" in row
+        assert "spread" in row
+        assert "roof" in row
+        assert "weather_exposed" in row
+        assert "wind_mph" in row
+        assert "precip_pop" in row
+
+
+def test_compose_without_environment_skips_itt(tmp_path: Path) -> None:
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--auto",
+            "--lines",
+            str(ROOT / "examples" / "sunday_lines.csv"),
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    assert code == 0
+    assert not (out_dir / "compose_itt.json").exists()
+
+
+def test_compose_writes_empty_itt_when_no_tickets(tmp_path: Path) -> None:
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--auto",
+            "--min-odds",
+            "1000",
+            "--lines",
+            str(ROOT / "examples" / "sunday_lines.csv"),
+            "--environment",
+            str(ROOT / "examples" / "environment.csv"),
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    assert code == 0
+    itt = json.loads((out_dir / "compose_itt.json").read_text(encoding="utf-8"))
+    assert itt["rows"] == []
+    assert itt["captured_at"].endswith("Z")
 
 
 def test_compose_auto_flags_override_defaults(tmp_path: Path, capsys) -> None:

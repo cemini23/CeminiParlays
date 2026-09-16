@@ -82,7 +82,26 @@ that would empty the window: `--max-odds +250` keeps the `+150` floor;
 
 It writes `ticket-001.csv` … `ticket-005.csv` plus `card.txt`, and prints
 `do not submit`. Tickets diversify games and prefer higher implied team totals
-when `--environment` is present.
+when `--environment` is present. `--environment` also writes `compose_itt.json`
+(bet-time ITT snapshot). Do not rewrite that file from box scores. Omit
+`--environment` to skip the snapshot.
+
+Report-only compose flags (default off):
+
+```bash
+# TG-04 thin catalog: halt when a game lacks moneyline/h2h or spread/spreads
+ceminiparlays compose --auto --enforce-market-depth \
+  --lines runs/slate/lines.csv --out-dir runs/slate
+# CATALOG_THIN_MANUAL_INPUT_REQUIRED then exit 2
+# --allow-thin-catalog prints the same note and continues
+# compose --auto without the flag (yards only) does not halt
+
+# TG-03 late active: FLAG/OUT on the lines file, later ACTIVE in this CSV
+ceminiparlays compose --auto --alert-late-active inactives.csv \
+  --lines runs/slate/lines.csv --out-dir runs/slate
+# OPERATOR_ACTION_REQUIRED: {player} excluded as {status} later ACTIVE
+# exit 0 (alert only). Missing file exits 2. No void, no reprice, no haircut.
+```
 
 Want a different card?
 
@@ -128,6 +147,16 @@ Pick flat **or** the cap for the whole ticket — never split Kelly across legs.
 
 Open Hard Rock / FanDuel / DraftKings / BetMGM and enter the legs. Confirm every
 line and the displayed American. The CLI never submits.
+
+After the booked ticket exists, diff it against the compose card (TG-06). Booked
+is display-only. You still type the ledger.
+
+```bash
+ceminiparlays diff --card examples/card_ticket_c.csv \
+  --booked examples/booked_ticket_c.csv
+# per-ticket_id stake / lines / multiplier deltas; exit 2 when any delta exists
+# --accept-booked prints the same table and exits 0; never writes the card
+```
 
 ## 7. Grade after the games
 

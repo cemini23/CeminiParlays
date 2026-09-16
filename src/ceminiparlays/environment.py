@@ -7,6 +7,7 @@ optional and the composer still works on lines alone.
 from __future__ import annotations
 
 import csv
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -103,3 +104,63 @@ def env_for(
         if row is not None:
             return row
     return None
+
+
+def env_rows_for_games(
+    environment: Environment,
+    games: set[tuple[str, ...]],
+) -> list[EnvRow]:
+    """Unique env rows whose ``(team, opp)`` game is in ``games``.
+
+    ``games`` is a set of ``tuple(sorted({team, opp}))`` keys from composed
+    tickets. Empty ``games`` returns ``[]``.
+    """
+
+    if not environment or not games:
+        return []
+    seen: set[tuple[str, str]] = set()
+    rows: list[EnvRow] = []
+    for row in environment.values():
+        if not isinstance(row, EnvRow):
+            continue
+        key = (row.team, row.opponent)
+        if not row.team or not row.opponent or key in seen:
+            continue
+        if tuple(sorted({row.team, row.opponent})) not in games:
+            continue
+        seen.add(key)
+        rows.append(row)
+    rows.sort(key=lambda item: (item.game_id, item.team, item.opponent))
+    return rows
+
+
+def write_compose_itt(
+    path: Path,
+    *,
+    captured_at: str,
+    source: str,
+    rows: list[EnvRow],
+) -> None:
+    """Write the bet-time ITT snapshot. Never rewrite from box scores."""
+
+    payload = {
+        "captured_at": captured_at,
+        "source": source,
+        "rows": [
+            {
+                "team": row.team,
+                "opp": row.opponent,
+                "game_id": row.game_id,
+                "implied_total": row.implied_total,
+                "spread": row.spread,
+                "roof": row.roof,
+                "weather_exposed": row.weather_exposed,
+                "wind_mph": row.wind_mph,
+                "precip_pop": row.precip_pop,
+            }
+            for row in rows
+        ],
+    }
+    resolved = Path(path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    resolved.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

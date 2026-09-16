@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from ceminiparlays import STANDARD_DISCLAIMER, __version__
 from ceminiparlays.bankroll import flat_stake, kelly_cap_stake
+from ceminiparlays.catalog import thin_catalog_games
 from ceminiparlays.compose import (
     TICKET_FIELDS,
     compose_tickets,
@@ -16,7 +17,9 @@ from ceminiparlays.compose import (
     estimate_multiplier,
     ticket_rows,
 )
-from ceminiparlays.environment import read_environment
+from ceminiparlays.diff import ACCEPTED, BOOKED_WINS, diff_ticket_lines, read_ticket_table
+from ceminiparlays.environment import env_rows_for_games, read_environment, write_compose_itt
+from ceminiparlays.late_active import late_active_alerts
 from ceminiparlays.fair import p_over_line, side_probability
 from ceminiparlays.fetch import load_fixture, rows_from_events, write_fetch_csv
 from ceminiparlays.grade import grade_ledger, write_grade
@@ -243,6 +246,28 @@ def build_parser() -> argparse.ArgumentParser:
     compose.add_argument("--max-odds", type=int, default=None)
     compose.add_argument("--n-tickets", type=int, default=5)
     compose.add_argument("--environment", type=Path, default=None)
+    compose.add_argument(
+        "--enforce-market-depth",
+        action="store_true",
+        help=(
+            "TG-04: exit 2 with CATALOG_THIN_MANUAL_INPUT_REQUIRED when a game "
+            "on the lines file is missing moneyline/h2h or spread/spreads"
+        ),
+    )
+    compose.add_argument(
+        "--allow-thin-catalog",
+        action="store_true",
+        help="print CATALOG_THIN_MANUAL_INPUT_REQUIRED and continue composing",
+    )
+    compose.add_argument(
+        "--alert-late-active",
+        type=Path,
+        default=None,
+        help=(
+            "TG-03: CSV of player_name/player_key + status; FLAG/OUT later "
+            "ACTIVE prints OPERATOR_ACTION_REQUIRED (no void)"
+        ),
+    )
     compose.add_argument("--ticket-id", default=None)
     compose.add_argument("--mode", default="standard", choices=["standard", "power"])
     compose.add_argument("--devig-method", default="power", choices=["power", "multiplicative", "additive"])
@@ -253,6 +278,19 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Abort (exit 2) when any leg is dropped. Default on.",
+    )
+
+    diff = sub.add_parser(
+        "diff",
+        help="TG-06 `--diff-card-booked`: print card vs booked stake/line/multiplier deltas",
+        description="TG-06 `--diff-card-booked`: print card vs booked stake/line/multiplier deltas",
+    )
+    diff.add_argument("--card", type=Path, required=True, help="Ledger-shaped compose card CSV")
+    diff.add_argument("--booked", type=Path, required=True, help="Ledger-shaped booked ticket CSV")
+    diff.add_argument(
+        "--accept-booked",
+        action="store_true",
+        help="print the same table and exit 0; never writes the card or ledger",
     )
 
     bankroll = sub.add_parser(
@@ -594,6 +632,7 @@ def _cmd_slate(args: argparse.Namespace) -> int:
 
 
 def _cmd_compose(args: argparse.Namespace) -> int:
+    captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     strict = getattr(args, "strict", True)
     platform = normalize_platform(args.platform)
     auto = bool(getattr(args, "auto", False))
@@ -631,6 +670,10 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     if n_tickets < 1:
         raise ValueError("--n-tickets must be at least 1")
 
+    late_path = getattr(args, "alert_late_active", None)
+    if late_path is not None and not Path(late_path).is_file():
+        raise FileNotFoundError(f"late-active file missing: {late_path}")
+
     lines = read_manual_lines(args.lines, strict=strict)
     lines = [
         row
@@ -640,6 +683,17 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     ticket_id = getattr(args, "ticket_id", None)
     if ticket_id:
         lines = [row for row in lines if row.ticket_id == str(ticket_id)]
+    if late_path is not None:
+        for note in late_active_alerts(lines, late_path):
+            print(note)
+    if getattr(args, "enforce_market_depth", False):
+        thin = thin_catalog_games(lines)
+        if thin:
+            print("CATALOG_THIN_MANUAL_INPUT_REQUIRED")
+            for game in thin:
+                print(f"  {game.label}")
+            if not getattr(args, "allow_thin_catalog", False):
+                return 2
     if market_filter:
         lines = [row for row in lines if row.stat_type in market_filter]
     if not lines:
@@ -699,6 +753,20 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     )
     out_dir = args.out_dir or Path("runs") / (next(iter(slate_ids), "compose"))
     out_dir.mkdir(parents=True, exist_ok=True)
+    if args.environment is not None:
+        games = {
+            tuple(sorted({leg.line.team, leg.line.opponent}))
+            for ticket in tickets
+            for leg in ticket
+            if leg.line.team and leg.line.opponent
+        }
+        itt_rows = env_rows_for_games(environment, games) if tickets else []
+        write_compose_itt(
+            out_dir / "compose_itt.json",
+            captured_at=captured_at,
+            source=Path(args.environment).name,
+            rows=itt_rows,
+        )
     slips = []
     for index, ticket_legs in enumerate(tickets, start=1):
         composed_id = f"compose-{index:03d}"
@@ -741,8 +809,25 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         print(f"warning: {warning}")
     print(card)
     print(f"wrote {card_path}")
+    if args.environment is not None:
+        print(f"wrote {out_dir / 'compose_itt.json'}")
     print("do not submit — type every ticket in-app")
     return 0
+
+
+def _cmd_diff(args: argparse.Namespace) -> int:
+    card = read_ticket_table(args.card)
+    booked = read_ticket_table(args.booked)
+    lines = diff_ticket_lines(card, booked)
+    for line in lines:
+        print(line)
+    if not lines:
+        return 0
+    print(BOOKED_WINS)
+    if args.accept_booked:
+        print(ACCEPTED)
+        return 0
+    return 2
 
 
 def _cmd_fetch(args: argparse.Namespace) -> int:
@@ -827,6 +912,7 @@ def main(argv: list[str] | None = None) -> int:
         "run": _cmd_run,
         "slate": _cmd_slate,
         "compose": _cmd_compose,
+        "diff": _cmd_diff,
         "bankroll": _cmd_bankroll,
         "fetch": _cmd_fetch,
     }

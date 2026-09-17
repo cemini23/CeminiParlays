@@ -17,7 +17,7 @@ The Never list is the product, not a buried limit.
 
 Numbered rules: [`docs/canon.md`](docs/canon.md). Machine index: [`llms.txt`](llms.txt).
 
-**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/canon.md`](docs/canon.md) is the citable rules. [`llms.txt`](llms.txt) lists the public docs. [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3; grade + ET fetch + game markets = v0.4; Week 1 report flags + ITT snapshot = v0.5).
+**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/canon.md`](docs/canon.md) is the citable rules. [`llms.txt`](llms.txt) lists the public docs. [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3; grade + ET fetch + game markets = v0.4; Week 1 report flags + ITT snapshot = v0.5; CeminiDFS handoff reader = v0.6).
 
 ## Install
 
@@ -110,6 +110,15 @@ ceminiparlays compose --auto --lines runs/slate/lines.csv \
 # compose_itt.json is the bet-time ITT snapshot. Do not rewrite it from box scores.
 # Omit --environment to skip the file.
 
+# Optional: copy a CeminiDFS handoff, then compose. FPPG is not a prop fair.
+# Missing file prints CEMINIDFS_HANDOFF_MISSING and continues.
+ceminiparlays compose --auto --lines runs/slate/lines.csv \
+  --environment examples/environment.csv \
+  --from-ceminidfs examples/ceminidfs_handoff.csv \
+  --card-md --out-dir runs/2026-w01-sun
+# fills blank implied_total; prints ceminidfs exposure notes; writes card.md
+# --max-exposure-per-player 1 exits 2 on same-player same-stat concentration
+
 # Thin catalog (TG-04). Default off; compose --auto (yards only) does not halt.
 ceminiparlays compose --auto --enforce-market-depth \
   --lines runs/slate/lines.csv --out-dir runs/slate
@@ -120,11 +129,12 @@ ceminiparlays compose --auto --enforce-market-depth \
 ceminiparlays compose --auto --alert-late-active inactives.csv \
   --lines runs/slate/lines.csv --out-dir runs/slate
 
-# Card vs booked (TG-06 `--diff-card-booked`). Report only; never writes the card.
+# Card vs booked (TG-06 `--diff-card-booked`). Never writes the card.
 ceminiparlays diff --card examples/card_ticket_c.csv \
   --booked examples/booked_ticket_c.csv
 # exit 2 when stake / lines / multiplier differ. --accept-booked prints the
 # same table and exits 0. Type the booked ticket into the ledger.
+# --accept-booked --emit-ledger PATH writes booked rows (not the card).
 
 # A first-TD longshot card (needs 4+ first_td rows — use a fetched slate)
 ceminiparlays compose --auto --markets first_td --legs 4 --min-odds +800 \
@@ -145,7 +155,7 @@ Default `--platform` is **hardrock**. Choices: `hardrock`, `fanduel`, `draftking
 
 `rank` / `run` load a packaged NFL roster (`config/rosters/nfl.json`, 2026-09-13). A **known** player on the wrong team is dropped as `wrong-team` (DJ Moore is BUF, not CHI). Unknown names pass. Pass `--roster path.json` to replace the file, or `--no-roster` to skip the check. Edit the JSON when someone is traded.
 
-The three v0.5 flags are **reports**. They do not void, reprice, invent an SGP, or overwrite the card. `--from-ceminidfs` is built (v0.6): copy `ceminidfs_handoff.csv`; this CLI only reads. Missing file prints `CEMINIDFS_HANDOFF_MISSING` and compose continues. House-rule quotes stay out of Python (no reduced-SGP table). SoFi remains `semi_open` (not a dome).
+The v0.5 flags are **reports**. They do not void, reprice, invent an SGP, or overwrite the card. `--from-ceminidfs` is built (v0.6): copy `ceminidfs_handoff.csv`; this CLI only reads. FanDuel FPPG is not a prop fair. House-rule quotes stay out of Python (no reduced-SGP table). SoFi remains `semi_open` (not a dome).
 
 `--displayed-odds` is the in-app American parlay / SGP price for **one ticket**. `--displayed-multiplier` is the decimal form. On a sportsbook (or prediction) platform the CLI quote is legal only when `live == slip-size` — a 4-row ticket needs `--legs 4`. A shared `ticket_id` does **not** let one American paint every 2-leg subset. Per combo the price is: agreeing row `slip_multiplier` → agreeing all-leg `slip_odds` → CLI displayed (size match only) → `leg_odds` product. A row quote wins over the CLI flag.
 
@@ -237,10 +247,10 @@ See `RESEARCH.md` for the wiki, CeminiDFS lessons, Gemini math, and social scan 
 - [`docs/SUNDAY.md`](docs/SUNDAY.md) — the 20-minute Sunday operator path.
 - [`docs/canon.md`](docs/canon.md) — numbered citable rules.
 - [`llms.txt`](llms.txt) — public-doc index for search and LLMs.
-- [`docs/GROK-BOTS.md`](docs/GROK-BOTS.md) — Parlays Slate Desk + Recap Desk (paste into Grok Bot.app).
+- [`docs/GROK-BOTS.md`](docs/GROK-BOTS.md) — Parlays Slate Desk + Recap Desk (already live in Grok Bot.app).
 - [`docs/week1/REPRODUCE.md`](docs/week1/REPRODUCE.md) — Week 1 `grade` artifact (2/5, +$26.07).
 - [`docs/2026-09-13-hardrock-card.md`](docs/2026-09-13-hardrock-card.md) — Week 1 $20 Hard Rock card.
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Phase 1 composer (v0.2), Odds API fetch (v0.3), grade + ET fetch + game markets (v0.4), Week 1 report flags + ITT snapshot (v0.5), Phase 2 environment/settlement, Phase 3 more books.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Phase 1 composer (v0.2), Odds API fetch (v0.3), grade + ET fetch + game markets (v0.4), Week 1 report flags + ITT snapshot (v0.5), CeminiDFS handoff reader (v0.6), Phase 2 stadium prior / nflverse parquet, Phase 3 more books.
 
 `grade` accepts optional ledger columns `ticket_id`, `market`, `stake_kind` (`cash` / `bonus`), and `paid` (Won-tab cash; that row is `paid - stake`). Discrete ATD `yes`/`yes` and ML `win`/`win` are hits, never voids. Numeric `actual == line` still voids on yardage/totals/spreads. Ledger `multiplier` `+288` is American, not 288×. Unknown extra columns are ignored. Sportsbook void + miss still settles at `0×`. HIT with an empty multiplier still fails closed.
 

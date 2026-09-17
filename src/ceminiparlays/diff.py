@@ -1,7 +1,7 @@
 """Card vs booked ledger diff (TG-06 ``--diff-card-booked``).
 
-Report only. Never writes the card or the ledger. The operator types the
-booked ticket after they accept the delta.
+Never writes the card. ``--emit-ledger`` may write booked rows after
+``--accept-booked``. The operator still types the booked ticket.
 """
 
 from __future__ import annotations
@@ -61,3 +61,22 @@ def diff_ticket_lines(
             if a != b:
                 lines.append(f"ticket {ticket_id} sides: card={a} booked={b}")
     return lines
+
+
+def write_booked_ledger(path: Path, booked: dict[str, dict[str, str]]) -> None:
+    """Write booked rows. Fieldnames are the union of keys in encounter order."""
+
+    fieldnames: list[str] = []
+    seen: set[str] = set()
+    for row in booked.values():
+        for key in row:
+            if key not in seen:
+                seen.add(key)
+                fieldnames.append(key)
+    resolved = Path(path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    with resolved.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames or ["ticket_id"])
+        writer.writeheader()
+        for ticket_id in sorted(booked):
+            writer.writerow(booked[ticket_id])

@@ -197,6 +197,28 @@ def compose_tickets(
     return tickets
 
 
+def player_stat_ticket_counts(tickets: list[list[EvaluatedLeg]]) -> dict[tuple[str, str], int]:
+    """Count tickets that carry each ``(player, stat_type)`` pair.
+
+    Same player on yards + ATD is two keys. A player appearing twice on one
+    ticket still counts as one ticket for that pair.
+    """
+
+    counts: dict[tuple[str, str], int] = {}
+    for ticket in tickets:
+        seen: set[tuple[str, str]] = set()
+        for leg in ticket:
+            player = (leg.line.player_key or leg.line.player_name).strip()
+            if not player:
+                continue
+            key = (player, leg.line.stat_type)
+            if key in seen:
+                continue
+            seen.add(key)
+            counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def concentration_warnings(tickets: list[list[EvaluatedLeg]]) -> list[str]:
     """Warn when the same player appears on two tickets in the same ``stat_type``.
 

@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from ceminiparlays.compose import compose_tickets, concentration_warnings, estimate_multiplier
+from ceminiparlays.compose import (
+    compose_tickets,
+    concentration_warnings,
+    estimate_multiplier,
+    player_stat_ticket_counts,
+)
 from ceminiparlays.environment import read_environment
 from ceminiparlays.io import LineRow, read_manual_lines
 from ceminiparlays.slips import EvaluatedLeg, evaluate_legs
@@ -170,6 +175,25 @@ def test_concentration_skips_yards_plus_atd() -> None:
         [_eval_leg("Chase Brown", "chase_brown", "anytime_td")],
     ]
     assert concentration_warnings(tickets) == []
+    counts = player_stat_ticket_counts(tickets)
+    assert counts[("chase_brown", "rush_yds")] == 1
+    assert counts[("chase_brown", "anytime_td")] == 1
+
+
+def test_player_stat_counts_same_stat_across_tickets() -> None:
+    tickets = [
+        [
+            _eval_leg("Chase Brown", "chase_brown", "rush_yds"),
+            _eval_leg("Gibbs", "jahmyr_gibbs", "rush_yds"),
+        ],
+        [
+            _eval_leg("Chase Brown", "chase_brown", "rush_yds"),
+            _eval_leg("Henry", "derrick_henry", "rush_yds"),
+        ],
+    ]
+    counts = player_stat_ticket_counts(tickets)
+    assert counts[("chase_brown", "rush_yds")] == 2
+    assert counts[("jahmyr_gibbs", "rush_yds")] == 1
 
 
 def test_estimate_multiplier_from_leg_odds_product() -> None:

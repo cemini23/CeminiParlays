@@ -633,12 +633,12 @@ def test_hardrock_flex_exits_two(tmp_path: Path) -> None:
     assert code == 2
 
 
-def test_version_is_0_5_0(capsys) -> None:
+def test_version_is_0_6_0(capsys) -> None:
     import pytest
 
     with pytest.raises(SystemExit):
         main(["--version"])
-    assert "0.5.0" in capsys.readouterr().out
+    assert "0.6.0" in capsys.readouterr().out
 
 
 def test_fetch_fixture_cli_prints_credits(tmp_path: Path, capsys) -> None:
@@ -847,6 +847,114 @@ def test_compose_auto_flags_override_defaults(tmp_path: Path, capsys) -> None:
     assert "composed=2 requested=2" in out
     rows = list(csv.DictReader((out_dir / "ticket-001.csv").open(encoding="utf-8")))
     assert {row["stat_type"] for row in rows} == {"rush_yds"}
+
+
+def _three_rush_lines(tmp_path: Path) -> Path:
+    path = tmp_path / "rush_lines.csv"
+    path.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,captured_at,injury_status,book_over,book_under,leg_odds\n"
+        "s,hardrock,Anchor Back,,CIN,TB,rush_yds,50.5,more,standard,,,-110,-110,-110\n"
+        "s,hardrock,Second Back,,DET,NO,rush_yds,60.5,more,standard,,,-110,-110,-110\n"
+        "s,hardrock,Third Back,,CHI,CAR,rush_yds,55.5,more,standard,,,-110,-110,-110\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_compose_from_ceminidfs_missing_file(tmp_path: Path, capsys) -> None:
+    missing = tmp_path / "missing_handoff.csv"
+    code = main(
+        [
+            "compose",
+            "--auto",
+            "--n-tickets",
+            "1",
+            "--lines",
+            str(ROOT / "examples" / "sunday_lines.csv"),
+            "--out-dir",
+            str(tmp_path / "compose"),
+            "--from-ceminidfs",
+            str(missing),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert f"CEMINIDFS_HANDOFF_MISSING: {missing}" in out
+
+
+def test_compose_from_ceminidfs_prints_exposure_notes(tmp_path: Path, capsys) -> None:
+    code = main(
+        [
+            "compose",
+            "--auto",
+            "--n-tickets",
+            "1",
+            "--lines",
+            str(ROOT / "examples" / "sunday_lines.csv"),
+            "--from-ceminidfs",
+            str(ROOT / "examples" / "ceminidfs_handoff.csv"),
+            "--out-dir",
+            str(tmp_path / "compose"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "ceminidfs exposure: Demo Back lineup_exposure_pct=42" in out
+    assert "CEMINIDFS_HANDOFF_MISSING" not in out
+    assert not (tmp_path / "compose" / "distributions.csv").exists()
+
+
+def test_compose_max_exposure_exits_two_when_set(tmp_path: Path, capsys) -> None:
+    lines = _three_rush_lines(tmp_path)
+    argv = [
+        "compose",
+        "--lines",
+        str(lines),
+        "--n-tickets",
+        "2",
+        "--markets",
+        "rush_yds",
+        "--out-dir",
+        str(tmp_path / "compose"),
+    ]
+    code = main(argv)
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "same-family concentration" in out
+
+    code = main([*argv, "--max-exposure-per-player", "1"])
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "same-family concentration" in out
+
+
+def test_compose_card_md_is_redacted(tmp_path: Path, capsys) -> None:
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--auto",
+            "--n-tickets",
+            "1",
+            "--lines",
+            str(ROOT / "examples" / "sunday_lines.csv"),
+            "--card-md",
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    capsys.readouterr()
+    assert code == 0
+    card_txt = out_dir / "card.txt"
+    card_md = out_dir / "card.md"
+    assert card_txt.is_file()
+    text = card_md.read_text(encoding="utf-8")
+    assert "do not submit" in text.lower()
+    assert "$" not in text
+    assert "THE_ODDS_API_KEY" not in text
+    assert "wallet" not in text.lower()
+    assert "stake" not in text.lower()
 
 
 def test_compose_auto_window_can_leave_no_tickets(tmp_path: Path, capsys) -> None:

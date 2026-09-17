@@ -1,6 +1,6 @@
 # CeminiParlays product plan
 
-**Status:** Phase 1 composer shipped (v0.2). Odds API ingest shipped (v0.3). Grade + ET fetch + game markets shipped (v0.4). Week 1 report flags + ITT snapshot shipped (v0.5). Phases 2–3 stay specified here so we do not invent scope mid-route.  
+**Status:** Phase 1 composer shipped (v0.2). Odds API ingest shipped (v0.3). Grade + ET fetch + game markets shipped (v0.4). Week 1 report flags + ITT snapshot shipped (v0.5). CeminiDFS handoff reader shipped (v0.6). Phases 2–3 stay specified here so we do not invent scope mid-route.  
 **Contract:** no book-site scrapers, no auto-submit, no book/PM API keys in this repo (Odds API key is env-only: `THE_ODDS_API_KEY`), no network in CI. The operator types the ticket. `fetch` writes a CSV; `compose --auto` **picks** tickets; neither places them. Reports never overwrite the card, auto-void, or invent an SGP.
 
 Sources: CeminiDFS GPP/env stack (`docs/GPP-WORKFLOW.md`, weather/vegas/stadiums), Gambling wiki `@concepts/parlay-and-correlated-bets.md` (SGP tax, DKeX COMBOS = product of binaries), `@briefs/2026-09-12_ceminidfs-lessons-pickem-parlay-cli.md`, world-cup-bot (shadow-first, DRY_RUN, paper ledger — steal the **gates**, not the CLOB).
@@ -78,24 +78,32 @@ Reports only. No silent overwrite, no auto-void, no invented SGP. Displayed Amer
 | `compose --alert-late-active FILE` | TG-03 | Print `OPERATOR_ACTION_REQUIRED` when a FLAG/OUT player is later `ACTIVE`. Exit 0 (alert only). Missing file exits 2. No void, no reprice, no haircut. |
 | `compose --environment` → `compose_itt.json` | TG-02 | One object per env row used on composed tickets (`team`, `opp`, `game_id`, `implied_total`, `spread`, `roof`, `weather_exposed`, `wind_mph`, `precip_pop`) plus `captured_at` UTC `...Z`. Empty implied_total stays null. Omit `--environment` skips the file. Never rewrite from box scores. |
 
-`--from-ceminidfs` is still specified, not built (Phase 2).
+## v0.6 — CeminiDFS handoff reader (shipped)
+
+This repo **reads** a copied `ceminidfs_handoff.csv`. CeminiDFS owns the writer. CLIs stay split. No live pipe. FanDuel FPPG `projection` is not a prop fair and is never written to `distributions.csv`.
+
+| Flag / file | Behavior |
+|-------------|---------|
+| `compose --from-ceminidfs PATH` | Missing file prints `CEMINIDFS_HANDOFF_MISSING: {path}` and continues. Present file fills **blank** `implied_total` on the compose environment (`game` like `CIN@TB` → team/opp). Does not overwrite roof / weather / wind / precip. Prints `ceminidfs exposure:` notes. |
+| `compose --max-exposure-per-player N` | Default unset (warning only, exit 0). When set, same `player` + `stat_type` on more than N tickets prints the concentration warning and exits 2. Yards + ATD on one player does not trip. |
+| `compose --card-md` | Writes `out_dir/card.md` (or `--card-md PATH`). Redacted: legs + do not submit. No stake dollars, wallets, or Odds API key. `card.txt` still writes. |
+| `diff --emit-ledger PATH` | Writes a ledger CSV from **booked** rows. Requires `--accept-booked`. Without it, do not write and keep exit 2 on deltas. Never overwrites the card. |
 
 ## Operator process + GEO (docs, not a math bump)
 
-Docs only. Version stays 0.5.0. No math change.
+Docs only. No math change.
 
 - Sunday cash rules: [`docs/SUNDAY.md`](SUNDAY.md) (run `bankroll` first; one cash ticket per player+family; type the booked American; `diff --card --booked` before the ledger).
 - Citable canon: [`docs/canon.md`](canon.md). Machine index: [`llms.txt`](../llms.txt).
 - Week 1 `grade` artifact: [`docs/week1/grade.json`](week1/grade.json) (hits 2, stake 40, pnl 26.07). Reproduce: [`docs/week1/REPRODUCE.md`](week1/REPRODUCE.md).
 
-`--from-ceminidfs` remains Phase 2 / specified, not built.
+`--from-ceminidfs` is built (v0.6). Copy the file; this CLI only reads.
 
 ## Phase 2 — environment + settlement
 
 - **Odds API ingest (shipped, v0.3):** `ceminiparlays fetch` pulls two-way player props from The Odds API (licensed REST, stdlib `urllib.request` only). Still no FanDuel / DraftKings / Hard Rock / BetMGM site clients, unofficial GitHub “book APIs”, or auto-submit. A fetched two-way price is not a confirmed SGP. Game markets (`h2h`/`spreads`/`totals`) shipped in v0.4.
-- **P2 still specified, not built:** TG-05 stadium prior. `--from-ceminidfs path` if the local DFS export exists; otherwise skip with a named note. Do not rewrite historical ITT from box scores. Do not auto-apply Shin, reduced-SGP, or book-site clients.
+- **P2 leftover:** TG-05 stadium prior. Roster refresh from a **local** nflverse players parquet (no download). Do not rewrite historical ITT from box scores. Do not auto-apply Shin, reduced-SGP, or book-site clients.
 - Model push / reduced sportsbook tickets only when the ledger has a **settled** multiplier (already required). Optional `--allow-integer-lines` on books stays off.
-- Roster refresh script that reads a **local** nflverse players parquet (no download).
 - **Grok Bot desks (operator, not CLI):** Parlays Slate Desk and Recap Desk already exist in Grok Bot.app. Slate writes `environment.csv` + scheme notes; Recap fills `ledger.csv` for `grade`. Copy: [`docs/GROK-BOTS.md`](GROK-BOTS.md). Do not create a second pair. No book scrape, no submit, no Odds API key on the Bot VM.
 
 ## Phase 3 — more sports / more books

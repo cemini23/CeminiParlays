@@ -102,6 +102,55 @@ def test_diff_help_mentions_tg06(capsys) -> None:
     assert "--diff-card-booked" in out
 
 
+def test_emit_ledger_writes_booked_week1_c(tmp_path: Path, capsys) -> None:
+    import csv
+
+    ledger = tmp_path / "ledger.csv"
+    before = CARD.read_text(encoding="utf-8")
+    code = main(
+        [
+            "diff",
+            "--card",
+            str(CARD),
+            "--booked",
+            str(BOOKED),
+            "--accept-booked",
+            "--emit-ledger",
+            str(ledger),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert f"wrote {ledger}" in out
+    assert CARD.read_text(encoding="utf-8") == before
+    rows = list(csv.DictReader(ledger.open(encoding="utf-8")))
+    assert rows
+    assert rows[0]["stake"] == "10"
+    assert "39" in rows[0]["lines"]
+    assert rows[0]["multiplier"] == "+367"
+
+
+def test_emit_ledger_without_accept_does_not_write(tmp_path: Path, capsys) -> None:
+    ledger = tmp_path / "ledger.csv"
+    before = CARD.read_text(encoding="utf-8")
+    code = main(
+        [
+            "diff",
+            "--card",
+            str(CARD),
+            "--booked",
+            str(BOOKED),
+            "--emit-ledger",
+            str(ledger),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 2
+    assert not ledger.exists()
+    assert "--emit-ledger requires --accept-booked" in out
+    assert CARD.read_text(encoding="utf-8") == before
+
+
 def _write(path: Path, text: str) -> Path:
     path.write_text(text, encoding="utf-8")
     return path

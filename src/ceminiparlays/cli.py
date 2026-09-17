@@ -10,14 +10,22 @@ from zoneinfo import ZoneInfo
 from ceminiparlays import STANDARD_DISCLAIMER, __version__
 from ceminiparlays.bankroll import flat_stake, kelly_cap_stake
 from ceminiparlays.catalog import thin_catalog_games
+from ceminiparlays.ceminidfs import exposure_notes, load_ceminidfs_handoff, merge_implied_totals
 from ceminiparlays.compose import (
     TICKET_FIELDS,
     compose_tickets,
     concentration_warnings,
     estimate_multiplier,
+    player_stat_ticket_counts,
     ticket_rows,
 )
-from ceminiparlays.diff import ACCEPTED, BOOKED_WINS, diff_ticket_lines, read_ticket_table
+from ceminiparlays.diff import (
+    ACCEPTED,
+    BOOKED_WINS,
+    diff_ticket_lines,
+    read_ticket_table,
+    write_booked_ledger,
+)
 from ceminiparlays.environment import env_rows_for_games, read_environment, write_compose_itt
 from ceminiparlays.late_active import late_active_alerts
 from ceminiparlays.fair import p_over_line, side_probability
@@ -245,7 +253,26 @@ def build_parser() -> argparse.ArgumentParser:
     compose.add_argument("--min-odds", type=int, default=None)
     compose.add_argument("--max-odds", type=int, default=None)
     compose.add_argument("--n-tickets", type=int, default=5)
+    compose.add_argument(
+        "--max-exposure-per-player",
+        type=int,
+        default=None,
+        help=(
+            "Exit 2 when the same player+stat_type appears on more than N tickets. "
+            "Default unset: concentration warning only."
+        ),
+    )
     compose.add_argument("--environment", type=Path, default=None)
+    compose.add_argument(
+        "--from-ceminidfs",
+        type=Path,
+        default=None,
+        help=(
+            "Local CeminiDFS handoff CSV. Missing file prints "
+            "CEMINIDFS_HANDOFF_MISSING and continues. FanDuel FPPG projection "
+            "is not a prop fair."
+        ),
+    )
     compose.add_argument(
         "--enforce-market-depth",
         action="store_true",
@@ -274,6 +301,13 @@ def build_parser() -> argparse.ArgumentParser:
     compose.add_argument("--bankroll", type=float, default=None)
     compose.add_argument("--out-dir", type=Path, default=None)
     compose.add_argument(
+        "--card-md",
+        nargs="?",
+        const="card.md",
+        default=None,
+        help="Write a redacted markdown card (default name card.md under --out-dir)",
+    )
+    compose.add_argument(
         "--strict",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -290,7 +324,16 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument(
         "--accept-booked",
         action="store_true",
-        help="print the same table and exit 0; never writes the card or ledger",
+        help="print the same table and exit 0; never writes the card",
+    )
+    diff.add_argument(
+        "--emit-ledger",
+        type=Path,
+        default=None,
+        help=(
+            "Write booked rows to PATH. Requires --accept-booked. "
+            "Never overwrites the card."
+        ),
     )
 
     bankroll = sub.add_parser(
@@ -742,6 +785,17 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         return 2
 
     environment = read_environment(args.environment)
+    handoff = None
+    dfs_path = getattr(args, "from_ceminidfs", None)
+    if dfs_path is not None:
+        handoff = load_ceminidfs_handoff(dfs_path)
+        if handoff.missing:
+            print(handoff.note)
+        else:
+            environment = merge_implied_totals(environment, handoff.rows)
+            for note in exposure_notes(handoff.rows):
+                print(note)
+
     tickets = compose_tickets(
         live,
         n_tickets=n_tickets,
@@ -761,10 +815,13 @@ def _cmd_compose(args: argparse.Namespace) -> int:
             if leg.line.team and leg.line.opponent
         }
         itt_rows = env_rows_for_games(environment, games) if tickets else []
+        source = Path(args.environment).name
+        if handoff is not None and not handoff.missing:
+            source = f"{source}+{Path(dfs_path).name}"
         write_compose_itt(
             out_dir / "compose_itt.json",
             captured_at=captured_at,
-            source=Path(args.environment).name,
+            source=source,
             rows=itt_rows,
         )
     slips = []
@@ -804,15 +861,51 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     card = slip_card(slips, bankroll_note=bankroll_note)
     card_path = out_dir / "card.txt"
     card_path.write_text(card + "\n", encoding="utf-8")
+    card_md = getattr(args, "card_md", None)
+    md_path: Path | None = None
+    if card_md is not None:
+        md_path = Path(card_md)
+        if not md_path.is_absolute():
+            md_path = out_dir / md_path
+        md_path.write_text(_compose_card_md(tickets), encoding="utf-8")
     print(f"composed={len(tickets)} requested={n_tickets} out={out_dir}")
     for warning in concentration_warnings(tickets):
         print(f"warning: {warning}")
     print(card)
     print(f"wrote {card_path}")
+    if md_path is not None:
+        print(f"wrote {md_path}")
     if args.environment is not None:
         print(f"wrote {out_dir / 'compose_itt.json'}")
     print("do not submit — type every ticket in-app")
+    max_n = getattr(args, "max_exposure_per_player", None)
+    if max_n is not None:
+        counts = player_stat_ticket_counts(tickets)
+        if any(count > max_n for count in counts.values()):
+            return 2
     return 0
+
+
+def _compose_card_md(tickets: list) -> str:
+    """Redacted markdown card: legs only. No stake, wallets, or API keys."""
+
+    lines = [
+        "# CeminiParlays card",
+        "",
+        "do not submit — type every ticket in-app",
+        "",
+    ]
+    if not tickets:
+        lines.append("No tickets composed.")
+        return "\n".join(lines) + "\n"
+    for index, ticket in enumerate(tickets, start=1):
+        lines.append(f"## Ticket {index}")
+        for leg in ticket:
+            line = leg.line
+            lines.append(f"- {line.player_name} {line.stat_type} {line.line}")
+        lines.append("")
+    lines.append("do not submit — type every ticket in-app")
+    return "\n".join(lines) + "\n"
 
 
 def _cmd_diff(args: argparse.Namespace) -> int:
@@ -821,11 +914,21 @@ def _cmd_diff(args: argparse.Namespace) -> int:
     lines = diff_ticket_lines(card, booked)
     for line in lines:
         print(line)
+    emit = getattr(args, "emit_ledger", None)
+    if emit is not None and not args.accept_booked:
+        print("--emit-ledger requires --accept-booked")
+        return 2
     if not lines:
+        if emit is not None:
+            write_booked_ledger(emit, booked)
+            print(f"wrote {emit}")
         return 0
     print(BOOKED_WINS)
     if args.accept_booked:
         print(ACCEPTED)
+        if emit is not None:
+            write_booked_ledger(emit, booked)
+            print(f"wrote {emit}")
         return 0
     return 2
 

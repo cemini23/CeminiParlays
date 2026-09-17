@@ -98,6 +98,24 @@ when `--environment` is present. `--environment` also writes `compose_itt.json`
 (bet-time ITT snapshot). Do not rewrite that file from box scores. Omit
 `--environment` to skip the snapshot.
 
+**CeminiDFS handoff** (optional, copy the file; this CLI only reads):
+
+```bash
+cp path/to/ceminidfs_handoff.csv runs/slate/ceminidfs_handoff.csv
+ceminiparlays compose --auto \
+  --lines runs/slate/lines.csv \
+  --environment examples/environment.csv \
+  --from-ceminidfs runs/slate/ceminidfs_handoff.csv \
+  --out-dir runs/2026-w01-sun/compose
+```
+
+Missing file: `CEMINIDFS_HANDOFF_MISSING: {path}` and compose continues.
+A present file fills blank `implied_total` (does not overwrite roof/weather)
+and prints `ceminidfs exposure:` notes. FanDuel FPPG `projection` is not a
+prop fair. Optional `--card-md` writes a redacted `card.md` (no stake).
+Optional `--max-exposure-per-player 1` exits 2 on same-player same-stat
+concentration.
+
 Report-only compose flags (default off):
 
 ```bash
@@ -168,6 +186,7 @@ ceminiparlays diff --card examples/card_ticket_c.csv \
   --booked examples/booked_ticket_c.csv
 # per-ticket_id stake / lines / multiplier deltas; exit 2 when any delta exists
 # --accept-booked prints the same table and exits 0; never writes the card
+# --accept-booked --emit-ledger PATH writes booked rows (not the card)
 ```
 
 ## 7. Grade after the games

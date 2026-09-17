@@ -1,5 +1,7 @@
 # Grok Bots for CeminiParlays
 
+**This week / before next lock:** paste both desks (Parlays Slate Desk and Parlays Recap Desk) into Grok Bot.app. Cursor cannot create the Bots. CLI `grade` still wins if the Bot paper PnL disagrees. No Bot scrape. No Bot submit. No Odds API key on the Bot VM.
+
 Operator paste for Grok Bot.app. Canon lives in OSINT `briefs/2026-09-01_grok-bot-charters.md` (§17 Parlays Slate Desk, §19 Parlays Recap Desk). Cursor cannot create the Bots — paste the Description, then send the First skill.
 
 These Bots **research and recap**. They do not fetch Odds API, they do not scrape books, and they do not submit. Laptop path stays [`docs/SUNDAY.md`](SUNDAY.md): `fetch` → `compose` → type the ticket → `grade`.

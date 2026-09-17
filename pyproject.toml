@@ -37,6 +37,8 @@ prop-grade = "ceminiparlays.cli:main_grade"
 [project.urls]
 Homepage = "https://github.com/cemini23/CeminiParlays"
 Source = "https://github.com/cemini23/CeminiParlays"
+Documentation = "https://github.com/cemini23/CeminiParlays/blob/main/docs/SUNDAY.md"
+Canon = "https://github.com/cemini23/CeminiParlays/blob/main/docs/canon.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]

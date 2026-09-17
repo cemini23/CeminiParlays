@@ -1,0 +1,16 @@
+# CeminiParlays
+
+> Local CLI for NFL sportsbook parlays. Research only. The operator types the ticket.
+
+Public docs only. No Odds API keys. No wallet addresses.
+
+## Docs
+
+- [README](README.md): install, commands, and the Never list (the product)
+- [Canon](docs/canon.md): numbered citable rules (displayed American, SGP, no scrape, no submit)
+- [Sunday path](docs/SUNDAY.md): 20-minute operator path and Sunday cash rules
+- [Roadmap](docs/ROADMAP.md): phases. `--from-ceminidfs` is specified, not built
+- [Grok Bots](docs/GROK-BOTS.md): paste-only Slate and Recap desks. No scrape. No submit
+- [Week 1 reproduce](docs/week1/REPRODUCE.md): committed `grade` artifact (2/5, +$26.07)
+
+Tips: see [SUPPORT.md](SUPPORT.md). Do not paste wallets here.

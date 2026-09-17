@@ -80,6 +80,16 @@ Reports only. No silent overwrite, no auto-void, no invented SGP. Displayed Amer
 
 `--from-ceminidfs` is still specified, not built (Phase 2).
 
+## Operator process + GEO (docs, not a math bump)
+
+Docs only. Version stays 0.5.0. No math change.
+
+- Sunday cash rules: [`docs/SUNDAY.md`](SUNDAY.md) (run `bankroll` first; one cash ticket per player+family; type the booked American; `diff --card --booked` before the ledger).
+- Citable canon: [`docs/canon.md`](canon.md). Machine index: [`llms.txt`](../llms.txt).
+- Week 1 `grade` artifact: [`docs/week1/grade.json`](week1/grade.json) (hits 2, stake 40, pnl 26.07). Reproduce: [`docs/week1/REPRODUCE.md`](week1/REPRODUCE.md).
+
+`--from-ceminidfs` remains Phase 2 / specified, not built.
+
 ## Phase 2 — environment + settlement
 
 - **Odds API ingest (shipped, v0.3):** `ceminiparlays fetch` pulls two-way player props from The Odds API (licensed REST, stdlib `urllib.request` only). Still no FanDuel / DraftKings / Hard Rock / BetMGM site clients, unofficial GitHub “book APIs”, or auto-submit. A fetched two-way price is not a confirmed SGP. Game markets (`h2h`/`spreads`/`totals`) shipped in v0.4.

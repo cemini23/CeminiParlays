@@ -1,0 +1,26 @@
+{
+  "n_slips": 5,
+  "hits": 2,
+  "hit_rate": 0.4,
+  "stake": 40.0,
+  "pnl": 26.07,
+  "roi": 0.65175,
+  "bonus_stake": 0.0,
+  "ticket_ids": [
+    "A-2leg",
+    "A-4leg",
+    "B",
+    "C",
+    "3"
+  ],
+  "markets": [
+    "rush_yds|rush_yds",
+    "rush_yds|rush_yds|rush_yds|rush_yds",
+    "anytime_td|anytime_td|anytime_td",
+    "moneyline|moneyline|total",
+    "pass_yds|rec_yds|rush_yds|anytime_td|total"
+  ],
+  "stake_kinds": [
+    "cash"
+  ]
+}

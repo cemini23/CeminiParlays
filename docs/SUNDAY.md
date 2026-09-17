@@ -8,6 +8,15 @@ CLI only fetches two-way lines, picks, and prices.
 scheme notes. After the games, Parlays Recap Desk fills a ledger for step 7.
 Paste: [`GROK-BOTS.md`](GROK-BOTS.md). The Bot does not fetch or submit.
 
+> **Sunday cash rules**
+>
+> 1. Run `ceminiparlays bankroll` before you type.
+> 2. One cash ticket per player + family. Yards + a smaller ATD is allowed.
+> 3. Do not type the published 4-leg and its 2-leg subset.
+> 4. Type the booked displayed American (the in-app price).
+> 5. Run `ceminiparlays diff --card --booked` before the ledger.
+> 6. Never backfill a naive product of legs as the booked American.
+
 **Rule for every step:** if a command exits `2`, read the named `dropped` /
 `no-line` rows and fix the CSV. Do not pass `--no-strict` on a money slate.
 

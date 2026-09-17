@@ -1,6 +1,6 @@
 # Week 1 consensus — auditor matrix (Mon 2026-09-14)
 
-Paper cash: **+$26.07 on $40**, hits **2/5**. Recap remains source of truth until `grade` reproduces it.
+Paper cash: **+$26.07 on $40**, hits **2/5**. `ceminiparlays grade` reproduces this ledger: [`docs/week1/grade.json`](grade.json). Command and expected totals: [`REPRODUCE.md`](REPRODUCE.md).
 
 | Auditor | Model | Outcome |
 |---------|--------|---------|
@@ -17,7 +17,7 @@ OpenCode Zen sidecar is down (same UnknownError as Sunday). Audits still landed 
 
 ## How we did
 
-Winning session on paper, not a repeatable edge. Ticket B (+$14.40 at booked +288) and Ticket C (+$36.67 at booked +367) covered three misses. Chase Brown **56 vs 57.5** zeroed **$20** of rush cash while the same player’s ATD helped B. The CLI still cannot print this ledger.
+Winning session on paper, not a repeatable edge. Ticket B (+$14.40 at booked +288) and Ticket C (+$36.67 at booked +367) covered three misses. Chase Brown **56 vs 57.5** zeroed **$20** of rush cash while the same player’s ATD helped B. The CLI prints this ledger: [`grade.json`](grade.json) (`hits` 2, `stake` 40, `pnl` 26.07).
 
 ---
 

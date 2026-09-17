@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -131,6 +132,14 @@ def test_grade_week1_hardrock_ledger() -> None:
     assert summary.stake == 40.0
     assert abs(summary.pnl - 26.07) < 0.02
     assert round(summary.pnl, 2) == 26.07
+
+
+def test_week1_grade_artifact_matches_live() -> None:
+    artifact = json.loads((ROOT / "docs" / "week1" / "grade.json").read_text(encoding="utf-8"))
+    live = grade_ledger(ROOT / "examples" / "ledger_week1_hardrock.csv")
+    assert artifact["hits"] == live.hits
+    assert artifact["stake"] == live.stake
+    assert round(artifact["pnl"], 2) == round(live.pnl, 2)
 
 
 def test_grade_atd_yes_yes_american_is_hit_not_void(tmp_path) -> None:

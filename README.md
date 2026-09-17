@@ -4,7 +4,20 @@ Local CLI for NFL **sportsbook parlays**. Pick'em (Underdog / PrizePicks) is a s
 
 `fetch` pulls two-way player-prop lines from [The Odds API](https://the-odds-api.com). You still type the ticket in Hard Rock / FanDuel / DraftKings / BetMGM and pass the **displayed American parlay / SGP price**. The tool ranks EV with a copula. It does not submit slips and it does not scrape book sites.
 
-**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3; grade + ET fetch + game markets = v0.4; Week 1 report flags + ITT snapshot = v0.5).
+## Why this is safe to run
+
+The Never list is the product, not a buried limit.
+
+- Displayed American is ticket identity. You type the in-app price. The CLI does not invent an SGP from the product of legs.
+- No book-site scrape. Licensed Odds API ingest is the only HTTP path.
+- No auto-submit. Output files say **do not submit**. You type the ticket in-app.
+- No invented reduced-SGP table. HIT with an empty multiplier fails closed.
+- Tests and CI do not hit the network.
+- Wager only where it is legal. If gambling is a problem, call **1-800-GAMBLER**.
+
+Numbered rules: [`docs/canon.md`](docs/canon.md). Machine index: [`llms.txt`](llms.txt).
+
+**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/canon.md`](docs/canon.md) is the citable rules. [`llms.txt`](llms.txt) lists the public docs. [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3; grade + ET fetch + game markets = v0.4; Week 1 report flags + ITT snapshot = v0.5).
 
 ## Install
 
@@ -15,6 +28,12 @@ pip install -e ".[dev]"
 ```
 
 Python 3.11 or 3.12.
+
+No Odds API key for the offline fixture path:
+
+```bash
+ceminiparlays fetch --fixture tests/fixtures/odds_api_nfl.json --out /tmp/lines.csv
+```
 
 ## Commands
 
@@ -216,7 +235,10 @@ Output files always say **do not submit**. That line is the product contract. Th
 See `RESEARCH.md` for the wiki, CeminiDFS lessons, Gemini math, and social scan that set v1.
 
 - [`docs/SUNDAY.md`](docs/SUNDAY.md) — the 20-minute Sunday operator path.
+- [`docs/canon.md`](docs/canon.md) — numbered citable rules.
+- [`llms.txt`](llms.txt) — public-doc index for search and LLMs.
 - [`docs/GROK-BOTS.md`](docs/GROK-BOTS.md) — Parlays Slate Desk + Recap Desk (paste into Grok Bot.app).
+- [`docs/week1/REPRODUCE.md`](docs/week1/REPRODUCE.md) — Week 1 `grade` artifact (2/5, +$26.07).
 - [`docs/2026-09-13-hardrock-card.md`](docs/2026-09-13-hardrock-card.md) — Week 1 $20 Hard Rock card.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — Phase 1 composer (v0.2), Odds API fetch (v0.3), grade + ET fetch + game markets (v0.4), Week 1 report flags + ITT snapshot (v0.5), Phase 2 environment/settlement, Phase 3 more books.
 

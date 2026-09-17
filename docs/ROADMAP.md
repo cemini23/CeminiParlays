@@ -96,7 +96,7 @@ Docs only. Version stays 0.5.0. No math change.
 - **P2 still specified, not built:** TG-05 stadium prior. `--from-ceminidfs path` if the local DFS export exists; otherwise skip with a named note. Do not rewrite historical ITT from box scores. Do not auto-apply Shin, reduced-SGP, or book-site clients.
 - Model push / reduced sportsbook tickets only when the ledger has a **settled** multiplier (already required). Optional `--allow-integer-lines` on books stays off.
 - Roster refresh script that reads a **local** nflverse players parquet (no download).
-- **Grok Bot desks (operator, not CLI):** Parlays Slate Desk writes `environment.csv` + scheme notes; Recap Desk fills `ledger.csv` for `grade`. Paste: [`docs/GROK-BOTS.md`](GROK-BOTS.md). No book scrape, no submit, no Odds API key on the Bot VM.
+- **Grok Bot desks (operator, not CLI):** Parlays Slate Desk and Recap Desk already exist in Grok Bot.app. Slate writes `environment.csv` + scheme notes; Recap fills `ledger.csv` for `grade`. Copy: [`docs/GROK-BOTS.md`](GROK-BOTS.md). Do not create a second pair. No book scrape, no submit, no Odds API key on the Bot VM.
 
 ## Phase 3 — more sports / more books
 

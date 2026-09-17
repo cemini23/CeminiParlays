@@ -4,9 +4,12 @@ The operator path for one afternoon slate. Licensed Odds API fetch is allowed.
 Book-site scrapers and auto-submit are not. You type the ticket in the app; this
 CLI only fetches two-way lines, picks, and prices.
 
-**Grok Bot desks:** before lock, Parlays Slate Desk can write `environment.csv` and
-scheme notes. After the games, Parlays Recap Desk fills a ledger for step 7.
-Paste: [`GROK-BOTS.md`](GROK-BOTS.md). The Bot does not fetch or submit.
+**Grok Bot desks:** Parlays Slate Desk and Parlays Recap Desk already exist in
+Grok Bot.app. Charters live in OSINT WORKSPACE
+(`briefs/2026-09-01_grok-bot-charters.md` §17 / §19). Product copy:
+[`GROK-BOTS.md`](GROK-BOTS.md). Before lock, open Slate Desk → `environment.csv`.
+After the games, open Recap Desk → ledger for step 7. Do not create new Bots.
+The Bot does not fetch or submit.
 
 > **Sunday cash rules**
 >

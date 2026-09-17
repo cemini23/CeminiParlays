@@ -9,7 +9,7 @@ Public docs only. No Odds API keys. No wallet addresses.
 - [README](README.md): install, commands, and the Never list (the product)
 - [Canon](docs/canon.md): numbered citable rules (displayed American, SGP, no scrape, no submit)
 - [Sunday path](docs/SUNDAY.md): 20-minute operator path and Sunday cash rules
-- [Roadmap](docs/ROADMAP.md): phases. `--from-ceminidfs` is specified, not built
+- [Roadmap](docs/ROADMAP.md): phases. `--from-ceminidfs` is built (copy the file; this CLI only reads)
 - [Grok Bots](docs/GROK-BOTS.md): live Slate and Recap desks in Grok Bot.app. No scrape. No submit
 - [Week 1 reproduce](docs/week1/REPRODUCE.md): committed `grade` artifact (2/5, +$26.07)
 

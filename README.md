@@ -145,7 +145,7 @@ Default `--platform` is **hardrock**. Choices: `hardrock`, `fanduel`, `draftking
 
 `rank` / `run` load a packaged NFL roster (`config/rosters/nfl.json`, 2026-09-13). A **known** player on the wrong team is dropped as `wrong-team` (DJ Moore is BUF, not CHI). Unknown names pass. Pass `--roster path.json` to replace the file, or `--no-roster` to skip the check. Edit the JSON when someone is traded.
 
-The three v0.5 flags are **reports**. They do not void, reprice, invent an SGP, or overwrite the card. `--from-ceminidfs` is still specified, not built. House-rule quotes stay out of Python (no reduced-SGP table). SoFi remains `semi_open` (not a dome).
+The three v0.5 flags are **reports**. They do not void, reprice, invent an SGP, or overwrite the card. `--from-ceminidfs` is built (v0.6): copy `ceminidfs_handoff.csv`; this CLI only reads. Missing file prints `CEMINIDFS_HANDOFF_MISSING` and compose continues. House-rule quotes stay out of Python (no reduced-SGP table). SoFi remains `semi_open` (not a dome).
 
 `--displayed-odds` is the in-app American parlay / SGP price for **one ticket**. `--displayed-multiplier` is the decimal form. On a sportsbook (or prediction) platform the CLI quote is legal only when `live == slip-size` — a 4-row ticket needs `--legs 4`. A shared `ticket_id` does **not** let one American paint every 2-leg subset. Per combo the price is: agreeing row `slip_multiplier` → agreeing all-leg `slip_odds` → CLI displayed (size match only) → `leg_odds` product. A row quote wins over the CLI flag.
 

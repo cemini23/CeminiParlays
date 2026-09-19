@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -104,6 +105,30 @@ def env_for(
         if row is not None:
             return row
     return None
+
+
+def missing_env_games(
+    games: Sequence[object],
+    environment: Environment,
+) -> list[str]:
+    """Return ``{away}@{home}`` ids missing either team's env row.
+
+    An empty environment is not a warning: a missing file is skip, same as
+    compose. Does not invent ITT.
+    """
+
+    if not environment:
+        return []
+    missing: list[str] = []
+    for game in games:
+        away = getattr(game, "away", "")
+        home = getattr(game, "home", "")
+        if (
+            env_for(environment, away, home) is None
+            or env_for(environment, home, away) is None
+        ):
+            missing.append(f"{away}@{home}")
+    return missing
 
 
 def env_rows_for_games(

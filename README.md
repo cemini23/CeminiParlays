@@ -105,7 +105,7 @@ ceminiparlays fetch --fixture tests/fixtures/odds_api_nfl.json --out /tmp/lines.
 
 # Compose 5 tickets with the auto defaults (2-leg, +150..+400, yards markets)
 ceminiparlays compose --auto --lines runs/slate/lines.csv \
-  --environment examples/environment.csv --out-dir runs/2026-w01-sun
+  --environment examples/2026-w02-sun-environment.csv --out-dir runs/2026-w02-sun
 # -> ticket-001.csv .. ticket-005.csv + card.txt + compose_itt.json
 # compose_itt.json is the bet-time ITT snapshot. Do not rewrite it from box scores.
 # Omit --environment to skip the file.

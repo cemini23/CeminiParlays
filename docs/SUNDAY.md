@@ -23,6 +23,9 @@ The Bot does not fetch or submit.
 **Rule for every step:** if a command exits `2`, read the named `dropped` /
 `no-line` rows and fix the CSV. Do not pass `--no-strict` on a money slate.
 
+This Sunday card is **2026-09-20**. SNF IND@KC is on this slate. NYG@LAR is
+Monday — wait.
+
 ## 0. Install (once)
 
 ```bash
@@ -33,13 +36,16 @@ pip install -e ".[dev]"
 ## 1. Build the fill-in slate (optional, 2 min)
 
 ```bash
-ceminiparlays slate
-# writes runs/slate/lines_fill_in.csv from examples/games_sunday_afternoon.csv
+ceminiparlays slate --games examples/games_2026_w02_sun.csv \
+  --environment examples/2026-w02-sun-environment.csv
+# writes runs/slate/lines_fill_in.csv from the Week 2 Sunday games file
 # + the packaged roster. Team comes from the roster (DJ Moore = BUF).
+# Missing env rows print ENVIRONMENT_MISSING_GAME: {AWAY}@{HOME} and exit 0.
 ```
 
-Swap `--games` for the current week's game file. Use this only when you want a
-blank roster sheet. Prefer `fetch` for posted two-way prices.
+Default `--games` stays `examples/games_sunday_afternoon.csv` (Week 1). Pass
+`--games` for the current week's file. Use this only when you want a blank
+roster sheet. Prefer `fetch` for posted two-way prices.
 
 ## 2. Fetch two-way lines (2 min)
 
@@ -47,7 +53,7 @@ blank roster sheet. Prefer `fetch` for posted two-way prices.
 `os.environ` only. It never prints the key.
 
 ```bash
-ceminiparlays fetch --out runs/slate/lines.csv
+ceminiparlays fetch --date 2026-09-20 --out runs/slate/lines.csv
 # defaults: --books hardrock,fanduel,draftkings
 #           --markets pass_yds,rush_yds,rec_yds,first_td,anytime_td
 # --date is the America/New_York slate day (midnight ET → next midnight ET,
@@ -60,7 +66,7 @@ ceminiparlays fetch --out runs/slate/lines.csv
 # do not submit — type the ticket in-app
 
 # Narrower card (overwrites only with --force)
-ceminiparlays fetch --date 2026-09-13 --books hardrock --markets first_td \
+ceminiparlays fetch --date 2026-09-20 --books hardrock --markets first_td \
   --out runs/slate/ftd.csv
 ```
 
@@ -82,8 +88,8 @@ API markets are skipped with a `no-odds-api-market` note.
 ```bash
 ceminiparlays compose --auto \
   --lines runs/slate/lines.csv \
-  --environment examples/environment.csv \
-  --out-dir runs/2026-w01-sun/compose
+  --environment examples/2026-w02-sun-environment.csv \
+  --out-dir runs/2026-w02-sun/compose
 ```
 
 `--auto` with no knobs uses: `--markets pass_yds,rush_yds,rec_yds`, `--legs 2`,
@@ -104,9 +110,9 @@ when `--environment` is present. `--environment` also writes `compose_itt.json`
 cp path/to/ceminidfs_handoff.csv runs/slate/ceminidfs_handoff.csv
 ceminiparlays compose --auto \
   --lines runs/slate/lines.csv \
-  --environment examples/environment.csv \
+  --environment examples/2026-w02-sun-environment.csv \
   --from-ceminidfs runs/slate/ceminidfs_handoff.csv \
-  --out-dir runs/2026-w01-sun/compose
+  --out-dir runs/2026-w02-sun/compose
 ```
 
 Missing file: `CEMINIDFS_HANDOFF_MISSING: {path}` and compose continues.
@@ -148,15 +154,21 @@ ceminiparlays compose --auto --markets rush_yds --legs 3 --max-odds +250 \
 ceminiparlays compose --auto --platform betmgm --lines runs/slate/lines.csv
 ```
 
+**Optional jev HITL** (after compose, before you type): run `jev_verify` on each
+composed leg against the lines file and the CeminiDFS handoff row. If Jev
+contradicts the row, do not type that ticket. `jev_find` may label a ticket
+`promo_hedge`, `real_hedge`, or `straight_bet`. Jev does not set odds, Kelly,
+or ITT.
+
 ## 4. Price one ticket before you build it (2 min)
 
 Once you have the in-app American on one ticket:
 
 ```bash
-ceminiparlays run --lines runs/2026-w01-sun/compose/ticket-001.csv \
+ceminiparlays run --lines runs/2026-w02-sun/compose/ticket-001.csv \
   --distributions examples/distributions.csv \
   --platform hardrock --displayed-odds +264 \
-  --out-dir runs/2026-w01-sun/ticket-001
+  --out-dir runs/2026-w02-sun/ticket-001
 ```
 
 `--displayed-odds` is legal only when `live == slip-size`. A 2-leg compose file

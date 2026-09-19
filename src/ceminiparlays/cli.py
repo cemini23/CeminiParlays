@@ -26,7 +26,12 @@ from ceminiparlays.diff import (
     read_ticket_table,
     write_booked_ledger,
 )
-from ceminiparlays.environment import env_rows_for_games, read_environment, write_compose_itt
+from ceminiparlays.environment import (
+    env_rows_for_games,
+    missing_env_games,
+    read_environment,
+    write_compose_itt,
+)
 from ceminiparlays.late_active import late_active_alerts
 from ceminiparlays.fair import p_over_line, side_probability
 from ceminiparlays.fetch import load_fixture, rows_from_events, write_fetch_csv
@@ -233,6 +238,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("examples/games_sunday_afternoon.csv"),
     )
     slate.add_argument("--roster", type=Path, default=None)
+    slate.add_argument(
+        "--environment",
+        type=Path,
+        default=None,
+        help=(
+            "Optional env CSV. Warn ENVIRONMENT_MISSING_GAME for games missing "
+            "a team row. Missing file skips the warn. Exit 0."
+        ),
+    )
     slate.add_argument("--platform", default="hardrock", choices=PLATFORM_CHOICES)
     slate.add_argument("--slate-id", default=None)
     slate.add_argument("--out", type=Path, default=Path("runs/slate/lines_fill_in.csv"))
@@ -629,6 +643,10 @@ def _cmd_slate(args: argparse.Namespace) -> int:
     games = read_games(args.games)
     if not games:
         raise ValueError(f"no games in {args.games}")
+    if getattr(args, "environment", None) is not None:
+        environment = read_environment(args.environment)
+        for game_id in missing_env_games(games, environment):
+            print(f"ENVIRONMENT_MISSING_GAME: {game_id}")
     roster = load_roster(args.roster)
     slate_id = args.slate_id or next((game.slate_id for game in games if game.slate_id), "")
     rows: list[dict[str, object]] = []

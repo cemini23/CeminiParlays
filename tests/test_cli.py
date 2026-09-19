@@ -691,6 +691,53 @@ def test_slate_writes_moore_as_buf_with_blank_lines(tmp_path: Path, capsys) -> N
     assert "do not submit" in capsys.readouterr().out.lower()
 
 
+def test_slate_week2_environment_has_no_missing_game_warn(
+    tmp_path: Path, capsys
+) -> None:
+    out = tmp_path / "slate.csv"
+    code = main(
+        [
+            "slate",
+            "--games",
+            str(ROOT / "examples" / "games_2026_w02_sun.csv"),
+            "--environment",
+            str(ROOT / "examples" / "2026-w02-sun-environment.csv"),
+            "--out",
+            str(out),
+        ]
+    )
+    captured = capsys.readouterr().out
+    assert code == 0
+    assert "ENVIRONMENT_MISSING_GAME" not in captured
+    assert "do not submit" in captured.lower()
+
+
+def test_slate_week2_environment_warns_when_ind_kc_missing(
+    tmp_path: Path, capsys
+) -> None:
+    src = (ROOT / "examples" / "2026-w02-sun-environment.csv").read_text(
+        encoding="utf-8"
+    )
+    stripped = "\n".join(line for line in src.splitlines() if "IND@KC" not in line)
+    env_path = tmp_path / "env.csv"
+    env_path.write_text(stripped + "\n", encoding="utf-8")
+    code = main(
+        [
+            "slate",
+            "--games",
+            str(ROOT / "examples" / "games_2026_w02_sun.csv"),
+            "--environment",
+            str(env_path),
+            "--out",
+            str(tmp_path / "slate.csv"),
+        ]
+    )
+    captured = capsys.readouterr().out
+    assert code == 0
+    assert "ENVIRONMENT_MISSING_GAME: IND@KC" in captured
+    assert "do not submit" in captured.lower()
+
+
 def test_rank_blank_line_drops_no_line_and_exits_two(tmp_path: Path, capsys) -> None:
     lines = _write_lines(
         tmp_path,

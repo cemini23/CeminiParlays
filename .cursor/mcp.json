@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "jev": {
+      "type": "stdio",
+      "disabled": false,
+      "command": "/Users/claudiobarone/.local/bin/mcp-jev",
+      "args": [],
+      "env": {}
+    }
+  }
+}

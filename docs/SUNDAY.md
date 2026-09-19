@@ -9,7 +9,8 @@ Grok Bot.app. Charters live in OSINT WORKSPACE
 (`briefs/2026-09-01_grok-bot-charters.md` §17 / §19). Product copy:
 [`GROK-BOTS.md`](GROK-BOTS.md). Before lock, open Slate Desk → `environment.csv`.
 After the games, open Recap Desk → ledger for step 7. Do not create new Bots.
-The Bot does not fetch or submit.
+The Bot does not fetch or submit. Slate Desk defaults to Sunday afternoon only,
+so name **SNF IND@KC** if you open it this Sunday; NYG@LAR is Monday.
 
 > **Sunday cash rules**
 >
@@ -89,7 +90,10 @@ API markets are skipped with a `no-odds-api-market` note.
 ceminiparlays compose --auto \
   --lines runs/slate/lines.csv \
   --environment examples/2026-w02-sun-environment.csv \
+  --card-md --max-exposure-per-player 1 \
   --out-dir runs/2026-w02-sun/compose
+# --card-md writes a redacted card.md (no stake) next to card.txt
+# --max-exposure-per-player 1 exits 2 on same-player same-stat concentration
 ```
 
 `--auto` with no knobs uses: `--markets pass_yds,rush_yds,rec_yds`, `--legs 2`,
@@ -112,20 +116,34 @@ ceminiparlays compose --auto \
   --lines runs/slate/lines.csv \
   --environment examples/2026-w02-sun-environment.csv \
   --from-ceminidfs runs/slate/ceminidfs_handoff.csv \
+  --card-md --max-exposure-per-player 1 \
   --out-dir runs/2026-w02-sun/compose
 ```
 
 Missing file: `CEMINIDFS_HANDOFF_MISSING: {path}` and compose continues.
 A present file fills blank `implied_total` (does not overwrite roof/weather)
 and prints `ceminidfs exposure:` notes. FanDuel FPPG `projection` is not a
-prop fair. Optional `--card-md` writes a redacted `card.md` (no stake).
-Optional `--max-exposure-per-player 1` exits 2 on same-player same-stat
-concentration.
+prop fair. Both examples above pass `--card-md --max-exposure-per-player 1`:
+the first writes a redacted `card.md` (no stake), the second exits 2 on
+same-player same-stat concentration.
+
+**Before you type** (four checks, every week):
+
+- **Wind** (packaged env): fade pass / lean rush on **NO@BAL**, **MIN@CHI**,
+  **WAS@DAL** (only if the roof is open), **IND@KC** — the ≥10 mph rows.
+- **Roof**: WAS@DAL is retractable and stays weather-exposed until an official
+  roof call. No call means treat it as exposed; do not fade on a guess.
+- **Jev**: `jev_verify` each live leg against the lines file and the CeminiDFS
+  handoff row. If Jev contradicts the row, do not type that ticket.
+- **Flags**: `--enforce-market-depth` only after a fetch that includes
+  `h2h,spreads` — a yards-only fetch will halt (exit 2). `--alert-late-active`
+  only if an inactives file exists — a missing file exits 2.
 
 Report-only compose flags (default off):
 
 ```bash
 # TG-04 thin catalog: halt when a game lacks moneyline/h2h or spread/spreads
+# Use only after a fetch that includes h2h,spreads. A yards-only fetch halts.
 ceminiparlays compose --auto --enforce-market-depth \
   --lines runs/slate/lines.csv --out-dir runs/slate
 # CATALOG_THIN_MANUAL_INPUT_REQUIRED then exit 2
@@ -133,6 +151,7 @@ ceminiparlays compose --auto --enforce-market-depth \
 # compose --auto without the flag (yards only) does not halt
 
 # TG-03 late active: FLAG/OUT on the lines file, later ACTIVE in this CSV
+# Use only when the inactives file exists. Missing file exits 2.
 ceminiparlays compose --auto --alert-late-active inactives.csv \
   --lines runs/slate/lines.csv --out-dir runs/slate
 # OPERATOR_ACTION_REQUIRED: {player} excluded as {status} later ACTIVE
@@ -155,10 +174,10 @@ ceminiparlays compose --auto --platform betmgm --lines runs/slate/lines.csv
 ```
 
 **Optional jev HITL** (after compose, before you type): run `jev_verify` on each
-composed leg against the lines file and the CeminiDFS handoff row. If Jev
-contradicts the row, do not type that ticket. `jev_find` may label a ticket
-`promo_hedge`, `real_hedge`, or `straight_bet`. Jev does not set odds, Kelly,
-or ITT.
+live leg against the lines file and the CeminiDFS handoff row. If Jev contradicts
+the row, do not type that ticket. Optional `jev_find` is a type/skip read and may
+label a ticket `promo_hedge`, `real_hedge`, or `straight_bet`. Jev does not set
+odds, Kelly, or ITT.
 
 ## 4. Price one ticket before you build it (2 min)
 

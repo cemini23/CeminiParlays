@@ -19,6 +19,8 @@ Laptop path stays [`docs/SUNDAY.md`](SUNDAY.md): `fetch` → `compose` → type 
 
 Default slate: NFL Sunday afternoon **1 p.m. ET + 4 p.m. ET** (4:05 / 4:25). Not SNF/MNF unless you name them.
 
+This Sunday (Week 2, **2026-09-20**): name **SNF IND@KC** in the Slate Desk packet. The packaged `examples/2026-w02-sun-environment.csv` already has that game, and `fetch --date 2026-09-20` already includes it. Do not add MNF **NYG@LAR** — it is Monday.
+
 After a clean run, copy files off the Bot VM:
 
 | Bot file | Laptop use |

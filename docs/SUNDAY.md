@@ -102,6 +102,11 @@ overrides that one default. A single odds bound keeps the other default unless
 that would empty the window: `--max-odds +250` keeps the `+150` floor;
 `--min-odds +800` drops the `+400` cap for a first-TD longshot.
 
+`--auto` caps each ticket at 2 legs of the same `stat_type`. Override with
+`--max-legs-per-market N`. `--max-legs-per-market 0` turns the cap off. When
+`--environment` is set, wind of 10 mph or more on a `first_td` or `pass_yds`
+leg prints `WEATHER_MARKET_REVIEW` and the leg stays on the ticket.
+
 It writes `ticket-001.csv` … `ticket-005.csv` plus `card.txt`, and prints
 `do not submit`. Tickets diversify games and prefer higher implied team totals
 when `--environment` is present. `--environment` also writes `compose_itt.json`

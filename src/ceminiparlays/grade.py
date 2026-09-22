@@ -17,7 +17,8 @@ NO_TOKENS = {"no", "n"}
 WIN_TOKENS = {"win", "won", "w"}
 LOSS_TOKENS = {"loss", "lose", "lost", "l"}
 #: Optional ledger columns. Unknown extra columns are ignored, never fatal.
-OPTIONAL_LEDGER_COLUMNS = ("ticket_id", "market", "stake_kind", "paid")
+#: ``boost`` is a note. Payout uses ``multiplier`` only, never ``(1 + boost)``.
+OPTIONAL_LEDGER_COLUMNS = ("ticket_id", "market", "stake_kind", "paid", "boost")
 
 
 @dataclass

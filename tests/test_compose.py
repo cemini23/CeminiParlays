@@ -122,14 +122,20 @@ def test_n_tickets_must_be_positive() -> None:
         )
 
 
-def _eval_leg(name: str, key: str, stat: str) -> EvaluatedLeg:
+def _eval_leg(
+    name: str,
+    key: str,
+    stat: str,
+    team: str = "CIN",
+    opponent: str = "CLE",
+) -> EvaluatedLeg:
     line = LineRow(
         slate_id="s",
         platform="hardrock",
         player_name=name,
         player_key=key,
-        team="CIN",
-        opponent="CLE",
+        team=team,
+        opponent=opponent,
         stat_type=stat,
         line=57.5,
         side="more",
@@ -194,6 +200,84 @@ def test_player_stat_counts_same_stat_across_tickets() -> None:
     counts = player_stat_ticket_counts(tickets)
     assert counts[("chase_brown", "rush_yds")] == 2
     assert counts[("jahmyr_gibbs", "rush_yds")] == 1
+
+
+def test_max_legs_per_market_caps_rush_yds() -> None:
+    pool = [
+        _eval_leg("Rush A", "rush_a", "rush_yds", "CIN", "CLE"),
+        _eval_leg("Rush B", "rush_b", "rush_yds", "DET", "GB"),
+        _eval_leg("Rush C", "rush_c", "rush_yds", "BAL", "PIT"),
+        _eval_leg("Rush D", "rush_d", "rush_yds", "KC", "LV"),
+        _eval_leg("Rush E", "rush_e", "rush_yds", "SF", "SEA"),
+    ]
+    uncapped = compose_tickets(
+        pool,
+        n_tickets=1,
+        sizes=[5],
+        min_odds=None,
+        max_odds=None,
+        markets=None,
+        environment=None,
+    )
+    assert len(uncapped) == 1
+    assert sum(leg.line.stat_type == "rush_yds" for leg in uncapped[0]) == 5
+    zero_cap = compose_tickets(
+        pool,
+        n_tickets=1,
+        sizes=[5],
+        min_odds=None,
+        max_odds=None,
+        markets=None,
+        environment=None,
+        max_legs_per_market=0,
+    )
+    assert len(zero_cap) == 1
+    capped = compose_tickets(
+        pool,
+        n_tickets=3,
+        sizes=[2, 5],
+        min_odds=None,
+        max_odds=None,
+        markets=None,
+        environment=None,
+        max_legs_per_market=2,
+    )
+    assert capped
+    for ticket in capped:
+        assert sum(leg.line.stat_type == "rush_yds" for leg in ticket) <= 2
+    five_only = compose_tickets(
+        pool,
+        n_tickets=1,
+        sizes=[5],
+        min_odds=None,
+        max_odds=None,
+        markets=None,
+        environment=None,
+        max_legs_per_market=2,
+    )
+    assert five_only == []
+
+
+def test_same_game_first_td_stays_skipped_under_market_cap() -> None:
+    pool = [
+        _eval_leg("A TD", "a_td", "first_td", "DET", "NO"),
+        _eval_leg("B TD", "b_td", "first_td", "NO", "DET"),
+        _eval_leg("C TD", "c_td", "first_td", "ATL", "PIT"),
+    ]
+    tickets = compose_tickets(
+        pool,
+        n_tickets=5,
+        sizes=[2],
+        min_odds=None,
+        max_odds=None,
+        markets=None,
+        environment=None,
+        max_legs_per_market=5,
+    )
+    pairs = {frozenset(leg.line.player_name for leg in ticket) for ticket in tickets}
+    assert frozenset({"A TD", "B TD"}) not in pairs
+    assert frozenset({"A TD", "C TD"}) in pairs
+    assert frozenset({"B TD", "C TD"}) in pairs
 
 
 def test_estimate_multiplier_from_leg_odds_product() -> None:

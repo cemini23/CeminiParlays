@@ -1,8 +1,9 @@
 """Parlay composer: pick tickets from a ranked pool.
 
 ``compose_tickets`` is deterministic and file-only: it diversifies games, skips
-illegal first-TD pairs, prefers higher implied team totals when an environment
-file is present, and filters by the American odds window. It never submits.
+illegal first-TD pairs, caps repeated ``stat_type`` values when asked, prefers
+higher implied team totals when an environment file is present, and filters by
+the American odds window. It never submits.
 """
 
 from __future__ import annotations
@@ -87,6 +88,26 @@ def estimate_multiplier(legs: list[EvaluatedLeg]) -> tuple[float | None, str, bo
     return product, source, True
 
 
+def _over_market_cap(
+    combo: tuple[EvaluatedLeg, ...],
+    max_legs_per_market: int | None,
+) -> bool:
+    """True when one ``stat_type`` appears more than ``max_legs_per_market`` times.
+
+    ``None`` or any int below 1 is no cap. Count the stored ``stat_type`` string.
+    """
+
+    if max_legs_per_market is None or max_legs_per_market < 1:
+        return False
+    counts: dict[str, int] = {}
+    for leg in combo:
+        stat = leg.line.stat_type
+        counts[stat] = counts.get(stat, 0) + 1
+        if counts[stat] > max_legs_per_market:
+            return True
+    return False
+
+
 def _in_window(
     multiplier: float,
     min_odds: int | None,
@@ -126,14 +147,17 @@ def compose_tickets(
     max_odds: int | None,
     markets: list[str] | None,
     environment: Environment | None,
+    max_legs_per_market: int | None = None,
 ) -> list[list[EvaluatedLeg]]:
     """Pick up to ``n_tickets`` diversified tickets from ``live``.
 
     A first pass fills tickets with no shared legs; a second pass lets a card
     reuse an anchor leg to reach ``n_tickets`` (never a duplicate ticket). Each
-    ticket uses distinct games. Same-game first-TD pairs never rank. The odds
-    window uses the best typed estimate (row M → slip_odds → leg_odds / fair
-    product).
+    ticket uses distinct games. Same-game first-TD pairs never rank. When
+    ``max_legs_per_market`` is an int >= 1, a combo where one ``stat_type``
+    appears more than that many times is skipped. ``None`` or ``0`` is no cap.
+    The odds window uses the best typed estimate (row M → slip_odds → leg_odds
+    / fair product).
     """
 
     if n_tickets < 1:
@@ -165,6 +189,8 @@ def compose_tickets(
                 continue
             first_tds = [leg for leg in combo if is_first_td(leg.line.stat_type)]
             if len(first_tds) > 1 and len({_game_key(leg) for leg in first_tds}) < len(first_tds):
+                continue
+            if _over_market_cap(combo, max_legs_per_market):
                 continue
             multiplier, _source, _unconfirmed = estimate_multiplier(list(combo))
             if multiplier is None or multiplier <= 1.0:

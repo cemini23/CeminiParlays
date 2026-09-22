@@ -27,6 +27,7 @@ from ceminiparlays.diff import (
     write_booked_ledger,
 )
 from ceminiparlays.environment import (
+    env_for,
     env_rows_for_games,
     missing_env_games,
     read_environment,
@@ -277,6 +278,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     compose.add_argument("--environment", type=Path, default=None)
+    compose.add_argument(
+        "--max-legs-per-market",
+        type=int,
+        default=None,
+        help=(
+            "Skip a combo when one stat_type appears more than N times. "
+            "--auto uses 2 when this flag is omitted. Pass 0 to turn the cap off."
+        ),
+    )
     compose.add_argument(
         "--from-ceminidfs",
         type=Path,
@@ -692,6 +702,25 @@ def _cmd_slate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _weather_market_reviews(tickets: list, environment: dict) -> list[str]:
+    """Warn on windy ``first_td`` / ``pass_yds`` legs. The leg stays."""
+
+    notes: list[str] = []
+    for ticket in tickets:
+        for leg in ticket:
+            stat = leg.line.stat_type
+            if stat not in {"first_td", "pass_yds"}:
+                continue
+            row = env_for(environment, leg.line.team, leg.line.opponent)
+            if row is None or row.wind_mph is None or row.wind_mph < 10:
+                continue
+            notes.append(
+                f"WEATHER_MARKET_REVIEW: {row.team}@{row.opponent} "
+                f"wind {row.wind_mph:g} {stat} {leg.line.player_name}"
+            )
+    return notes
+
+
 def _cmd_compose(args: argparse.Namespace) -> int:
     captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     strict = getattr(args, "strict", True)
@@ -814,6 +843,14 @@ def _cmd_compose(args: argparse.Namespace) -> int:
             for note in exposure_notes(handoff.rows):
                 print(note)
 
+    raw_market_cap = getattr(args, "max_legs_per_market", None)
+    if raw_market_cap is None and auto:
+        max_legs_per_market: int | None = 2
+    elif raw_market_cap is None or raw_market_cap == 0:
+        max_legs_per_market = None
+    else:
+        max_legs_per_market = raw_market_cap
+
     tickets = compose_tickets(
         live,
         n_tickets=n_tickets,
@@ -822,7 +859,11 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         max_odds=max_odds,
         markets=market_filter,
         environment=environment,
+        max_legs_per_market=max_legs_per_market,
     )
+    if args.environment is not None:
+        for note in _weather_market_reviews(tickets, environment):
+            print(note)
     out_dir = args.out_dir or Path("runs") / (next(iter(slate_ids), "compose"))
     out_dir.mkdir(parents=True, exist_ok=True)
     if args.environment is not None:

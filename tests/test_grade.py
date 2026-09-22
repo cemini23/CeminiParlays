@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from ceminiparlays.grade import grade_ledger
+from ceminiparlays.grade import OPTIONAL_LEDGER_COLUMNS, grade_ledger
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -201,6 +201,36 @@ def test_grade_win_vs_win_is_hit_not_void(tmp_path) -> None:
     summary = grade_ledger(path)
     assert summary.hits == 1
     assert abs(summary.pnl - 5.0) < 1e-9
+
+
+def test_grade_boost_does_not_change_pnl(tmp_path) -> None:
+    assert "boost" in OPTIONAL_LEDGER_COLUMNS
+
+    def write(name: str, row: str, boost: str | None):
+        path = tmp_path / name
+        if boost is None:
+            text = f"stake_kind,platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n{row}\n"
+        else:
+            text = (
+                "stake_kind,platform,mode,n_legs,sides,lines,actuals,stake,multiplier,boost\n"
+                f"{row},{boost}\n"
+            )
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    loss = "cash,hardrock,standard,1,more,50.5,10,10,+250"
+    win = "cash,hardrock,standard,1,more,50.5,80,10,+250"
+    loss_plain = grade_ledger(write("loss.csv", loss, None))
+    loss_boost = grade_ledger(write("loss_boost.csv", loss, "0.50"))
+    assert abs(loss_boost.pnl - loss_plain.pnl) < 1e-9
+    assert abs(loss_boost.pnl - (-10.0)) < 1e-9
+
+    win_plain = grade_ledger(write("win.csv", win, None))
+    win_boost = grade_ledger(write("win_boost.csv", win, "0.50"))
+    # +250 is decimal 3.5. Stake 10 pays 25. Not 3.5 * 1.5.
+    assert abs(win_boost.pnl - win_plain.pnl) < 1e-9
+    assert abs(win_boost.pnl - 25.0) < 1e-9
+    assert abs(win_boost.pnl - (10.0 * (3.5 * 1.5 - 1.0))) > 1.0
 
 
 def test_grade_accepts_optional_ticket_market_stake_kind(tmp_path) -> None:

@@ -952,6 +952,129 @@ def test_compose_from_ceminidfs_prints_exposure_notes(tmp_path: Path, capsys) ->
     assert not (tmp_path / "compose" / "distributions.csv").exists()
 
 
+def _rush_stack_lines(tmp_path: Path) -> Path:
+    path = tmp_path / "rush_stack.csv"
+    path.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,captured_at,injury_status,book_over,book_under,leg_odds\n"
+        "s,hardrock,Rush A,,CIN,TB,rush_yds,50.5,more,standard,,,-220,-220,-220\n"
+        "s,hardrock,Rush B,,DET,NO,rush_yds,60.5,more,standard,,,-220,-220,-220\n"
+        "s,hardrock,Rush C,,CHI,CAR,rush_yds,55.5,more,standard,,,-220,-220,-220\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_compose_auto_caps_same_market_unless_disabled(tmp_path: Path, capsys) -> None:
+    import csv
+
+    lines = _rush_stack_lines(tmp_path)
+    base = [
+        "compose",
+        "--auto",
+        "--legs",
+        "3",
+        "--n-tickets",
+        "1",
+        "--lines",
+        str(lines),
+        "--out-dir",
+        str(tmp_path / "capped"),
+    ]
+    code = main(base)
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "composed=0 requested=1" in out
+    assert not (tmp_path / "capped" / "ticket-001.csv").exists()
+
+    code = main(
+        [
+            *base[:6],
+            "--max-legs-per-market",
+            "0",
+            *base[6:],
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "composed=1 requested=1" in out
+    rows = list(csv.DictReader((tmp_path / "capped" / "ticket-001.csv").open(encoding="utf-8")))
+    assert len(rows) == 3
+    assert {row["stat_type"] for row in rows} == {"rush_yds"}
+
+    code = main(
+        [
+            "compose",
+            "--auto",
+            "--legs",
+            "3",
+            "--n-tickets",
+            "1",
+            "--max-legs-per-market",
+            "3",
+            "--lines",
+            str(lines),
+            "--out-dir",
+            str(tmp_path / "higher"),
+        ]
+    )
+    capsys.readouterr()
+    assert code == 0
+    higher = list(csv.DictReader((tmp_path / "higher" / "ticket-001.csv").open(encoding="utf-8")))
+    assert len(higher) == 3
+
+
+def test_compose_weather_review_keeps_the_leg(tmp_path: Path, capsys) -> None:
+    import csv
+
+    lines = tmp_path / "weather_lines.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,captured_at,injury_status,book_over,book_under,leg_odds\n"
+        "s,hardrock,Windy TD,,NO,BAL,first_td,0.5,more,standard,,,,,400\n"
+        "s,hardrock,Windy Pass,,MIN,CHI,pass_yds,250.5,more,standard,,,-110,-110,-110\n"
+        "s,hardrock,Windy Rush,,IND,KC,rush_yds,60.5,more,standard,,,-110,-110,-110\n",
+        encoding="utf-8",
+    )
+    env = tmp_path / "environment.csv"
+    env.write_text(
+        "game_id,team,opp,implied_total,roof,weather_exposed,wind_mph,precip_pop\n"
+        "NO@BAL,NO,BAL,,open,true,20,\n"
+        "NO@BAL,BAL,NO,,open,true,20,\n"
+        "MIN@CHI,MIN,CHI,,open,true,10,\n"
+        "MIN@CHI,CHI,MIN,,open,true,10,\n"
+        "IND@KC,IND,KC,,open,true,20,\n"
+        "IND@KC,KC,IND,,open,true,20,\n",
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--lines",
+            str(lines),
+            "--legs",
+            "3",
+            "--n-tickets",
+            "1",
+            "--environment",
+            str(env),
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    weather = [line for line in out.splitlines() if line.startswith("WEATHER_MARKET_REVIEW")]
+    assert "WEATHER_MARKET_REVIEW: NO@BAL wind 20 first_td Windy TD" in weather
+    assert "WEATHER_MARKET_REVIEW: MIN@CHI wind 10 pass_yds Windy Pass" in weather
+    assert all("rush_yds" not in line and "Windy Rush" not in line for line in weather)
+    ticket = out_dir / "ticket-001.csv"
+    assert ticket.is_file()
+    rows = list(csv.DictReader(ticket.open(encoding="utf-8")))
+    assert {row["player_name"] for row in rows} == {"Windy TD", "Windy Pass", "Windy Rush"}
+
+
 def test_compose_max_exposure_exits_two_when_set(tmp_path: Path, capsys) -> None:
     lines = _three_rush_lines(tmp_path)
     argv = [

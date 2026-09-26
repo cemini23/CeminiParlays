@@ -89,6 +89,12 @@ This repo **reads** a copied `ceminidfs_handoff.csv`. CeminiDFS owns the writer.
 | `compose --card-md` | Writes `out_dir/card.md` (or `--card-md PATH`). Redacted: legs + do not submit. No stake dollars, wallets, or Odds API key. `card.txt` still writes. |
 | `diff --emit-ledger PATH` | Writes a ledger CSV from **booked** rows. Requires `--accept-booked`. Without it, do not write and keep exit 2 on deltas. Never overwrites the card. |
 
+## v0.7 — pick'em gap + SGP weather discount (shipped)
+
+- **`compare`** — print the gap between a de-juiced two-way fair price and the fixed pick'em all-hit multiplier. Uses `devig_two_way` for fair P, then `fair_decimal = 1 / (p ** legs)`. Compares against `resolve_payout` table value. The operator's typed `displayed_multiplier` is echoed but does not replace the table in the gap. Works for PrizePicks (power) and Underdog (standard/flex).
+- **`weather.py`** — `apply_weather_discount` applies a numeric haircut to a marginal when `weather_exposed=true` and wind/precip were typed. Gates: indoor (dome/indoor/closed) = no discount; retractable-closed = no discount; not exposed = no discount; exposed but both fields blank = no discount + `WEATHER_FIELDS_BLANK` note; otherwise wind `min(0.04, max(0, wind-10)*0.002)` + precip `min(0.04, (precip/25)*0.01)`, cap 0.08. `sgp_from_score_marginals` feeds discounted marginals into the existing `exact_joint` copula. No forecast invention; uses only operator-typed fields.
+- Hard Rock / FanDuel remain manual entry. No book login, no submit, no scraper.
+
 ## Operator process + GEO (docs, not a math bump)
 
 Docs only. No math change.

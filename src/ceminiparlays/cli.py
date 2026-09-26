@@ -52,6 +52,7 @@ from ceminiparlays.odds_api import (
     utc_day_window,
 )
 from ceminiparlays.odds import american_to_decimal, devig_spread, devig_two_way
+from ceminiparlays.compare import pickem_gap
 from ceminiparlays.payouts import (
     PREDICTION_PLATFORMS,
     SPORTSBOOK_PLATFORMS,
@@ -221,6 +222,19 @@ def build_parser() -> argparse.ArgumentParser:
     devig.add_argument("--over", type=int, required=True)
     devig.add_argument("--under", type=int, required=True)
     devig.add_argument("--method", default="power", choices=["power", "multiplicative", "additive"])
+
+    compare = sub.add_parser(
+        "compare",
+        help="Compare de-juiced fair price vs fixed pick'em multiplier (gap report)",
+    )
+    compare.add_argument("--over", type=int, required=True)
+    compare.add_argument("--under", type=int, required=True)
+    compare.add_argument("--platform", required=True, choices=["prizepicks", "underdog"])
+    compare.add_argument("--legs", type=int, required=True, choices=[2, 3, 4, 5, 6, 7, 8])
+    compare.add_argument("--mode", default="standard", choices=["standard", "power", "flex"])
+    compare.add_argument("--method", default="power", choices=["power", "multiplicative", "additive"])
+    compare.add_argument("--side", default="over", choices=["over", "under"])
+    compare.add_argument("--displayed-multiplier", type=float, default=None)
 
     run = sub.add_parser("run", help="Write edges.csv + report under runs/{slate}")
     _add_common(run)
@@ -639,6 +653,23 @@ def _cmd_devig(args: argparse.Namespace) -> int:
     )
     if spread["unstable"]:
         print("UNSTABLE_DEVIG")
+    return 0
+
+
+def _cmd_compare(args: argparse.Namespace) -> int:
+    report = pickem_gap(
+        odds_over=args.over,
+        odds_under=args.under,
+        platform=args.platform,
+        legs=args.legs,
+        mode=args.mode,
+        method=args.method,
+        side=args.side,
+        displayed_multiplier=args.displayed_multiplier,
+    )
+    print(report)
+    print()
+    print(STANDARD_DISCLAIMER)
     return 0
 
 
@@ -1071,6 +1102,7 @@ def main(argv: list[str] | None = None) -> int:
         "rank": _cmd_rank,
         "grade": _cmd_grade,
         "devig": _cmd_devig,
+        "compare": _cmd_compare,
         "run": _cmd_run,
         "slate": _cmd_slate,
         "compose": _cmd_compose,

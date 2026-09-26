@@ -633,12 +633,12 @@ def test_hardrock_flex_exits_two(tmp_path: Path) -> None:
     assert code == 2
 
 
-def test_version_is_0_6_0(capsys) -> None:
+def test_version_is_0_7_0(capsys) -> None:
     import pytest
 
     with pytest.raises(SystemExit):
         main(["--version"])
-    assert "0.6.0" in capsys.readouterr().out
+    assert "0.7.0" in capsys.readouterr().out
 
 
 def test_fetch_fixture_cli_prints_credits(tmp_path: Path, capsys) -> None:

@@ -45,6 +45,10 @@ ceminiparlays fair --player "Patrick Mahomes" --stat pass_yds --line 275.5 \
 # De-vig a two-way book market (operator-typed American odds)
 ceminiparlays devig --over -155 --under 120 --method power
 
+# Compare de-juiced fair price vs fixed pick'em multiplier (gap report)
+ceminiparlays compare --over -110 --under -110 --platform prizepicks --legs 2
+ceminiparlays compare --over -110 --under -110 --platform underdog --legs 2 --mode standard
+
 # Rank 2-leg Hard Rock parlays / SGPs (default --platform hardrock)
 ceminiparlays run --lines examples/hardrock_lines.csv \
   --distributions examples/distributions.csv \

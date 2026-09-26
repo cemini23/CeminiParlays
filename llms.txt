@@ -12,5 +12,6 @@ Public docs only. No Odds API keys. No wallet addresses.
 - [Roadmap](docs/ROADMAP.md): phases. `--from-ceminidfs` is built (copy the file; this CLI only reads)
 - [Grok Bots](docs/GROK-BOTS.md): live Slate and Recap desks in Grok Bot.app. No scrape. No submit
 - [Week 1 reproduce](docs/week1/REPRODUCE.md): committed `grade` artifact (2/5, +$26.07)
+- `compare` prints the pick'em gap; weather helper discounts an exposed marginal.
 
 Tips: see [SUPPORT.md](SUPPORT.md). Do not paste wallets here.

@@ -17,7 +17,7 @@ The Never list is the product, not a buried limit.
 
 Numbered rules: [`docs/canon.md`](docs/canon.md). Machine index: [`llms.txt`](llms.txt).
 
-**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/canon.md`](docs/canon.md) is the citable rules. [`llms.txt`](llms.txt) lists the public docs. [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3; grade + ET fetch + game markets = v0.4; Week 1 report flags + ITT snapshot = v0.5; CeminiDFS handoff reader = v0.6).
+**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/canon.md`](docs/canon.md) is the citable rules. [`llms.txt`](llms.txt) lists the public docs. [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3; grade + ET fetch + game markets = v0.4; Week 1 report flags + ITT snapshot = v0.5; CeminiDFS handoff reader = v0.6; pick'em gap report + SGP weather discount = v0.7). The typed ticket price stays the in-app price.
 
 ## Install
 
@@ -254,9 +254,9 @@ See `RESEARCH.md` for the wiki, CeminiDFS lessons, Gemini math, and social scan 
 - [`docs/GROK-BOTS.md`](docs/GROK-BOTS.md) — Parlays Slate Desk + Recap Desk (already live in Grok Bot.app).
 - [`docs/week1/REPRODUCE.md`](docs/week1/REPRODUCE.md) — Week 1 `grade` artifact (2/5, +$26.07).
 - [`docs/2026-09-13-hardrock-card.md`](docs/2026-09-13-hardrock-card.md) — Week 1 $20 Hard Rock card.
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Phase 1 composer (v0.2), Odds API fetch (v0.3), grade + ET fetch + game markets (v0.4), Week 1 report flags + ITT snapshot (v0.5), CeminiDFS handoff reader (v0.6), Phase 2 stadium prior / nflverse parquet, Phase 3 more books.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Phase 1 composer (v0.2), Odds API fetch (v0.3), grade + ET fetch + game markets (v0.4), Week 1 report flags + ITT snapshot (v0.5), CeminiDFS handoff reader (v0.6), pick'em gap report + SGP weather discount (v0.7).
 
-`grade` accepts optional ledger columns `ticket_id`, `market`, `stake_kind` (`cash` / `bonus`), and `paid` (Won-tab cash; that row is `paid - stake`). Discrete ATD `yes`/`yes` and ML `win`/`win` are hits, never voids. Numeric `actual == line` still voids on yardage/totals/spreads. Ledger `multiplier` `+288` is American, not 288×. Unknown extra columns are ignored. Sportsbook void + miss still settles at `0×`. HIT with an empty multiplier still fails closed.
+`grade` accepts optional ledger columns `ticket_id`, `market`, `stake_kind` (`cash` / `bonus`), `paid` (Won-tab cash; that row is `paid - stake`), and `boost` (a note; payout uses the displayed multiplier only). Discrete ATD `yes`/`yes` and ML `win`/`win` are hits, never voids. Numeric `actual == line` still voids on yardage/totals/spreads. Ledger `multiplier` `+288` is American, not 288×. Unknown extra columns are ignored. Sportsbook void + miss still settles at `0×`. HIT with an empty multiplier still fails closed.
 
 ## Support
 

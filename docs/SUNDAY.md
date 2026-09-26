@@ -107,6 +107,10 @@ that would empty the window: `--max-odds +250` keeps the `+150` floor;
 `--environment` is set, wind of 10 mph or more on a `first_td` or `pass_yds`
 leg prints `WEATHER_MARKET_REVIEW` and the leg stays on the ticket.
 
+**Pick'em gap report** (`ceminiparlays compare`): prints the de-juiced fair decimal versus the fixed pick'em all-hit multiplier. The operator's typed `displayed_multiplier` is echoed but does not replace the table in the gap. The typed ticket price stays the in-app price.
+
+**SGP weather discount**: `apply_weather_discount` (called by `sgp_from_score_marginals`) applies a numeric haircut to a marginal only when `weather_exposed=true` and wind or precip was typed. Gates: indoor (dome/indoor/closed) = no discount; retractable-closed = no discount; not exposed = no discount; exposed but both fields blank = no discount + `WEATHER_FIELDS_BLANK` note; otherwise wind `min(0.04, max(0, wind-10)*0.002)` + precip `min(0.04, (precip/25)*0.01)`, cap 0.08. `compose` still only prints `WEATHER_MARKET_REVIEW` and keeps the leg.
+
 It writes `ticket-001.csv` … `ticket-005.csv` plus `card.txt`, and prints
 `do not submit`. Tickets diversify games and prefer higher implied team totals
 when `--environment` is present. `--environment` also writes `compose_itt.json`

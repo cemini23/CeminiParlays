@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from ceminiparlays.environment import EnvRow
 from ceminiparlays.weather import apply_weather_discount, sgp_from_score_marginals
 from ceminiparlays.copula import exact_joint
@@ -45,6 +46,23 @@ def test_weather_discount_indoor_dome() -> None:
         team="AAA",
         opponent="BBB",
         roof="dome",
+        weather_exposed=True,
+        wind_mph=20.0,
+        precip_pop=50.0,
+    )
+    result = apply_weather_discount(0.5, row)
+    assert result.adjusted == 0.5
+    assert "WEATHER_NO_DISCOUNT: indoor" in result.note
+
+
+@pytest.mark.parametrize("roof", ["indoor", "closed"])
+def test_weather_discount_indoor_and_closed_roofs(roof: str) -> None:
+    # indoor and closed roofs skip discount even with wind and precip
+    row = EnvRow(
+        game_id="test",
+        team="AAA",
+        opponent="BBB",
+        roof=roof,
         weather_exposed=True,
         wind_mph=20.0,
         precip_pop=50.0,

@@ -208,9 +208,10 @@ def _check_first_td_review(player: str, stat_type: str) -> str | None:
 def _hard_rock_injury_rule_note() -> str:
     """Return the Hard Rock rule for a player hurt after a snap, or NO_EVIDENCE."""
     return (
-        "NO_EVIDENCE: Hard Rock rule for a player who is hurt after a snap "
-        "could not be cited. No URL or retrieval date available. "
-        "Do not build a void. Do not build a cashout."
+        "Operator 2026-09-30, no public URL: if the only missed leg is a player "
+        "hurt before halftime, Hard Rock pays a bonus bet equal to the original "
+        "stake. It is not cash. Week 3 Jefferson $5 ticket qualified and the "
+        "bonus was used Monday. Do not build a void. Do not build a cashout."
     )
 
 

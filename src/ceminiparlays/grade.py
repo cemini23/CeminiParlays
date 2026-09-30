@@ -18,7 +18,7 @@ WIN_TOKENS = {"win", "won", "w"}
 LOSS_TOKENS = {"loss", "lose", "lost", "l"}
 #: Optional ledger columns. Unknown extra columns are ignored, never fatal.
 #: ``boost`` is a note. Payout uses ``multiplier`` only, never ``(1 + boost)``.
-OPTIONAL_LEDGER_COLUMNS = ("ticket_id", "market", "stake_kind", "paid", "boost")
+OPTIONAL_LEDGER_COLUMNS = ("ticket_id", "market", "stake_kind", "paid", "boost", "slate_id", "book_actual", "official_actual")
 
 
 @dataclass
@@ -33,6 +33,12 @@ class GradeSummary:
     ticket_ids: list[str] = field(default_factory=list)
     markets: list[str] = field(default_factory=list)
     stake_kinds: list[str] = field(default_factory=list)
+    slate_ids: list[str] = field(default_factory=list)
+    cash_pnl: float = 0.0
+    bonus_in: float = 0.0
+    bonus_out: float = 0.0
+    review_flags: list[str] = field(default_factory=list)
+    hard_rock_rule_note: str = ""
 
 
 def _canonical_discrete(token: str) -> str | None:
@@ -150,6 +156,62 @@ def _leg_outcomes(raw: dict[str, str]) -> tuple[int, int, int]:
     return hits, misses, voids
 
 
+def _parse_n_bet_count(raw_n_legs: str, raw_legs: str) -> int | None:
+    """Parse the on-screen N-Bet count from n_legs or legs column.
+    
+    Returns the N-Bet count if clearly determinable, otherwise None.
+    - n_legs column: if valid integer, use it
+    - legs column: if pipe-separated list, count parts
+    - Otherwise: return None (don't enforce gate)
+    """
+    # First try n_legs column
+    raw_n_legs = (raw_n_legs or "").strip()
+    if raw_n_legs:
+        try:
+            return int(raw_n_legs)
+        except ValueError:
+            pass
+    
+    # Then try legs column if it's pipe-separated
+    raw_legs = (raw_legs or "").strip()
+    if raw_legs and "|" in raw_legs:
+        return len([p for p in raw_legs.split("|") if p.strip()])
+    
+    # Can't determine N-Bet count clearly
+    return None
+
+
+def _count_captured_legs(raw: dict[str, str]) -> int:
+    """Count the number of captured legs from sides/lines/actuals."""
+    sides = [p for p in raw.get("sides", "").split("|") if p.strip()]
+    return len(sides)
+
+
+def _check_yards_review(line: float, actual: float, player: str, stat_type: str) -> str | None:
+    """Check if a prop is within 2 yards of the line. Returns review message or None."""
+    if isinstance(line, (int, float)) and isinstance(actual, (int, float)):
+        diff = abs(actual - line)
+        if diff <= 2.0:
+            return f"REVIEW: {player} {stat_type} projection {actual} within 2 yards of line {line}"
+    return None
+
+
+def _check_first_td_review(player: str, stat_type: str) -> str | None:
+    """Check if leg is first_td. Returns review message or None."""
+    if stat_type == "first_td":
+        return f"REVIEW: {player} first_td — first score can be an unfeatured player, including a return"
+    return None
+
+
+def _hard_rock_injury_rule_note() -> str:
+    """Return the Hard Rock rule for a player hurt after a snap, or NO_EVIDENCE."""
+    return (
+        "NO_EVIDENCE: Hard Rock rule for a player who is hurt after a snap "
+        "could not be cited. No URL or retrieval date available. "
+        "Do not build a void. Do not build a cashout."
+    )
+
+
 def grade_ledger(
     path: Path,
     profile_dir: Path | None = None,
@@ -159,34 +221,49 @@ def grade_ledger(
     hits = 0
     stake_total = 0.0
     pnl = 0.0
+    cash_pnl = 0.0
+    bonus_in = 0.0
+    bonus_out = 0.0
     bonus_stake = 0.0
     ticket_ids: list[str] = []
     markets: list[str] = []
     stake_kinds: list[str] = []
+    slate_ids: list[str] = []
+    review_flags: list[str] = []
     with path.open(newline="", encoding="utf-8") as handle:
         for row_index, raw in enumerate(csv.DictReader(handle), start=2):
-            slips += 1
             stake = float(raw.get("stake", 1.0) or 1.0)
-            stake_total += stake
             stake_kind = (raw.get("stake_kind") or "").strip().lower()
+            ticket_id = (raw.get("ticket_id") or "").strip()
+            market = (raw.get("market") or "").strip()
+            slate_id = (raw.get("slate_id") or "").strip()
+            raw_n_legs = raw.get("n_legs") or ""
+            raw_legs = raw.get("legs") or ""
+            n_bet_count = _parse_n_bet_count(raw_n_legs, raw_legs)
+            captured_legs = _count_captured_legs(raw)
+            
+            # N-Bet count gate: stop/skip when captured legs != on-screen N-Bet count
+            if n_bet_count is not None and n_bet_count > 0 and captured_legs != n_bet_count:
+                review_flags.append(
+                    f"GATE: ticket {ticket_id or f'row {row_index}'} skipped — "
+                    f"captured legs ({captured_legs}) != N-Bet count ({n_bet_count})"
+                )
+                continue
+            
+            stake_total += stake
             if stake_kind:
                 if stake_kind not in stake_kinds:
                     stake_kinds.append(stake_kind)
                 if stake_kind == "bonus":
                     bonus_stake += stake
-            ticket_id = (raw.get("ticket_id") or "").strip()
+            
             if ticket_id and ticket_id not in ticket_ids:
                 ticket_ids.append(ticket_id)
-            market = (raw.get("market") or "").strip()
             if market and market not in markets:
                 markets.append(market)
-            raw_legs = raw.get("n_legs") or raw.get("legs") or ""
-            try:
-                n_legs = int(raw_legs)
-            except (TypeError, ValueError):
-                n_legs = 0
-            if n_legs <= 0:
-                n_legs = len([p for p in raw.get("sides", "").split("|") if p.strip()])
+            if slate_id and slate_id not in slate_ids:
+                slate_ids.append(slate_id)
+            
             raw_platform = (raw.get("platform") or "").strip()
             platform = normalize_platform(
                 raw_platform or default_platform or "underdog"
@@ -194,19 +271,62 @@ def grade_ledger(
             mode = raw.get("mode") or "standard"
             displayed = _parse_multiplier(raw.get("multiplier"))
             paid_value = _parse_paid(raw.get("paid"))
+            
+            # Parse book_actual and official_actual if present
+            book_actual_raw = raw.get("book_actual", "").strip()
+            official_actual_raw = raw.get("official_actual", "").strip()
+            
             hit_count, miss_count, void_count = _leg_outcomes(raw)
-            if hit_count == n_legs:
+            effective_n_legs = n_bet_count if n_bet_count is not None else captured_legs
+            if hit_count == effective_n_legs:
                 hits += 1
+            
+            # Check for review flags on each leg
+            sides = [part.strip().lower() for part in raw.get("sides", "").split("|") if part.strip()]
+            actual_parts = [part.strip() for part in raw.get("actuals", "").split("|") if part.strip()]
+            line_parts = [part.strip() for part in raw.get("lines", "").split("|") if part.strip()]
+            markets_per_leg = [part.strip() for part in raw.get("market", "").split("|") if part.strip()]
+            players_per_leg = [part.strip() for part in raw.get("player_name", "").split("|") if part.strip()]
+            
+            # If no player_name column, try to infer from legs column
+            if not players_per_leg and raw.get("legs"):
+                players_per_leg = [p.strip() for p in raw.get("legs", "").split("|") if p.strip()]
+            
+            for i, (side, actual_raw, line_raw) in enumerate(zip(sides, actual_parts, line_parts, strict=True)):
+                actual = _parse_leg_token(actual_raw)
+                line = _parse_leg_token(line_raw)
+                player = players_per_leg[i] if i < len(players_per_leg) else f"leg {i+1}"
+                stat_type = markets_per_leg[i] if i < len(markets_per_leg) else market
+                
+                # ±2 yards review
+                yards_review = _check_yards_review(line, actual, player, stat_type)
+                if yards_review:
+                    review_flags.append(yards_review)
+                
+                # first_td review
+                first_td_review = _check_first_td_review(player, stat_type)
+                if first_td_review:
+                    review_flags.append(first_td_review)
+            
+            slips += 1
+            
             if paid_value is not None:
-                pnl += paid_value - stake
+                net = paid_value - stake
+                pnl += net
+                if stake_kind == "bonus":
+                    bonus_in += stake
+                    bonus_out += paid_value
+                else:
+                    cash_pnl += net
                 continue
+            
             sportsbook = platform in SPORTSBOOK_PLATFORMS
             row_label = raw.get("legs") or raw.get("slip_id") or f"row {row_index}"
             if void_count:
                 payout = _void_payout(
                     platform,
                     mode,
-                    n_legs,
+                    effective_n_legs,
                     void_count,
                     hit_count,
                     miss_count,
@@ -220,14 +340,22 @@ def grade_ledger(
                 table = resolve_payout(
                     platform,
                     mode,
-                    n_legs,
+                    effective_n_legs,
                     displayed_multiplier=displayed,
                     profile_dir=profile_dir,
                 )
                 payout = table.multiplier_for_hits(hit_count)
-            pnl += stake * (payout - 1.0)
+            net = stake * (payout - 1.0)
+            pnl += net
+            if stake_kind == "bonus":
+                bonus_in += stake
+                bonus_out += stake * payout
+            else:
+                cash_pnl += net
+    
     hit_rate = hits / slips if slips else 0.0
     roi = pnl / stake_total if stake_total else 0.0
+    hard_rock_note = _hard_rock_injury_rule_note()
     return GradeSummary(
         n_slips=slips,
         hits=hits,
@@ -239,6 +367,12 @@ def grade_ledger(
         ticket_ids=ticket_ids,
         markets=markets,
         stake_kinds=stake_kinds,
+        slate_ids=slate_ids,
+        cash_pnl=cash_pnl,
+        bonus_in=bonus_in,
+        bonus_out=bonus_out,
+        review_flags=review_flags,
+        hard_rock_rule_note=hard_rock_note,
     )
 
 

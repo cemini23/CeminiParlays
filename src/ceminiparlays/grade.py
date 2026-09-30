@@ -39,6 +39,8 @@ class GradeSummary:
     bonus_out: float = 0.0
     review_flags: list[str] = field(default_factory=list)
     hard_rock_rule_note: str = ""
+    book_actuals: list[str] = field(default_factory=list)
+    official_actuals: list[str] = field(default_factory=list)
 
 
 def _canonical_discrete(token: str) -> str | None:
@@ -230,6 +232,8 @@ def grade_ledger(
     stake_kinds: list[str] = []
     slate_ids: list[str] = []
     review_flags: list[str] = []
+    book_actuals: list[str] = []
+    official_actuals: list[str] = []
     with path.open(newline="", encoding="utf-8") as handle:
         for row_index, raw in enumerate(csv.DictReader(handle), start=2):
             stake = float(raw.get("stake", 1.0) or 1.0)
@@ -272,9 +276,12 @@ def grade_ledger(
             displayed = _parse_multiplier(raw.get("multiplier"))
             paid_value = _parse_paid(raw.get("paid"))
             
-            # Parse book_actual and official_actual if present
-            book_actual_raw = raw.get("book_actual", "").strip()
-            official_actual_raw = raw.get("official_actual", "").strip()
+            book_actual_raw = (raw.get("book_actual") or "").strip()
+            official_actual_raw = (raw.get("official_actual") or "").strip()
+            if book_actual_raw:
+                book_actuals.append(book_actual_raw)
+            if official_actual_raw:
+                official_actuals.append(official_actual_raw)
             
             hit_count, miss_count, void_count = _leg_outcomes(raw)
             effective_n_legs = n_bet_count if n_bet_count is not None else captured_legs
@@ -373,6 +380,8 @@ def grade_ledger(
         bonus_out=bonus_out,
         review_flags=review_flags,
         hard_rock_rule_note=hard_rock_note,
+        book_actuals=book_actuals,
+        official_actuals=official_actuals,
     )
 
 

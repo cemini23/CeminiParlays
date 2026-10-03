@@ -5,7 +5,7 @@ import pytest
 
 from ceminiparlays import slips as slips_module
 from ceminiparlays.io import LineRow, read_distributions, read_manual_lines
-from ceminiparlays.payouts import breakeven_per_leg, resolve_payout
+from ceminiparlays.payouts import breakeven_per_leg, pickem_breakeven, resolve_payout
 from ceminiparlays.slips import (
     evaluate_legs,
     filter_slips_by_odds,
@@ -213,6 +213,34 @@ def test_table_multiplier_is_marked_unconfirmed() -> None:
     assert all(slip.multiplier_unconfirmed is True for slip in slips)
     assert all(
         any("multiplier_unconfirmed" in note for note in slip.notes) for slip in slips
+    )
+
+
+def test_pickem_notes_show_hurdle_and_each_leg_fair_p() -> None:
+    live, _ = _evaluate([_line("A One", "AAA", "BBB"), _line("B One", "BBB", "AAA")])
+    slips = rank_slips(live, "underdog", "standard", 2)
+    assert slips
+    hurdle = pickem_breakeven("underdog", "standard", 2)
+    for slip in slips:
+        assert any(note == f"pickem_breakeven={hurdle:.4f}" for note in slip.notes)
+        for leg in slip.legs:
+            needle = (
+                f"{leg.line.player_name} fair_p={leg.fair_p:.4f} "
+                f"vs pickem_breakeven={hurdle:.4f}"
+            )
+            assert any(needle in note for note in slip.notes)
+
+
+def test_sportsbook_slips_have_no_pickem_hurdle_note() -> None:
+    lines = [
+        _line("A One", "AAA", "BBB", book_over=-110, book_under=-110),
+        _line("B One", "BBB", "AAA", book_over=-110, book_under=-110),
+    ]
+    live, _ = _evaluate(lines)
+    slips = rank_slips(live, "hardrock", "standard", 2, displayed_multiplier=3.0)
+    assert slips
+    assert all(
+        not any("pickem_breakeven" in note for note in slip.notes) for slip in slips
     )
 
 

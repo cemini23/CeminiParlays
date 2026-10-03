@@ -28,6 +28,17 @@ def nearest_correlation(matrix: np.ndarray) -> np.ndarray:
     corr = psd / np.outer(diagonal, diagonal)
     corr = np.clip((corr + corr.T) / 2.0, -0.999, 0.999)
     np.fill_diagonal(corr, 1.0)
+    # Clipping individual off-diagonals can leave the matrix slightly
+    # indefinite, so re-project when (and only when) the clip broke PSD. A
+    # well-formed prior stays untouched; ``simulate_slip``'s Cholesky and a
+    # caller's eigenvalue check both need a genuine correlation matrix.
+    for _ in range(3):
+        if float(np.min(np.linalg.eigvalsh(corr))) >= -1e-8:
+            break
+        psd = nearest_psd(corr)
+        diagonal = np.sqrt(np.maximum(np.diag(psd), 1e-12))
+        corr = psd / np.outer(diagonal, diagonal)
+        np.fill_diagonal(corr, 1.0)
     return corr
 
 

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from math import comb
 from pathlib import Path
 from typing import Mapping
+
+from scipy.optimize import brentq
 
 from ceminiparlays.resources import read_config_text
 
@@ -20,6 +23,8 @@ DISPLAY_NAMES = {
     "kalshi": "Kalshi",
 }
 SPORTSBOOK_PLATFORMS = {"hardrock", "fanduel", "draftkings", "betmgm"}
+#: Fixed-multiplier pick'em cards. A published payout structure, not a price.
+PICKEM_PLATFORMS = {"prizepicks", "underdog"}
 #: Prediction venues. Each leg is a 0-1 contract; a combo is the product of
 #: independently settled binaries (DKeX COMBOS), paper only.
 PREDICTION_PLATFORMS = {"polymarket", "kalshi"}
@@ -203,6 +208,43 @@ def breakeven_per_leg(multiplier: float, legs: int) -> float:
     if multiplier <= 0 or legs < 1:
         raise ValueError("multiplier and legs must be positive")
     return float(multiplier ** (-1.0 / legs))
+
+
+def pickem_breakeven(
+    platform: str,
+    mode: str,
+    legs: int,
+    profile_dir: Path | None = None,
+) -> float:
+    """Breakeven per-leg hit rate for a fixed-multiplier pick'em card.
+
+    A fixed multiplier is a payout structure, not a price. The hurdle is the
+    per-leg probability at which the published tiers break even, which answers
+    a different question from a de-vigged market probability. The row is loaded
+    with ``resolve_payout`` and no displayed multiplier, so a missing row raises
+    the same missing-row error instead of inventing a payout.
+
+    All-or-nothing (no published partial tier) returns ``m ** (-1/n)``. Flex
+    solves the published tier EV by ``brentq``, weighting the partial payouts
+    with the binomial coefficients. Multipliers come only from the JSON.
+    """
+
+    table = resolve_payout(platform, mode, legs, profile_dir=profile_dir)
+    if table.minus_1 == 0.0 and table.minus_2 == 0.0:
+        return breakeven_per_leg(table.all_hit, legs)
+
+    all_hit = table.all_hit
+    minus_1 = table.minus_1
+    minus_2 = table.minus_2
+
+    def ev(p: float) -> float:
+        q = 1.0 - p
+        p_all = p**legs
+        p_minus_1 = legs * p ** (legs - 1) * q
+        p_minus_2 = comb(legs, 2) * p ** (legs - 2) * q**2 if legs >= 2 else 0.0
+        return p_all * all_hit + p_minus_1 * minus_1 + p_minus_2 * minus_2 - 1.0
+
+    return float(brentq(ev, 1e-6, 1.0 - 1e-6))
 
 
 def implied_slip_win(multiplier: float) -> float:

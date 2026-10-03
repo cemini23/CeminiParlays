@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.4,<0.16"]
+dev = ["pytest>=8.0", "ruff>=0.4,<0.16", "hypothesis>=6.0"]
 
 [project.scripts]
 ceminiparlays = "ceminiparlays.cli:main"

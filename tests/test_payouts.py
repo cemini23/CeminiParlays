@@ -6,6 +6,7 @@ from ceminiparlays.payouts import (
     breakeven_per_leg,
     implied_slip_win,
     normalize_platform,
+    pickem_breakeven,
     resolve_payout,
 )
 
@@ -151,3 +152,39 @@ def test_prediction_platform_accepts_displayed_combo_price() -> None:
 def test_prediction_platform_rejects_flex() -> None:
     with pytest.raises(ValueError, match="COMBOS"):
         resolve_payout("polymarket", "flex", 3, displayed_multiplier=3.0)
+
+
+def test_pickem_breakeven_power_two_and_three() -> None:
+    two = pickem_breakeven("prizepicks", "power", 2)
+    three = pickem_breakeven("prizepicks", "power", 3)
+    assert isclose(two, 3**-0.5, rel_tol=1e-12)
+    assert isclose(three, 6 ** (-1 / 3), rel_tol=1e-12)
+
+
+def test_pickem_breakeven_flex_three_cancels_to_power_two() -> None:
+    # The PrizePicks flex-3 row publishes all=3.0, minus_1=1.0, and no minus_2,
+    # so EV(p) = 3p**3 + 3p**2(1-p) - 1 = 3p**2 - 1. The p**3 terms cancel and
+    # the root is 3 ** -0.5, the same value as breakeven_per_leg(3.0, 2) — but
+    # that equality is a consequence of this published row, not a definition.
+    # If the JSON tiers change, this test follows the JSON.
+    flex_three = pickem_breakeven("prizepicks", "flex", 3)
+    assert isclose(flex_three, 3**-0.5, rel_tol=1e-12)
+    assert isclose(flex_three, breakeven_per_leg(3.0, 2), rel_tol=1e-12)
+
+
+def test_pickem_breakeven_flex_two_raises_missing_row() -> None:
+    with pytest.raises(ValueError, match="PrizePicks flex has no 2-leg row"):
+        pickem_breakeven("prizepicks", "flex", 2)
+
+
+def test_pickem_breakeven_flex_five_solves_published_tiers() -> None:
+    table = resolve_payout("prizepicks", "flex", 5)
+    root = pickem_breakeven("prizepicks", "flex", 5)
+    q = 1.0 - root
+    ev = (
+        root**5 * table.all_hit
+        + 5 * root**4 * q * table.minus_1
+        + 10 * root**3 * q**2 * table.minus_2
+        - 1.0
+    )
+    assert abs(ev) < 1e-12

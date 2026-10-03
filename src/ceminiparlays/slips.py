@@ -21,11 +21,13 @@ from ceminiparlays.odds import (
     devig_two_way,
 )
 from ceminiparlays.payouts import (
+    PICKEM_PLATFORMS,
     PREDICTION_PLATFORMS,
     SPORTSBOOK_PLATFORMS,
     display_name,
     flex_ev,
     normalize_platform,
+    pickem_breakeven,
     power_ev,
     resolve_payout,
 )
@@ -402,6 +404,7 @@ def rank_slips(
             "raise --max-slips or pass --allow-large-enum"
         )
     priors = load_priors(priors_path)
+    pickem_hurdle: float | None = None
     ranked: list[EvaluatedSlip] = []
     for combo in combinations(live, slip_size):
         refs = [
@@ -570,6 +573,19 @@ def rank_slips(
             ev_lo = p_lo * price - 1.0
         if table.note:
             slip_notes.append(table.note)
+        if platform in PICKEM_PLATFORMS:
+            # Payout-structure hurdle, not a de-vigged market line. The typed
+            # displayed multiplier still drives price; this only annotates it.
+            if pickem_hurdle is None:
+                pickem_hurdle = pickem_breakeven(
+                    platform, mode, slip_size, profile_dir=profile_dir
+                )
+            slip_notes.append(f"pickem_breakeven={pickem_hurdle:.4f}")
+            for leg in combo:
+                slip_notes.append(
+                    f"pickem_leg {leg.line.player_name} fair_p={leg.fair_p:.4f} "
+                    f"vs pickem_breakeven={pickem_hurdle:.4f}"
+                )
         if repaired:
             slip_notes.append(f"corr_repaired=yes max_delta={max_corr_delta:.4f}")
         if unconfirmed:

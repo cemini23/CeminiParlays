@@ -10,7 +10,7 @@ Grok Bot.app. Charters live in OSINT WORKSPACE
 [`GROK-BOTS.md`](GROK-BOTS.md). Before lock, open Slate Desk → `environment.csv`.
 After the games, open Recap Desk → ledger for step 7. Do not create new Bots.
 The Bot does not fetch or submit. Slate Desk defaults to Sunday afternoon only,
-so name **SNF IND@KC** if you open it this Sunday; NYG@LAR is Monday.
+so name **SNF DET@CAR** if you open it this Sunday; ATL@NO is Monday.
 
 > **Sunday cash rules**
 >
@@ -24,8 +24,8 @@ so name **SNF IND@KC** if you open it this Sunday; NYG@LAR is Monday.
 **Rule for every step:** if a command exits `2`, read the named `dropped` /
 `no-line` rows and fix the CSV. Do not pass `--no-strict` on a money slate.
 
-This Sunday card is **2026-09-20**. SNF IND@KC is on this slate. NYG@LAR is
-Monday — wait.
+This Sunday card is **2026-10-04** (Week 4). SNF DET@CAR is on this slate.
+ATL@NO is Monday — wait. The London game IND@WAS kicks at 09:30 ET.
 
 ## 0. Install (once)
 
@@ -37,9 +37,9 @@ pip install -e ".[dev]"
 ## 1. Build the fill-in slate (optional, 2 min)
 
 ```bash
-ceminiparlays slate --games examples/games_2026_w02_sun.csv \
-  --environment examples/2026-w02-sun-environment.csv
-# writes runs/slate/lines_fill_in.csv from the Week 2 Sunday games file
+ceminiparlays slate --games examples/games_2026_w04_sun.csv \
+  --environment examples/2026-w04-sun-environment.csv
+# writes runs/slate/lines_fill_in.csv from the Week 4 Sunday games file
 # + the packaged roster. Team comes from the roster (DJ Moore = BUF).
 # Missing env rows print ENVIRONMENT_MISSING_GAME: {AWAY}@{HOME} and exit 0.
 ```
@@ -54,7 +54,7 @@ roster sheet. Prefer `fetch` for posted two-way prices.
 `os.environ` only. It never prints the key.
 
 ```bash
-ceminiparlays fetch --date 2026-09-20 --out runs/slate/lines.csv
+ceminiparlays fetch --date 2026-10-04 --out runs/slate/lines.csv
 # defaults: --books hardrock,fanduel,draftkings
 #           --markets pass_yds,rush_yds,rec_yds,first_td,anytime_td
 # --date is the America/New_York slate day (midnight ET → next midnight ET,
@@ -67,7 +67,7 @@ ceminiparlays fetch --date 2026-09-20 --out runs/slate/lines.csv
 # do not submit — type the ticket in-app
 
 # Narrower card (overwrites only with --force)
-ceminiparlays fetch --date 2026-09-20 --books hardrock --markets first_td \
+ceminiparlays fetch --date 2026-10-04 --books hardrock --markets first_td \
   --out runs/slate/ftd.csv
 ```
 
@@ -89,9 +89,9 @@ API markets are skipped with a `no-odds-api-market` note.
 ```bash
 ceminiparlays compose --auto \
   --lines runs/slate/lines.csv \
-  --environment examples/2026-w02-sun-environment.csv \
+  --environment examples/2026-w04-sun-environment.csv \
   --card-md --max-exposure-per-player 1 \
-  --out-dir runs/2026-w02-sun/compose
+  --out-dir runs/2026-w04-sun/compose
 # --card-md writes a redacted card.md (no stake) next to card.txt
 # --max-exposure-per-player 1 exits 2 on same-player same-stat concentration
 ```
@@ -123,10 +123,10 @@ when `--environment` is present. `--environment` also writes `compose_itt.json`
 cp path/to/ceminidfs_handoff.csv runs/slate/ceminidfs_handoff.csv
 ceminiparlays compose --auto \
   --lines runs/slate/lines.csv \
-  --environment examples/2026-w02-sun-environment.csv \
+  --environment examples/2026-w04-sun-environment.csv \
   --from-ceminidfs runs/slate/ceminidfs_handoff.csv \
   --card-md --max-exposure-per-player 1 \
-  --out-dir runs/2026-w02-sun/compose
+  --out-dir runs/2026-w04-sun/compose
 ```
 
 Missing file: `CEMINIDFS_HANDOFF_MISSING: {path}` and compose continues.
@@ -138,9 +138,10 @@ same-player same-stat concentration.
 
 **Before you type** (four checks, every week):
 
-- **Wind** (packaged env): fade pass / lean rush on **NO@BAL**, **MIN@CHI**,
-  **WAS@DAL** (only if the roof is open), **IND@KC** — the ≥10 mph rows.
-- **Roof**: WAS@DAL is retractable and stays weather-exposed until an official
+- **Wind** (packaged env): after the weather fill, fade pass / lean rush on the
+  ≥10 mph rows in this week's environment.csv. The rows are blank until the
+  research step fills wind and precip.
+- **Roof**: DAL@HOU is retractable and stays weather-exposed until an official
   roof call. No call means treat it as exposed; do not fade on a guess.
 - **Jev**: `jev_verify` each live leg against the lines file and the CeminiDFS
   handoff row. If Jev contradicts the row, do not type that ticket.
@@ -193,10 +194,10 @@ odds, Kelly, or ITT.
 Once you have the in-app American on one ticket:
 
 ```bash
-ceminiparlays run --lines runs/2026-w02-sun/compose/ticket-001.csv \
+ceminiparlays run --lines runs/2026-w04-sun/compose/ticket-001.csv \
   --distributions examples/distributions.csv \
   --platform hardrock --displayed-odds +264 \
-  --out-dir runs/2026-w02-sun/ticket-001
+  --out-dir runs/2026-w04-sun/ticket-001
 ```
 
 `--displayed-odds` is legal only when `live == slip-size`. A 2-leg compose file

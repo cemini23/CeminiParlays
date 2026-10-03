@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
@@ -58,7 +59,7 @@ def test_gaussian_joint_at_rho_zero_is_the_product(p1: float, p2: float) -> None
 
 @settings(max_examples=150, deadline=None)
 @given(MARGINALS, MARGINALS, st.floats(0.0, 0.90), st.floats(1e-3, 0.05))
-def test_higher_rho_moves_joint_up_toward_smaller_marginal(
+def test_higher_rho_never_lowers_joint_and_never_exceeds_smaller_marginal(
     p1: float, p2: float, rho: float, step: float
 ) -> None:
     low = exact_joint([p1, p2], _corr(rho))
@@ -70,11 +71,33 @@ def test_higher_rho_moves_joint_up_toward_smaller_marginal(
 
 @settings(max_examples=200, deadline=None)
 @given(MARGINALS, MARGINALS, st.floats(0.0, 0.94))
-def test_rho_step_changes_joint_by_a_finite_amount(
+def test_higher_rho_step_does_not_lower_joint(
     p1: float, p2: float, rho: float
 ) -> None:
     delta = exact_joint([p1, p2], _corr(rho + 0.01)) - exact_joint([p1, p2], _corr(rho))
-    assert math.isfinite(delta)
+    assert delta >= -1e-12
+
+
+@pytest.mark.parametrize("p1, p2", [(0.20, 0.80), (0.30, 0.60), (0.10, 0.90)])
+def test_joint_approaches_smaller_marginal_as_rho_goes_to_one(p1: float, p2: float) -> None:
+    # Asymmetric pairs: the gap is O(sqrt(1 - rho)) but small enough at these
+    # marginals that a fixed absolute bound holds. Close marginals need the
+    # convergence test below instead.
+    for rho in (0.99, 0.999):
+        joint = exact_joint([p1, p2], _corr(rho))
+        assert abs(joint - min(p1, p2)) <= 1e-4
+
+
+def test_joint_gap_shrinks_toward_min_marginal_for_symmetric_pairs() -> None:
+    # The Gaussian-copula joint tends to min(p1, p2) as rho -> 1, but the gap is
+    # O(sqrt(1 - rho)), so it shrinks slowly when the two marginals are close.
+    # Assert monotone shrinkage, not a fixed absolute tolerance.
+    gaps = [
+        abs(exact_joint([0.5, 0.5], _corr(rho)) - 0.5)
+        for rho in (0.90, 0.99, 0.999, 0.9999)
+    ]
+    assert all(a > b for a, b in zip(gaps, gaps[1:]))
+    assert 0.0 < gaps[-1] < 3e-3
 
 
 @st.composite
@@ -92,9 +115,32 @@ def square_matrices(draw: st.DrawFn) -> np.ndarray:
 
 @settings(max_examples=150, deadline=None)
 @given(square_matrices())
-def test_nearest_correlation_is_positive_semi_definite(matrix: np.ndarray) -> None:
+def test_nearest_correlation_is_positive_definite(matrix: np.ndarray) -> None:
     corr = nearest_correlation(matrix)
-    assert float(np.min(np.linalg.eigvalsh(corr))) >= -1e-8
+    assert float(np.min(np.linalg.eigvalsh(corr))) > 0
+
+
+#: Reproducer for the PSD-guard defect: the smallest eigenvalue was -1.16e-9,
+#: so Cholesky and the multivariate normal CDF both raised on the output.
+_INDEFINITE_MATRIX = np.array(
+    [
+        [0.7269640219873539, 0.11588504729418059, 0.4839917306043495, -0.007491767882153999],
+        [-0.9605856174556551, 0.33975068832180444, -0.015694276799716134, 0.8636917566326356],
+        [0.5235072585744627, -0.16082528756892933, -0.5018161080625936, -0.5504949583047589],
+        [-0.3952072749399689, 0.8737550871273578, 0.36408366399359293, -0.4749664652355181],
+    ]
+)
+
+
+def test_nearest_correlation_returns_strictly_positive_definite_matrix() -> None:
+    corr = nearest_correlation(_INDEFINITE_MATRIX)
+    assert float(np.min(np.linalg.eigvalsh(corr))) > 0
+    np.linalg.cholesky(corr)  # Must not raise.
+
+
+def test_simulate_slip_accepts_an_almost_indefinite_matrix() -> None:
+    result = simulate_slip([0.5, 0.5, 0.5, 0.5], _INDEFINITE_MATRIX, n_sims=200, seed=3)
+    assert math.isfinite(result["p_all"])
 
 
 @settings(max_examples=6, deadline=None, suppress_health_check=[HealthCheck.too_slow])

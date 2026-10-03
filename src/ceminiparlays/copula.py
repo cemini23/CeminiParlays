@@ -8,6 +8,11 @@ from scipy.stats import multivariate_normal, norm, t
 
 CopulaType = Literal["gaussian", "student_t"]
 
+#: Strict positive-definiteness floor used by ``nearest_correlation``. Cholesky
+#: and the multivariate normal CDF both reject a matrix whose smallest
+#: eigenvalue is not strictly positive, so the guard must be strict.
+_PD_EPS = 1e-9
+
 
 def nearest_psd(matrix: np.ndarray, eigenvalue_floor: float = 1e-8) -> np.ndarray:
     """Symmetric PSD approximation via eigenvalue flooring."""
@@ -22,23 +27,33 @@ def nearest_psd(matrix: np.ndarray, eigenvalue_floor: float = 1e-8) -> np.ndarra
     return (psd + psd.T) / 2.0
 
 
-def nearest_correlation(matrix: np.ndarray) -> np.ndarray:
-    psd = nearest_psd(matrix)
-    diagonal = np.sqrt(np.maximum(np.diag(psd), 1e-12))
-    corr = psd / np.outer(diagonal, diagonal)
-    corr = np.clip((corr + corr.T) / 2.0, -0.999, 0.999)
+def _as_correlation(psd: np.ndarray) -> np.ndarray:
+    """Rescale a PSD matrix to a unit-diagonal correlation with off-diagonals in range."""
+
+    corr = (psd + psd.T) / 2.0
+    diagonal = np.sqrt(np.maximum(np.diag(corr), 1e-12))
+    corr = corr / np.outer(diagonal, diagonal)
+    corr = np.clip(corr, -0.999, 0.999)
     np.fill_diagonal(corr, 1.0)
-    # Clipping individual off-diagonals can leave the matrix slightly
-    # indefinite, so re-project when (and only when) the clip broke PSD. A
-    # well-formed prior stays untouched; ``simulate_slip``'s Cholesky and a
-    # caller's eigenvalue check both need a genuine correlation matrix.
-    for _ in range(3):
-        if float(np.min(np.linalg.eigvalsh(corr))) >= -1e-8:
-            break
-        psd = nearest_psd(corr)
-        diagonal = np.sqrt(np.maximum(np.diag(psd), 1e-12))
-        corr = psd / np.outer(diagonal, diagonal)
-        np.fill_diagonal(corr, 1.0)
+    return corr
+
+
+def nearest_correlation(matrix: np.ndarray) -> np.ndarray:
+    corr = _as_correlation(nearest_psd(matrix))
+    # Clipping individual off-diagonals, and the unit-diagonal normalization,
+    # can leave the matrix slightly indefinite. Re-project until the smallest
+    # eigenvalue is STRICTLY positive: ``simulate_slip``'s Cholesky and scipy's
+    # multivariate normal CDF both reject a matrix that is only PSD.
+    for _ in range(10):
+        if float(np.min(np.linalg.eigvalsh(corr))) > _PD_EPS:
+            return corr
+        corr = _as_correlation(nearest_psd(corr, eigenvalue_floor=_PD_EPS))
+    # Final guarantee: shift the spectrum up so the matrix stays strictly
+    # positive definite while keeping a unit diagonal.
+    corr = (corr + corr.T) / 2.0
+    smallest = float(np.min(np.linalg.eigvalsh(corr)))
+    if smallest <= _PD_EPS:
+        corr = _as_correlation(corr + (_PD_EPS - smallest) * np.eye(corr.shape[0]))
     return corr
 
 

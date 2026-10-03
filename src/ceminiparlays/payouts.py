@@ -233,16 +233,13 @@ def pickem_breakeven(
     if table.minus_1 == 0.0 and table.minus_2 == 0.0:
         return breakeven_per_leg(table.all_hit, legs)
 
-    all_hit = table.all_hit
-    minus_1 = table.minus_1
-    minus_2 = table.minus_2
-
     def ev(p: float) -> float:
         q = 1.0 - p
-        p_all = p**legs
-        p_minus_1 = legs * p ** (legs - 1) * q
-        p_minus_2 = comb(legs, 2) * p ** (legs - 2) * q**2 if legs >= 2 else 0.0
-        return p_all * all_hit + p_minus_1 * minus_1 + p_minus_2 * minus_2 - 1.0
+        total = 0.0
+        for hits in range(max(legs - 2, 0), legs + 1):
+            weight = comb(legs, hits) * p**hits * q ** (legs - hits)
+            total += weight * table.multiplier_for_hits(hits)
+        return total - 1.0
 
     return float(brentq(ev, 1e-6, 1.0 - 1e-6))
 

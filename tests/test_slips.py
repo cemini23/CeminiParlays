@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -222,7 +223,13 @@ def test_pickem_notes_show_hurdle_and_each_leg_fair_p() -> None:
     assert slips
     hurdle = pickem_breakeven("underdog", "standard", 2)
     for slip in slips:
-        assert any(note == f"pickem_breakeven={hurdle:.4f}" for note in slip.notes)
+        hurdle_note = f"pickem_breakeven={hurdle:.4f} (uniform per-leg)"
+        assert any(note == hurdle_note for note in slip.notes)
+        geomean = math.prod(leg.fair_p for leg in slip.legs) ** (1.0 / len(slip.legs))
+        geomean_note = (
+            f"pickem_geomean_fair_p={geomean:.4f} vs pickem_breakeven={hurdle:.4f}"
+        )
+        assert any(note == geomean_note for note in slip.notes)
         for leg in slip.legs:
             needle = (
                 f"{leg.line.player_name} fair_p={leg.fair_p:.4f} "

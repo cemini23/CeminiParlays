@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from itertools import combinations
 from math import comb, isnan
@@ -580,7 +581,14 @@ def rank_slips(
                 pickem_hurdle = pickem_breakeven(
                     platform, mode, slip_size, profile_dir=profile_dir
                 )
-            slip_notes.append(f"pickem_breakeven={pickem_hurdle:.4f}")
+            slip_notes.append(
+                f"pickem_breakeven={pickem_hurdle:.4f} (uniform per-leg)"
+            )
+            geomean = math.prod(leg.fair_p for leg in combo) ** (1.0 / len(combo))
+            slip_notes.append(
+                f"pickem_geomean_fair_p={geomean:.4f} "
+                f"vs pickem_breakeven={pickem_hurdle:.4f}"
+            )
             for leg in combo:
                 slip_notes.append(
                     f"pickem_leg {leg.line.player_name} fair_p={leg.fair_p:.4f} "

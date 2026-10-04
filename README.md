@@ -157,7 +157,7 @@ Default `--platform` is **hardrock**. Choices: `hardrock`, `fanduel`, `draftking
 
 `--legs` sets how many legs to rank (`4`, `2,3,4`, or `2-4`). It overrides `--slip-size` when present. `--min-odds` / `--max-odds` keep slips in an American window after pricing (minimum = at least this long; maximum = no longer than this). `--displayed-odds` still prices **one** ticket and needs a single leg count.
 
-`rank` / `run` load a packaged NFL roster (`config/rosters/nfl.json`, 2026-09-13). A **known** player on the wrong team is dropped as `wrong-team` (DJ Moore is BUF, not CHI). Unknown names pass. Pass `--roster path.json` to replace the file, or `--no-roster` to skip the check. Edit the JSON when someone is traded.
+`rank` / `run` load a packaged NFL roster (`config/rosters/nfl.json`, 2026-10-04). A **known** player on the wrong team is dropped as `wrong-team` (DJ Moore is BUF, not CHI). Unknown names pass. Pass `--roster path.json` to replace the file, or `--no-roster` to skip the check. Edit the JSON when someone is traded.
 
 The v0.5 flags are **reports**. They do not void, reprice, invent an SGP, or overwrite the card. `--from-ceminidfs` is built (v0.6): copy `ceminidfs_handoff.csv`; this CLI only reads. FanDuel FPPG is not a prop fair. House-rule quotes stay out of Python (no reduced-SGP table). SoFi remains `semi_open` (not a dome).
 

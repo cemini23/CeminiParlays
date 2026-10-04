@@ -1,7 +1,7 @@
 {
   "league": "nfl",
   "season": 2026,
-  "retrieved": "2026-09-13",
+  "retrieved": "2026-10-04",
   "note": "Known player + wrong team is dropped (DJ Moore is BUF, not CHI). Unknown names pass. Edit this file or pass --roster. --no-roster skips the check.",
   "aliases": {
     "d.j. moore": "dj_moore",
@@ -58,7 +58,7 @@
     "chris_olave": {"name": "Chris Olave", "team": "NO"},
     "bijan_robinson": {"name": "Bijan Robinson", "team": "ATL"},
     "michael_penix": {"name": "Michael Penix Jr.", "team": "ATL"},
-    "tua_tagovailoa": {"name": "Tua Tagovailoa", "team": "MIA"},
+    "tua_tagovailoa": {"name": "Tua Tagovailoa", "team": "ATL"},
     "devon_achane": {"name": "De'Von Achane", "team": "MIA"},
     "cj_stroud": {"name": "C.J. Stroud", "team": "HOU"},
     "nico_collins": {"name": "Nico Collins", "team": "HOU"},

@@ -33,6 +33,15 @@ def test_dj_moore_is_a_bill() -> None:
     assert found.team == "BUF"
 
 
+def test_tua_tagovailoa_is_a_falcon() -> None:
+    roster = load_roster()
+    assert roster_mismatch(_line("Tua Tagovailoa", "MIA"), roster) == "wrong-team"
+    assert roster_mismatch(_line("Tua Tagovailoa", "ATL"), roster) is None
+    found = lookup_player(_line("Tua Tagovailoa", "ATL"), roster)
+    assert found is not None
+    assert found.team == "ATL"
+
+
 def test_unknown_player_passes() -> None:
     roster = load_roster()
     assert roster_mismatch(_line("Brand New Callup", "KC"), roster) is None

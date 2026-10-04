@@ -865,7 +865,8 @@ def test_compose_writes_empty_itt_when_no_tickets(tmp_path: Path) -> None:
             str(out_dir),
         ]
     )
-    assert code == 0
+    # composed=0 requested=5 is a hard fail (ticket-count P0); ITT still written.
+    assert code == 2
     itt = json.loads((out_dir / "compose_itt.json").read_text(encoding="utf-8"))
     assert itt["rows"] == []
     assert itt["captured_at"].endswith("Z")
@@ -983,7 +984,7 @@ def test_compose_auto_caps_same_market_unless_disabled(tmp_path: Path, capsys) -
     ]
     code = main(base)
     out = capsys.readouterr().out
-    assert code == 0
+    assert code == 2
     assert "composed=0 requested=1" in out
     assert not (tmp_path / "capped" / "ticket-001.csv").exists()
 
@@ -1038,13 +1039,13 @@ def test_compose_weather_review_keeps_the_leg(tmp_path: Path, capsys) -> None:
     )
     env = tmp_path / "environment.csv"
     env.write_text(
-        "game_id,team,opp,implied_total,roof,weather_exposed,wind_mph,precip_pop\n"
-        "NO@BAL,NO,BAL,,open,true,20,\n"
-        "NO@BAL,BAL,NO,,open,true,20,\n"
-        "MIN@CHI,MIN,CHI,,open,true,10,\n"
-        "MIN@CHI,CHI,MIN,,open,true,10,\n"
-        "IND@KC,IND,KC,,open,true,20,\n"
-        "IND@KC,KC,IND,,open,true,20,\n",
+        "game_id,team,opp,implied_total,spread,roof,weather_exposed,wind_mph,precip_pop\n"
+        "NO@BAL,NO,BAL,24.0,-3.0,open,true,20,\n"
+        "NO@BAL,BAL,NO,21.0,3.0,open,true,20,\n"
+        "MIN@CHI,MIN,CHI,22.0,1.0,open,true,10,\n"
+        "MIN@CHI,CHI,MIN,23.0,-1.0,open,true,10,\n"
+        "IND@KC,IND,KC,20.0,2.5,open,true,20,\n"
+        "IND@KC,KC,IND,25.0,-2.5,open,true,20,\n",
         encoding="utf-8",
     )
     out_dir = tmp_path / "compose"
@@ -1142,9 +1143,106 @@ def test_compose_auto_window_can_leave_no_tickets(tmp_path: Path, capsys) -> Non
         ]
     )
     out = capsys.readouterr().out
-    assert code == 0
+    assert code == 2
     assert "composed=0 requested=5" in out
     assert "No slips cleared the filters" in out
+
+
+def test_compose_n_tickets_undershoot_exits_two(tmp_path: Path, capsys) -> None:
+    """P0: composed < --n-tickets still prints composed= and exits 2."""
+
+    lines = tmp_path / "lines.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,captured_at,injury_status,book_over,book_under,leg_odds\n"
+        "s,hardrock,Josh Allen,josh_allen,BUF,MIA,pass_yds,249.5,more,"
+        "standard,,,-110,-110,100\n"
+        "s,hardrock,Tyreek Hill,tyreek_hill,MIA,BUF,rec_yds,74.5,more,"
+        "standard,,,-110,-110,120\n"
+        "s,hardrock,Saquon Barkley,saquon_barkley,PHI,ATL,rush_yds,89.5,more,"
+        "standard,,,-110,-110,105\n",
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--lines",
+            str(lines),
+            "--platform",
+            "hardrock",
+            "--legs",
+            "2",
+            "--n-tickets",
+            "5",
+            "--no-strict",
+            "--no-roster",
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "composed=2 requested=5" in out
+    assert out.splitlines()[0].startswith("flags legs=2")
+    assert "n_tickets=5" in out.splitlines()[0]
+    assert "environment=-" in out.splitlines()[0]
+    assert "handoff=-" in out.splitlines()[0]
+    assert len(list(out_dir.glob("ticket-*.csv"))) == 2
+
+
+def test_compose_blank_environment_raises_before_writes(tmp_path: Path, capsys) -> None:
+    """P0: blank spread/implied_total on a ticket game fails before artifacts."""
+
+    lines = tmp_path / "lines.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,captured_at,injury_status,book_over,book_under,leg_odds\n"
+        "s,hardrock,Josh Allen,josh_allen,BUF,MIA,pass_yds,249.5,more,"
+        "standard,,,-110,-110,100\n"
+        "s,hardrock,Saquon Barkley,saquon_barkley,PHI,ATL,rush_yds,89.5,more,"
+        "standard,,,-110,-110,105\n",
+        encoding="utf-8",
+    )
+    env = tmp_path / "environment.csv"
+    env.write_text(
+        "game_id,team,opp,implied_total,spread,roof,weather_exposed,wind_mph,precip_pop\n"
+        "BUF@MIA,BUF,MIA,,,open,true,12,20\n"
+        "BUF@MIA,MIA,BUF,,,open,true,12,20\n"
+        "PHI@ATL,PHI,ATL,,,retractable,false,,\n"
+        "PHI@ATL,ATL,PHI,,,retractable,false,,\n",
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--lines",
+            str(lines),
+            "--platform",
+            "hardrock",
+            "--legs",
+            "2",
+            "--n-tickets",
+            "1",
+            "--no-strict",
+            "--no-roster",
+            "--environment",
+            str(env),
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 2
+    err = captured.err
+    assert "implied_total" in err
+    assert "BUF" in err or "PHI" in err or "@" in err
+    assert not (out_dir / "card.txt").exists()
+    assert not (out_dir / "compose_itt.json").exists()
+    assert not list(out_dir.glob("ticket-*.csv"))
+    assert "flags " in captured.out
+    assert f"environment={env}" in captured.out.splitlines()[0]
 
 
 def test_bankroll_cli_prints_flat_and_kelly(capsys) -> None:

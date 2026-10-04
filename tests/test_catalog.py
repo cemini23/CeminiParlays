@@ -149,6 +149,8 @@ def test_moneyline_and_spread_rows_do_not_halt(tmp_path: Path, capsys) -> None:
         [
             "compose",
             "--auto",
+            "--n-tickets",
+            "1",
             "--enforce-market-depth",
             "--lines",
             str(lines),
@@ -159,3 +161,4 @@ def test_moneyline_and_spread_rows_do_not_halt(tmp_path: Path, capsys) -> None:
     out = capsys.readouterr().out
     assert code == 0
     assert "CATALOG_THIN_MANUAL_INPUT_REQUIRED" not in out
+    assert "composed=1 requested=1" in out

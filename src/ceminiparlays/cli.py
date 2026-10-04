@@ -485,6 +485,68 @@ def _bankroll_note(bankroll: float | None, n_tickets: int) -> str | None:
     )
 
 
+def _flag_value(value: object) -> str:
+    if value is None:
+        return "*"
+    text = str(value).strip()
+    return text if text else "*"
+
+
+def _flag_path(value: object) -> str:
+    if value is None:
+        return "-"
+    return str(value)
+
+
+def _print_command_flags(
+    *,
+    legs: object,
+    markets: object,
+    min_odds: object,
+    max_odds: object,
+    n_tickets: object,
+    environment: object,
+    handoff: object,
+) -> None:
+    """One stdout line of applied flags before CSV reads."""
+
+    print(
+        "flags "
+        f"legs={_flag_value(legs)} "
+        f"markets={_flag_value(markets)} "
+        f"min_odds={_flag_value(min_odds)} "
+        f"max_odds={_flag_value(max_odds)} "
+        f"n_tickets={_flag_value(n_tickets)} "
+        f"environment={_flag_path(environment)} "
+        f"handoff={_flag_path(handoff)}"
+    )
+
+
+def _require_environment_fields(tickets: list, environment: dict) -> None:
+    """Fail loud when a written ticket needs a blank implied_total.
+
+    Compose scores on ITT. A blank ``implied_total`` on a ticket game must not
+    produce a card or ``compose_itt.json``. Blank ``spread`` alone is common in
+    operator env files and is not scored here. Only runs when ``--environment``
+    pointed at a present file that yielded rows. A missing file stays a skip.
+    Does not invent numbers.
+    """
+
+    if not environment or not tickets:
+        return
+    for ticket in tickets:
+        for leg in ticket:
+            row = env_for(environment, leg.line.team, leg.line.opponent)
+            if row is None:
+                continue
+            label = row.game_id or f"{leg.line.team}@{leg.line.opponent}"
+            if row.implied_total is None:
+                raise ValueError(
+                    f"environment blank implied_total for {label} "
+                    f"({leg.line.team}); fill the field or omit --environment"
+                )
+
+
 def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path | None) -> int:
     strict = getattr(args, "strict", True)
     platform = normalize_platform(args.platform)
@@ -616,6 +678,15 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
 
 
 def _cmd_rank(args: argparse.Namespace) -> int:
+    _print_command_flags(
+        legs=getattr(args, "legs", None),
+        markets=getattr(args, "markets", None),
+        min_odds=getattr(args, "min_odds", None),
+        max_odds=getattr(args, "max_odds", None),
+        n_tickets=getattr(args, "max_slips", None),
+        environment="*",
+        handoff="*",
+    )
     return _rank_and_write(args, args.out, args.report)
 
 
@@ -674,6 +745,15 @@ def _cmd_compare(args: argparse.Namespace) -> int:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
+    _print_command_flags(
+        legs=getattr(args, "legs", None),
+        markets=getattr(args, "markets", None),
+        min_odds=getattr(args, "min_odds", None),
+        max_odds=getattr(args, "max_odds", None),
+        n_tickets=getattr(args, "max_slips", None),
+        environment="*",
+        handoff="*",
+    )
     out_dir = args.out_dir or Path("runs") / args.slate_id
     out_dir.mkdir(parents=True, exist_ok=True)
     return _rank_and_write(args, out_dir / "edges.csv", out_dir / "report.txt")
@@ -753,6 +833,15 @@ def _weather_market_reviews(tickets: list, environment: dict) -> list[str]:
 
 
 def _cmd_compose(args: argparse.Namespace) -> int:
+    _print_command_flags(
+        legs=getattr(args, "legs", None),
+        markets=getattr(args, "markets", None),
+        min_odds=getattr(args, "min_odds", None),
+        max_odds=getattr(args, "max_odds", None),
+        n_tickets=getattr(args, "n_tickets", None),
+        environment=getattr(args, "environment", None),
+        handoff=getattr(args, "from_ceminidfs", None),
+    )
     captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     strict = getattr(args, "strict", True)
     platform = normalize_platform(args.platform)
@@ -892,6 +981,11 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         environment=environment,
         max_legs_per_market=max_legs_per_market,
     )
+    # A present --environment file with a blank implied_total on a ticket game
+    # fails before any ticket CSV, card, or compose_itt.json write.
+    # Blank spread is not scored and does not fail this check.
+    if args.environment is not None and Path(args.environment).is_file():
+        _require_environment_fields(tickets, environment)
     if args.environment is not None:
         for note in _weather_market_reviews(tickets, environment):
             print(note)
@@ -973,6 +1067,9 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         counts = player_stat_ticket_counts(tickets)
         if any(count > max_n for count in counts.values()):
             return 2
+    # P0: fewer tickets than --n-tickets is a hard fail. Do not pad the card.
+    if len(tickets) != n_tickets:
+        return 2
     return 0
 
 

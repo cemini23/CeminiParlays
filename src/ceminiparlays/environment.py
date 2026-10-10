@@ -42,6 +42,10 @@ class EnvRow:
     weather_exposed: bool = False
     wind_mph: float | None = None
     precip_pop: float | None = None
+    #: Optional operator flag for a game with no first-touchdown prop. Blank
+    #: (the default) leaves the leg eligible; ``none`` / ``no`` / ``false``
+    #: (lower-cased) tells compose and rank to skip a ``first_td`` leg.
+    first_td: str = ""
 
 
 #: Keyed by ``(team, opp)`` and by ``game_id`` (both the bare id and a
@@ -65,6 +69,7 @@ def read_environment(path: Path | None) -> Environment:
             opponent = normalize_team(raw.get("opp", raw.get("opponent", "")))
             game_id = (raw.get("game_id") or "").strip()
             roof = (raw.get("roof") or "").strip().lower()
+            first_td = (raw.get("first_td") or "").strip().lower()
             row = EnvRow(
                 game_id=game_id,
                 team=team,
@@ -75,6 +80,7 @@ def read_environment(path: Path | None) -> Environment:
                 weather_exposed=_truthy(raw.get("weather_exposed")),
                 wind_mph=_optional_float(raw.get("wind_mph")),
                 precip_pop=_optional_float(raw.get("precip_pop")),
+                first_td=first_td,
             )
             if team and opponent:
                 out[(team, opponent)] = row
@@ -182,6 +188,7 @@ def write_compose_itt(
                 "weather_exposed": row.weather_exposed,
                 "wind_mph": row.wind_mph,
                 "precip_pop": row.precip_pop,
+                "first_td": row.first_td,
             }
             for row in rows
         ],

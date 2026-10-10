@@ -56,13 +56,20 @@ def _line(
     )
 
 
-def _evaluate(lines: list[LineRow], allow_integer_lines: bool = False):
+def _evaluate(
+    lines: list[LineRow],
+    allow_integer_lines: bool = False,
+    allow_high_receiving: bool = True,
+):
     table = resolve_payout("underdog", "standard", 2)
     return evaluate_legs(
         lines,
         {},
         implied_p=breakeven_per_leg(table.all_hit, 2),
         allow_integer_lines=allow_integer_lines,
+        # Most fixtures exercise pricing, not the Week 4 rec-line bar; the bar
+        # tests opt back in with allow_high_receiving=False.
+        allow_high_receiving=allow_high_receiving,
     )
 
 
@@ -71,9 +78,111 @@ def _example():
     dists = read_distributions(ROOT / "examples" / "distributions.csv")
     table = resolve_payout("underdog", "standard", 2)
     live, excluded = evaluate_legs(
-        lines, dists, implied_p=breakeven_per_leg(table.all_hit, 2)
+        lines,
+        dists,
+        implied_p=breakeven_per_leg(table.all_hit, 2),
+        allow_high_receiving=True,
     )
     return live, excluded
+
+
+def test_receiving_line_bar_drops_50_and_up() -> None:
+    lines = [
+        _line("Keep 49", "AAA", "BBB", stat="rec_yds", line=49.5),
+        _line("Bar 50", "CCC", "DDD", stat="rec_yds", line=50.0),
+        _line("Bar 50.5", "EEE", "FFF", stat="rec_yds", line=50.5),
+    ]
+    live, excluded = _evaluate(lines, allow_high_receiving=False)
+    assert [leg.line.player_name for leg in live] == ["Keep 49"]
+    assert [(leg.line.player_name, leg.warn) for leg in excluded] == [
+        ("Bar 50", "rec-line-bar"),
+        ("Bar 50.5", "rec-line-bar"),
+    ]
+
+
+def test_receiving_line_bar_is_opt_out_and_never_hits_rush() -> None:
+    table = resolve_payout("underdog", "standard", 2)
+    lines = [
+        _line("Rec 50.5", "AAA", "BBB", stat="rec_yds", line=50.5),
+        _line("Rush 60.5", "CCC", "DDD", stat="rush_yds", line=60.5),
+    ]
+    live, excluded = evaluate_legs(
+        lines,
+        {},
+        implied_p=breakeven_per_leg(table.all_hit, 2),
+        allow_high_receiving=True,
+    )
+    assert excluded == []
+    assert {leg.line.player_name for leg in live} == {"Rec 50.5", "Rush 60.5"}
+
+
+def test_two_plus_td_without_fair_or_dist_is_not_a_gaussian() -> None:
+    leg = _line(
+        "Two TD", "AAA", "BBB", stat="two_plus_td", line=0.5,
+        book_over=None, book_under=None,
+    )
+    live, excluded = _evaluate([leg])
+    assert live == []
+    assert excluded[0].warn == "dropped"
+
+
+def test_two_plus_td_book_odds_alone_are_not_priced() -> None:
+    # A two-way book line is not a count distribution; the leg is dropped, not
+    # priced by de-vig or by a Gaussian.
+    leg = _line("Two TD", "AAA", "BBB", stat="two_plus_td", line=0.5)
+    live, excluded = _evaluate([leg])
+    assert live == []
+    assert excluded[0].warn == "dropped"
+
+
+def test_two_plus_td_typed_fair_p_is_kept() -> None:
+    leg = _line(
+        "Two TD", "AAA", "BBB", stat="two_plus_td", line=0.5,
+        book_over=None, book_under=None,
+    )
+    leg.fair_p = 0.35
+    live, excluded = _evaluate([leg])
+    assert excluded == []
+    assert live[0].source == "fair_p"
+
+
+def test_two_plus_td_count_distribution_uses_poisson() -> None:
+    from ceminiparlays.io import DistRow
+
+    leg = _line(
+        "Two TD", "AAA", "BBB", stat="two_plus_td", line=0.5,
+        book_over=None, book_under=None,
+    )
+    dists = {("two_td", "two_plus_td"): DistRow("two_td", "Two TD", "two_plus_td", 3.2, 0.0, "")}
+    live, excluded = evaluate_legs([leg], dists, implied_p=0.5)
+    assert excluded == []
+    assert live[0].family.startswith("poisson")
+
+
+def test_receiving_bar_fires_before_a_played_50_5_is_graded() -> None:
+    # The bar is a compose/rank guard only; ``grade`` still settles a played
+    # 50.5 line from the typed actual. The grading itself lives in test_grade.
+    live, excluded = _evaluate(
+        [_line("Bar 50.5", "AAA", "BBB", stat="rec_yds", line=50.5)],
+        allow_high_receiving=False,
+    )
+    assert live == []
+    assert excluded[0].warn == "rec-line-bar"
+
+
+def test_ticket_id_compare_is_exact_not_prefix() -> None:
+    a = _line("A One", "AAA", "BBB")
+    a.ticket_id = "B-50"
+    b = _line("B One", "CCC", "DDD")
+    b.ticket_id = "B-5"
+    live, _ = _evaluate([a, b])
+    notes: list[str] = []
+    slips = rank_slips(live, "underdog", "standard", 2, notes=notes)
+    # Exact string equality: B-5 and B-50 are two tickets, never one, and a
+    # short id is never zero-padded to match the longer one.
+    assert slips == []
+    assert any("mixed-ticket-id" in note for note in notes)
+    assert {leg.line.ticket_id for leg in live} == {"B-50", "B-5"}
 
 
 def test_evaluate_legs_names_the_exclusions() -> None:
@@ -119,7 +228,7 @@ def test_same_player_opposite_sides_rejected() -> None:
     assert opposite.team == "KC"
     mixed = lines + [opposite]
     table = resolve_payout("underdog", "standard", 2)
-    live, _ = evaluate_legs(mixed, dists, implied_p=breakeven_per_leg(table.all_hit, 2))
+    live, _ = evaluate_legs(mixed, dists, implied_p=breakeven_per_leg(table.all_hit, 2), allow_high_receiving=True)
     slips = rank_slips(live, "underdog", "standard", 2, n_sims=2000, seed=3)
     assert slips
     for slip in slips:

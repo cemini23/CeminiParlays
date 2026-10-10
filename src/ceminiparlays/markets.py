@@ -14,13 +14,13 @@ YARDS_STATS = frozenset({"pass_yds", "rush_yds", "rec_yds"})
 #: Discrete touchdown props. No Gaussian median; fair P needs a typed value.
 TD_STATS = frozenset({"first_td", "anytime_td"})
 #: Non-yard counting props that the fair model already supports.
-COUNT_STATS = frozenset({"receptions", "rush_att", "pass_tds"})
+COUNT_STATS = frozenset({"receptions", "rush_att", "pass_tds", "two_plus_td"})
 #: Game markets (Odds API h2h / spreads / totals). Compose ``--auto`` skips these.
 GAME_STATS = frozenset({"moneyline", "spread", "total"})
 
 LEGAL_MARKETS = frozenset(YARDS_STATS | TD_STATS | COUNT_STATS | GAME_STATS)
 
-#: Odds API keys and short names map onto GAME_STATS tokens.
+#: Odds API keys and short names map onto canonical tokens.
 MARKET_ALIASES = {
     "h2h": "moneyline",
     "moneyline": "moneyline",
@@ -28,6 +28,8 @@ MARKET_ALIASES = {
     "spread": "spread",
     "totals": "total",
     "total": "total",
+    # ``pass_td`` is a spelling alias of ``pass_tds``, never its own family.
+    "pass_td": "pass_tds",
 }
 
 #: Hard-coded ``--auto`` market family (ROADMAP defaults table). Yards only.
@@ -35,6 +37,11 @@ AUTO_MARKETS = ("pass_yds", "rush_yds", "rec_yds")
 
 FIRST_TD = "first_td"
 ANYTIME_TD = "anytime_td"
+TWO_PLUS_TD = "two_plus_td"
+
+
+def is_two_plus_td(stat_type: str) -> bool:
+    return (stat_type or "").strip().lower() == TWO_PLUS_TD
 
 
 def is_first_td(stat_type: str) -> bool:

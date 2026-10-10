@@ -124,6 +124,7 @@ def test_compose_missing_handoff_prints_token_and_exits_zero(
             "1",
             "--lines",
             str(ROOT / "examples" / "sunday_lines.csv"),
+            "--allow-rec-line",
             "--from-ceminidfs",
             str(missing),
             "--out-dir",

@@ -13,7 +13,7 @@ from ceminiparlays.correlation import LegRef, correlation_matrix, load_priors
 from ceminiparlays.fair import FairResult, p_over_line, side_probability
 from ceminiparlays.io import DistRow, LineRow, is_flagged, is_scratched
 from ceminiparlays.kelly import slip_kelly
-from ceminiparlays.markets import is_first_td, is_td_market
+from ceminiparlays.markets import is_first_td, is_td_market, is_two_plus_td
 from ceminiparlays.odds import (
     DevigMethod,
     american_to_decimal,
@@ -48,6 +48,7 @@ EXCLUDED_WARNS = {
     "book-line-mismatch",
     "bad-odds",
     "wrong-team",
+    "rec-line-bar",
 }
 #: Scratch is expected (a listed player is out); every other exclusion is a
 #: data problem and aborts the default strict rank.
@@ -117,13 +118,19 @@ def fair_for_line(
     Precedence: typed ``fair_p`` → de-vigged two-way book → TD ``leg_odds``
     implied → projected distribution → prediction ``contract_price`` mid. A TD
     market never falls through to a fake Gaussian: with no distribution it is
-    dropped, not invented.
+    dropped, not invented. ``two_plus_td`` is the same: it is priced only from a
+    typed ``fair_p`` or a count distribution, never a normal curve.
     """
 
     if line.fair_p is not None:
         if not 0.0 < line.fair_p < 1.0:
             raise ValueError(f"fair_p must be between 0 and 1, got {line.fair_p}")
         return line.fair_p, "fair_p", None
+    if is_two_plus_td(line.stat_type) and dist is None:
+        raise KeyError(
+            f"two_plus_td needs a typed fair_p or a count distribution "
+            f"for {line.player_key}/{line.stat_type}"
+        )
     if line.book_over is not None and line.book_under is not None:
         result = devig_two_way(line.book_over, line.book_under, method=method)
         if line.side in MORE_SIDES:
@@ -142,11 +149,18 @@ def fair_for_line(
         return implied, "leg_odds_implied", None
     if dist is not None:
         family = dist.family or None
+        # ``two_plus_td`` is a count market: a typed count projection prices it
+        # with Poisson. A normal family (typed or defaulted) is never invented
+        # for it; without a distribution the caller drops the leg.
+        if is_two_plus_td(line.stat_type):
+            family = "poisson"
+        elif family not in {"lognormal", "normal", "poisson"}:
+            family = None
         fair = p_over_line(
             line=line.line,
             median=dist.median,
             sigma=dist.sigma,
-            family=family if family in {"lognormal", "normal", "poisson"} else None,
+            family=family,
             stat_type=line.stat_type,
         )
         return side_probability(fair, line.side), "distribution", fair
@@ -182,13 +196,16 @@ def evaluate_legs(
     allow_integer_lines: bool = False,
     platform: str = "",
     roster: Roster | None = None,
+    allow_high_receiving: bool = False,
 ) -> tuple[list[EvaluatedLeg], list[EvaluatedLeg]]:
     """Split lines into rankable legs and named exclusions.
 
     Every path that skips a line appends to ``excluded`` with a warn token, so
     the operator can reconcile CSV in vs card out (I-03 / I-26). Sportsbook
     integer lines stay excluded even when ``allow_integer_lines`` is set
-    (push / reduced-ticket payout is not modeled).
+    (push / reduced-ticket payout is not modeled). A receiving-yards line at 50
+    or higher is barred with ``rec-line-bar`` unless ``allow_high_receiving`` is
+    set (the 49.5 line stays legal; rush yards are never barred).
     """
 
     sportsbook = (
@@ -220,6 +237,13 @@ def evaluate_legs(
             line.line = NO_LINE_DUMMY
         if roster is not None and roster_mismatch(line, roster):
             excluded.append(_excluded_leg(line, stored_implied, "wrong-team"))
+            continue
+        if (
+            not allow_high_receiving
+            and (line.stat_type or "").strip().lower() == "rec_yds"
+            and line.line >= 50
+        ):
+            excluded.append(_excluded_leg(line, stored_implied, "rec-line-bar"))
             continue
         if line.book_line is not None and abs(line.book_line - line.line) > 1e-9:
             excluded.append(_excluded_leg(line, stored_implied, "book-line-mismatch"))

@@ -247,3 +247,104 @@ def test_grade_accepts_optional_ticket_market_stake_kind(tmp_path) -> None:
     assert summary.ticket_ids == ["t1", "t2"]
     assert summary.markets == ["pass_yds", "anytime_td"]
     assert summary.stake_kinds == ["cash", "bonus"]
+
+
+def test_grade_two_plus_td_two_is_hit_never_void(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,market,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,1,two_plus_td,more,0.5,2,5,2.0\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert summary.hits == 1
+    assert abs(summary.pnl - 5.0) < 1e-9
+
+
+def test_grade_two_plus_td_six_is_hit(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,market,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,1,two_plus_td,more,1.5,6,5,2.0\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert summary.hits == 1
+
+
+def test_grade_two_plus_td_one_is_miss(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,market,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,1,two_plus_td,more,0.5,1,5,2.0\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert summary.hits == 0
+    assert abs(summary.pnl - (-5.0)) < 1e-9
+
+
+def test_other_markets_keep_the_push_void(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,market,sides,lines,actuals,stake,multiplier\n"
+        "underdog,standard,2,pass_yds|rec_yds,more|more,10.5|20.5,30|20.5,10,3.5\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    # The exact 20.5 hit still voids; the slip steps down to a 1-leg refund.
+    assert summary.pnl == 0.0
+
+
+def test_no_sweat_loss_keeps_cash_loss_and_paid_is_bonus(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "stake_kind,platform,mode,n_legs,sides,lines,actuals,stake,multiplier,paid\n"
+        "no_sweat,hardrock,standard,1,more,50.5,10,10,+250,10\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert abs(summary.cash_pnl - (-10.0)) < 1e-9
+    assert abs(summary.bonus_out - 10.0) < 1e-9
+    # The bonus return never offsets the cash loss in cash_pnl.
+    assert abs(summary.cash_pnl - 0.0) > 1.0
+
+
+def test_no_sweat_win_stays_cash(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "stake_kind,platform,mode,n_legs,sides,lines,actuals,stake,multiplier,paid\n"
+        "no_sweat,hardrock,standard,1,more,50.5,80,10,+250,35\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert abs(summary.cash_pnl - 25.0) < 1e-9
+    assert abs(summary.bonus_out) < 1e-9
+    assert abs(summary.pnl - 25.0) < 1e-9
+
+
+def test_no_sweat_kind_variants_keep_cash_loss(tmp_path) -> None:
+    for kind in ("no_sweat", "nosweat", "no-sweat"):
+        path = tmp_path / f"{kind}.csv"
+        path.write_text(
+            "stake_kind,platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+            f"{kind},hardrock,standard,1,more,50.5,10,10,+250\n",
+            encoding="utf-8",
+        )
+        summary = grade_ledger(path)
+        assert abs(summary.cash_pnl - (-10.0)) < 1e-9, kind
+        assert abs(summary.pnl - (-10.0)) < 1e-9, kind
+
+
+def test_bonus_row_does_not_change_cash_pnl(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "stake_kind,platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "bonus,hardrock,standard,2,more|more,10.5|20.5,30|40,5,3.5\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    assert abs(summary.cash_pnl) < 1e-9
+    assert summary.bonus_stake == 5.0
+    assert summary.bonus_in == 5.0
+    assert abs(summary.pnl - 12.5) < 1e-9

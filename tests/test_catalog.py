@@ -104,6 +104,7 @@ def test_allow_thin_catalog_prints_note_and_continues(tmp_path: Path, capsys) ->
             "--allow-thin-catalog",
             "--lines",
             str(ROOT / "examples" / "sunday_lines.csv"),
+            "--allow-rec-line",
             "--out-dir",
             str(tmp_path / "compose"),
         ]
@@ -121,6 +122,7 @@ def test_compose_auto_without_flag_does_not_halt(tmp_path: Path, capsys) -> None
             "--auto",
             "--lines",
             str(ROOT / "examples" / "sunday_lines.csv"),
+            "--allow-rec-line",
             "--out-dir",
             str(tmp_path / "compose"),
         ]

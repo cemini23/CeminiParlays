@@ -15,6 +15,7 @@ from ceminiparlays.compose import (
     TICKET_FIELDS,
     compose_tickets,
     concentration_warnings,
+    drop_unavailable_first_td,
     estimate_multiplier,
     player_stat_ticket_counts,
     ticket_rows,
@@ -138,7 +139,8 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
         "--markets",
         default=None,
         help="Comma list of market tokens: pass_yds,rush_yds,rec_yds,receptions,"
-        "rush_att,pass_tds,first_td,anytime_td,h2h,spreads,totals",
+        "rush_att,pass_tds (alias pass_td),two_plus_td,first_td,anytime_td,"
+        "h2h,spreads,totals",
     )
     parser.add_argument(
         "--ticket-id",
@@ -175,7 +177,31 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-slips", type=int, default=25)
     parser.add_argument("--allow-large-enum", action="store_true")
     parser.add_argument("--allow-integer-lines", action="store_true")
+    parser.add_argument(
+        "--allow-rec-line",
+        action="store_true",
+        help="Keep a rec_yds leg at 50 or higher. Default bars 50+ (49.5 stays).",
+    )
+    parser.add_argument(
+        "--games",
+        type=Path,
+        default=None,
+        help=(
+            "Optional games file (away/home). When set, a leg whose team and "
+            "opp are not in that file is dropped with warn off-card. Omitted "
+            "means no filtering."
+        ),
+    )
     parser.add_argument("--shade-pp", type=float, default=0.0)
+    parser.add_argument(
+        "--environment",
+        type=Path,
+        default=None,
+        help=(
+            "Optional env CSV. A first_td leg whose game row marks first_td "
+            "none/no/false is skipped. Missing file is a no-op."
+        ),
+    )
     parser.add_argument(
         "--strict",
         action=argparse.BooleanOptionalAction,
@@ -277,6 +303,20 @@ def build_parser() -> argparse.ArgumentParser:
     compose.add_argument("--no-roster", action="store_true")
     compose.add_argument("--auto", action="store_true")
     compose.add_argument("--markets", default=None)
+    compose.add_argument(
+        "--allow-rec-line",
+        action="store_true",
+        help="Keep a rec_yds leg at 50 or higher. Default bars 50+ (49.5 stays).",
+    )
+    compose.add_argument(
+        "--games",
+        type=Path,
+        default=None,
+        help=(
+            "Optional games file. When set, a leg whose team and opp are not in "
+            "that file is dropped with warn off-card. Omitted means no filter."
+        ),
+    )
     compose.add_argument("--legs", default=None)
     compose.add_argument("--slip-size", type=int, default=2)
     compose.add_argument("--min-odds", type=int, default=None)
@@ -522,6 +562,38 @@ def _print_command_flags(
     )
 
 
+def _game_keys(path: Path) -> set[tuple[str, str]]:
+    """Unordered team pairs from a games file, for the ``--games`` off-card guard."""
+
+    games = read_games(path)
+    return {tuple(sorted({game.away, game.home})) for game in games if game.away and game.home}
+
+
+def _off_card_filter(
+    lines: list,
+    games_path: Path | None,
+) -> tuple[list, list]:
+    """Drop legs whose team/opp pair is absent from ``--games``.
+
+    Returns ``(kept, dropped)``. ``None`` path means no filtering. A leg whose
+    team and opponent are absent from the file is warned ``off-card``. The
+    filtered read is not used to infer a slate day or widen the fetch window.
+    """
+
+    if games_path is None:
+        return lines, []
+    keys = _game_keys(games_path)
+    kept: list = []
+    dropped: list = []
+    for row in lines:
+        pair = tuple(sorted({(row.team or "").upper(), (row.opponent or "").upper()}))
+        if pair in keys:
+            kept.append(row)
+        else:
+            dropped.append(row)
+    return kept, dropped
+
+
 def _require_environment_fields(tickets: list, environment: dict) -> None:
     """Fail loud when a written ticket needs a blank implied_total.
 
@@ -571,6 +643,7 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
     ticket_id = getattr(args, "ticket_id", None)
     if ticket_id:
         lines = [row for row in lines if row.ticket_id == str(ticket_id)]
+    lines, off_card = _off_card_filter(lines, getattr(args, "games", None))
     market_filter = parse_markets(getattr(args, "markets", None))
     if market_filter:
         lines = [row for row in lines if row.stat_type in market_filter]
@@ -622,11 +695,19 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         allow_integer_lines=args.allow_integer_lines,
         platform=platform,
         roster=roster,
+        allow_high_receiving=bool(getattr(args, "allow_rec_line", False)),
     )
+    environment = read_environment(getattr(args, "environment", None))
+    if environment:
+        kept = drop_unavailable_first_td(live, environment)
+        for leg in live:
+            if leg not in kept:
+                print(f"  dropped {leg.line.player_name}: first_td-none")
+        live = kept
     dropped = [leg for leg in excluded if leg.warn not in {"scratch"}]
     scratched = [leg for leg in excluded if leg.warn == "scratch"]
     print(
-        f"lines={len(lines)} live={len(live)} dropped={len(dropped)} "
+        f"lines={len(lines)} live={len(live)} dropped={len(dropped) + len(off_card)} "
         f"scratched={len(scratched)}"
     )
     if roster is not None:
@@ -638,10 +719,12 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
             if found:
                 extra = f" (roster {found.team}, csv {leg.line.team})"
         print(f"  dropped {leg.line.player_name}: {leg.warn}{extra}")
+    for row in off_card:
+        print(f"  dropped {row.player_name}: off-card")
     for leg in scratched:
         print(f"  scratched {leg.line.player_name}")
 
-    if strict and dropped:
+    if strict and (dropped or off_card):
         print("strict mode: refusing to rank with dropped legs; fix the rows or pass --no-strict")
         return 2
 
@@ -684,7 +767,7 @@ def _cmd_rank(args: argparse.Namespace) -> int:
         min_odds=getattr(args, "min_odds", None),
         max_odds=getattr(args, "max_odds", None),
         n_tickets=getattr(args, "max_slips", None),
-        environment="*",
+        environment=getattr(args, "environment", None),
         handoff="*",
     )
     return _rank_and_write(args, args.out, args.report)
@@ -893,6 +976,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     ticket_id = getattr(args, "ticket_id", None)
     if ticket_id:
         lines = [row for row in lines if row.ticket_id == str(ticket_id)]
+    lines, off_card = _off_card_filter(lines, getattr(args, "games", None))
     if late_path is not None:
         for note in late_active_alerts(lines, late_path):
             print(note)
@@ -939,15 +1023,18 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         allow_integer_lines=False,
         platform=platform,
         roster=roster,
+        allow_high_receiving=bool(getattr(args, "allow_rec_line", False)),
     )
     dropped = [leg for leg in excluded if leg.warn not in {"scratch"}]
     print(
-        f"lines={len(lines)} live={len(live)} dropped={len(dropped)} "
+        f"lines={len(lines)} live={len(live)} dropped={len(dropped) + len(off_card)} "
         f"scratch={len(excluded) - len(dropped)}"
     )
     for leg in dropped:
         print(f"  dropped {leg.line.player_name}: {leg.warn}")
-    if strict and dropped:
+    for row in off_card:
+        print(f"  dropped {row.player_name}: off-card")
+    if strict and (dropped or off_card):
         print("strict mode: refusing to compose with dropped legs; fix the rows")
         return 2
 
@@ -962,6 +1049,12 @@ def _cmd_compose(args: argparse.Namespace) -> int:
             environment = merge_implied_totals(environment, handoff.rows)
             for note in exposure_notes(handoff.rows):
                 print(note)
+    if environment:
+        kept = drop_unavailable_first_td(live, environment)
+        for leg in live:
+            if leg not in kept:
+                print(f"  dropped {leg.line.player_name}: first_td-none")
+        live = kept
 
     raw_market_cap = getattr(args, "max_legs_per_market", None)
     if raw_market_cap is None and auto:
@@ -980,6 +1073,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         markets=market_filter,
         environment=environment,
         max_legs_per_market=max_legs_per_market,
+        allow_high_receiving=bool(getattr(args, "allow_rec_line", False)),
     )
     # A present --environment file with a blank implied_total on a ticket game
     # fails before any ticket CSV, card, or compose_itt.json write.
@@ -1010,7 +1104,10 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         )
     slips = []
     for index, ticket_legs in enumerate(tickets, start=1):
-        composed_id = f"compose-{index:03d}"
+        typed_ids = {leg.line.ticket_id for leg in ticket_legs if leg.line.ticket_id}
+        # Copy the operator's typed id when it is unambiguous; otherwise keep
+        # the generated compose-00N placeholder. Never pad or prefix-match.
+        composed_id = next(iter(typed_ids)) if len(typed_ids) == 1 else f"compose-{index:03d}"
         write_csv(
             out_dir / f"ticket-{index:03d}.csv",
             ticket_rows(ticket_legs, composed_id, platform),

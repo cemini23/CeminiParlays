@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from ceminiparlays.markets import is_two_plus_td
 from ceminiparlays.odds import american_to_decimal
 from ceminiparlays.payouts import SPORTSBOOK_PLATFORMS, normalize_platform, resolve_payout
 
@@ -103,9 +104,32 @@ def _discrete_expected(side: str) -> str | None:
     return None
 
 
-def _grade_leg(side: str, actual: str | float, line: str | float) -> str:
+#: ``stake_kind`` values that are settled on the No Sweat path. The stake is
+#: real cash and is never refunded, so the cash loss stands. Any book-returned
+#: amount is a bonus, never cash.
+NO_SWEAT_KINDS = {"no_sweat", "nosweat", "no-sweat"}
+
+
+def _grade_two_plus_td(side: str, actual: str | float, line: str | float) -> str:
+    """Grade ``two_plus_td``: 2 or more hits, under 2 misses. 2 is never a void."""
+
+    if isinstance(actual, str) or isinstance(line, str):
+        return "miss"
+    if actual >= 2:
+        return "hit"
+    return "miss"
+
+
+def _grade_leg(
+    side: str,
+    actual: str | float,
+    line: str | float,
+    stat_type: str = "",
+) -> str:
     """Return 'hit', 'miss', or 'void' for one leg. Discrete equality is never a void."""
 
+    if is_two_plus_td(stat_type):
+        return _grade_two_plus_td(side, actual, line)
     expected = _discrete_expected(side)
     actual_discrete = isinstance(actual, str)
     line_discrete = isinstance(line, str)
@@ -132,7 +156,8 @@ def _leg_outcomes(raw: dict[str, str]) -> tuple[int, int, int]:
     """Return (hits, misses, voids) for one ledger row.
 
     Numeric ``actual == line`` is a void (yardage / totals / spreads). Discrete
-    yes/no and ML win/loss matching tokens are hits, never voids.
+    yes/no and ML win/loss matching tokens are hits, never voids. ``two_plus_td``
+    is the one market where equality is not a void: 2 or more hits.
     """
 
     if raw.get("hits"):
@@ -142,13 +167,17 @@ def _leg_outcomes(raw: dict[str, str]) -> tuple[int, int, int]:
     sides = [part.strip().lower() for part in raw.get("sides", "").split("|") if part.strip()]
     actual_parts = [part.strip() for part in raw.get("actuals", "").split("|") if part.strip()]
     line_parts = [part.strip() for part in raw.get("lines", "").split("|") if part.strip()]
+    market_parts = [part.strip() for part in raw.get("market", "").split("|") if part.strip()]
     if len(actual_parts) != len(sides) or len(line_parts) != len(sides):
         raise ValueError("sides, lines, and actuals must have the same length")
     hits = misses = voids = 0
-    for side, actual_raw, line_raw in zip(sides, actual_parts, line_parts, strict=True):
+    for index, (side, actual_raw, line_raw) in enumerate(
+        zip(sides, actual_parts, line_parts, strict=True)
+    ):
         actual = _parse_leg_token(actual_raw)
         line = _parse_leg_token(line_raw)
-        result = _grade_leg(side, actual, line)
+        stat_type = market_parts[index] if index < len(market_parts) else ""
+        result = _grade_leg(side, actual, line, stat_type)
         if result == "hit":
             hits += 1
         elif result == "void":
@@ -320,11 +349,18 @@ def grade_ledger(
             
             if paid_value is not None:
                 net = paid_value - stake
-                pnl += net
                 if stake_kind == "bonus":
+                    pnl += net
                     bonus_in += stake
                     bonus_out += paid_value
+                elif stake_kind in NO_SWEAT_KINDS and miss_count > 0:
+                    # A lost No Sweat ticket keeps the cash loss. The book
+                    # return is a bonus. A winning No Sweat ticket stays cash.
+                    pnl -= stake
+                    cash_pnl -= stake
+                    bonus_out += paid_value
                 else:
+                    pnl += net
                     cash_pnl += net
                 continue
             
@@ -358,6 +394,9 @@ def grade_ledger(
             if stake_kind == "bonus":
                 bonus_in += stake
                 bonus_out += stake * payout
+            elif stake_kind in NO_SWEAT_KINDS and miss_count > 0:
+                # A lost ticket keeps the cash loss. A hit uses the cash net.
+                cash_pnl -= stake
             else:
                 cash_pnl += net
     

@@ -17,6 +17,32 @@ from ceminiparlays.slips import EvaluatedLeg
 
 #: Largest pool the composer enumerates. 14 choose 5 is still tiny.
 COMPOSE_POOL = 14
+#: Env ``first_td`` values that mean the game has no first-touchdown prop.
+NO_FIRST_TD = {"none", "no", "false"}
+
+
+def first_td_available(environment: Environment | None, leg: EvaluatedLeg) -> bool:
+    """False only when the matching env row says the game has no ``first_td``.
+
+    A missing env row, a missing column, or a blank value all leave the leg
+    eligible; only an explicit ``none`` / ``no`` / ``false`` bars it.
+    """
+
+    if not is_first_td(leg.line.stat_type):
+        return True
+    row = env_for(environment, leg.line.team, leg.line.opponent)
+    if row is None:
+        return True
+    return (row.first_td or "").strip().lower() not in NO_FIRST_TD
+
+
+def drop_unavailable_first_td(
+    live: list[EvaluatedLeg],
+    environment: Environment | None,
+) -> list[EvaluatedLeg]:
+    """Remove ``first_td`` legs whose env row bars the market. Order is kept."""
+
+    return [leg for leg in live if first_td_available(environment, leg)]
 
 
 def _game_key(leg: EvaluatedLeg) -> tuple[str, ...]:
@@ -148,6 +174,7 @@ def compose_tickets(
     markets: list[str] | None,
     environment: Environment | None,
     max_legs_per_market: int | None = None,
+    allow_high_receiving: bool = False,
 ) -> list[list[EvaluatedLeg]]:
     """Pick up to ``n_tickets`` diversified tickets from ``live``.
 
@@ -157,7 +184,9 @@ def compose_tickets(
     ``max_legs_per_market`` is an int >= 1, a combo where one ``stat_type``
     appears more than that many times is skipped. ``None`` or ``0`` is no cap.
     The odds window uses the best typed estimate (row M → slip_odds → leg_odds
-    / fair product).
+    / fair product). A ``first_td`` leg whose env row says the game has no
+    first-touchdown prop is skipped. A receiving line at 50 or higher is
+    skipped unless ``allow_high_receiving`` is set.
     """
 
     if n_tickets < 1:
@@ -169,6 +198,12 @@ def compose_tickets(
         for leg in live
         if (market_set is None or leg.line.stat_type in market_set)
         and not (skip_games and leg.line.stat_type in GAME_STATS)
+        and first_td_available(environment, leg)
+        and (
+            allow_high_receiving
+            or (leg.line.stat_type or "").strip().lower() != "rec_yds"
+            or leg.line.line < 50
+        )
     ]
     if not pool:
         return []

@@ -12,6 +12,9 @@ from ceminiparlays.io import FLAG_STATUSES, OUT_STATUSES, LineRow
 from ceminiparlays.names import fold_name
 
 WATCH_STATUSES = OUT_STATUSES | FLAG_STATUSES
+#: In-game exit / left tokens. A warning only: never added to ``OUT_STATUSES``,
+#: never a void, scratch, or reprice. Grade still uses the typed actual.
+IN_GAME_EXIT_STATUSES = {"exit", "left"}
 
 
 def _line_keys(row: LineRow) -> set[str]:
@@ -52,19 +55,33 @@ def read_active_keys(path: Path) -> set[str]:
 
 
 def late_active_alerts(lines: list[LineRow], path: Path) -> list[str]:
-    """``OPERATOR_ACTION_REQUIRED`` notes for FLAG/OUT players later ACTIVE."""
+    """``OPERATOR_ACTION_REQUIRED`` notes for FLAG/OUT players later ACTIVE.
+
+    A row that already carries an in-game ``exit`` / ``left`` status also emits
+    an ``IN_GAME_EXIT`` warning. That warning never voids, scratches, or
+    reprices the leg; it only tells the operator to review it.
+    """
 
     active = read_active_keys(path)
     alerts: list[str] = []
     seen: set[str] = set()
+    exit_seen: set[str] = set()
     for row in lines:
         status = (row.injury_status or "").strip().lower()
+        marker = row.player_key.strip().lower() if row.player_key else fold_name(row.player_name)
+        if status in IN_GAME_EXIT_STATUSES:
+            if marker not in exit_seen:
+                exit_seen.add(marker)
+                alerts.append(
+                    f"IN_GAME_EXIT: {row.player_name} status {status} — review, "
+                    "leg stays as typed"
+                )
+            continue
         if status not in WATCH_STATUSES:
             continue
         keys = _line_keys(row)
         if not keys & active:
             continue
-        marker = row.player_key.strip().lower() if row.player_key else fold_name(row.player_name)
         if marker in seen:
             continue
         seen.add(marker)

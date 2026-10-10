@@ -21,6 +21,18 @@ def test_family_tree() -> None:
     assert choose_family("receptions", 5.0) == "poisson"
 
 
+def test_two_plus_td_is_poisson_even_at_high_median() -> None:
+    assert choose_family("two_plus_td", 0.8) == "poisson"
+    # A median of 3 or more would be ``normal`` for most stats; this market
+    # stays Poisson so a Gaussian is never built for it.
+    assert choose_family("two_plus_td", 3.0) == "poisson"
+    assert choose_family("two_plus_td", 4.5) == "poisson"
+
+
+def test_pass_td_alias_uses_poisson_family() -> None:
+    assert choose_family("pass_td", 1.5) == "poisson"
+
+
 def test_integer_poisson_keeps_push_mass() -> None:
     result = p_over_line(line=2.0, median=2.0, sigma=0.0, family="poisson")
     assert result.fair_p_push > 0.0

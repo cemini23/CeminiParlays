@@ -27,8 +27,12 @@ def choose_family(stat_type: str, median: float) -> StatFamily:
 
     discrete_low = {
         "pass_tds",
+        # ``pass_td`` is an accepted spelling alias of ``pass_tds``; a CSV
+        # stat_type keeps whatever the operator typed, so both stay Poisson.
+        "pass_td",
         "rush_tds",
         "rec_tds",
+        "two_plus_td",
         "anytime_td",
         "ints",
         "sacks",

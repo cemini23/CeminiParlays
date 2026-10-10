@@ -57,6 +57,48 @@ def test_inactive_status_in_alert_file_does_not_trigger(tmp_path: Path) -> None:
     assert late_active_alerts([_row()], path) == []
 
 
+def test_in_game_exit_is_a_warning_only(tmp_path: Path) -> None:
+    path = tmp_path / "active.csv"
+    path.write_text("player_name,status\nMalik Nabers,ACTIVE\n", encoding="utf-8")
+    notes = late_active_alerts([_row(injury_status="exit")], path)
+    assert len(notes) == 1
+    assert notes[0].startswith("IN_GAME_EXIT: Malik Nabers")
+    assert "review" in notes[0]
+    # No void / scratch / OPERATOR_ACTION_REQUIRED rewrite.
+    assert "OPERATOR_ACTION_REQUIRED" not in notes[0]
+    assert "void" not in notes[0]
+
+
+def test_in_game_left_is_a_warning_only(tmp_path: Path) -> None:
+    path = tmp_path / "active.csv"
+    path.write_text("player_name,status\nMalik Nabers,ACTIVE\n", encoding="utf-8")
+    notes = late_active_alerts([_row(injury_status="left")], path)
+    assert len(notes) == 1
+    assert notes[0].startswith("IN_GAME_EXIT: Malik Nabers")
+
+
+def test_in_game_exit_tokens_stay_out_of_out_statuses() -> None:
+    from ceminiparlays.io import OUT_STATUSES
+    from ceminiparlays.late_active import IN_GAME_EXIT_STATUSES
+
+    assert IN_GAME_EXIT_STATUSES == {"exit", "left"}
+    assert not (IN_GAME_EXIT_STATUSES & OUT_STATUSES)
+
+
+def test_in_game_exit_leg_still_grades_on_typed_actual(tmp_path: Path) -> None:
+    from ceminiparlays.grade import grade_ledger
+
+    ledger = tmp_path / "ledger.csv"
+    ledger.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,1,more,69.5,88,5,2.0\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(ledger)
+    assert summary.hits == 1
+    assert abs(summary.pnl - 5.0) < 1e-9
+
+
 def test_compose_alert_late_active_prints_and_exits_zero(tmp_path: Path, capsys) -> None:
     lines = tmp_path / "lines.csv"
     source = (ROOT / "examples" / "sunday_lines.csv").read_text(encoding="utf-8")
@@ -71,6 +113,7 @@ def test_compose_alert_late_active_prints_and_exits_zero(tmp_path: Path, capsys)
         [
             "compose",
             "--auto",
+            "--allow-rec-line",
             "--lines",
             str(lines),
             "--alert-late-active",

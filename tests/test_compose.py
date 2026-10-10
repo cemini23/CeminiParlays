@@ -16,7 +16,15 @@ AUTO_MARKETS = ["pass_yds", "rush_yds", "rec_yds"]
 
 def _live():
     lines = read_manual_lines(ROOT / "examples" / "sunday_lines.csv")
-    live, excluded = evaluate_legs(lines, {}, implied_p=0.5, platform="hardrock")
+    live, excluded = evaluate_legs(
+        lines,
+        {},
+        implied_p=0.5,
+        platform="hardrock",
+        # The composed fixtures keep the 50+ receiving lines; the bar has its
+        # own test below.
+        allow_high_receiving=True,
+    )
     assert excluded == []
     assert len(live) == 12
     return live
@@ -31,6 +39,7 @@ def test_auto_defaults_produce_five_diversified_tickets() -> None:
         max_odds=400,
         markets=AUTO_MARKETS,
         environment=read_environment(ROOT / "examples" / "environment.csv"),
+        allow_high_receiving=True,
     )
     assert len(tickets) == 5
     used: set[tuple[str, str]] = set()
@@ -54,6 +63,7 @@ def test_min_max_odds_window_filters_tickets() -> None:
             max_odds=2000,
             markets=AUTO_MARKETS,
             environment=None,
+            allow_high_receiving=True,
         )
         == []
     )
@@ -66,6 +76,7 @@ def test_min_max_odds_window_filters_tickets() -> None:
             max_odds=-200,
             markets=AUTO_MARKETS,
             environment=None,
+            allow_high_receiving=True,
         )
         == []
     )
@@ -80,6 +91,7 @@ def test_markets_filter_limits_the_pool() -> None:
         max_odds=None,
         markets=["rush_yds"],
         environment=None,
+        allow_high_receiving=True,
     )
     assert len(tickets) == 2
     for ticket in tickets:
@@ -102,6 +114,7 @@ def test_environment_itt_prefers_the_higher_total_game(tmp_path: Path) -> None:
         max_odds=None,
         markets=AUTO_MARKETS,
         environment=read_environment(env_path),
+        allow_high_receiving=True,
     )
     assert tickets
     assert any(leg.line.team == "CIN" for leg in tickets[0])
@@ -119,6 +132,7 @@ def test_n_tickets_must_be_positive() -> None:
             max_odds=None,
             markets=None,
             environment=None,
+            allow_high_receiving=True,
         )
 
 
@@ -287,3 +301,120 @@ def test_estimate_multiplier_from_leg_odds_product() -> None:
     assert multiplier is not None and multiplier > 1.0
     assert source == "leg_odds_naive"
     assert unconfirmed is True
+
+
+def test_env_first_td_none_skips_the_leg_but_keeps_other_games(
+    tmp_path: Path,
+) -> None:
+    env_path = tmp_path / "env.csv"
+    env_path.write_text(
+        "game_id,team,opp,implied_total,first_td\n"
+        "DET@NO,DET,NO,24.0,none\n"
+        "DET@NO,NO,DET,21.0,none\n"
+        "ATL@PIT,ATL,PIT,22.0,yes\n"
+        "ATL@PIT,PIT,ATL,23.0,yes\n",
+        encoding="utf-8",
+    )
+    pool = [
+        _eval_leg("A TD", "a_td", "first_td", "DET", "NO"),
+        _eval_leg("B TD", "b_td", "first_td", "ATL", "PIT"),
+    ]
+    tickets = compose_tickets(
+        pool,
+        n_tickets=1,
+        sizes=[1],
+        min_odds=None,
+        max_odds=None,
+        markets=None,
+        environment=read_environment(env_path),
+    )
+    names = {leg.line.player_name for ticket in tickets for leg in ticket}
+    assert names == {"B TD"}
+
+
+def test_missing_first_td_column_does_not_change_current_cards(
+    tmp_path: Path,
+) -> None:
+    env_path = tmp_path / "env.csv"
+    env_path.write_text(
+        "game_id,team,opp,implied_total\nDET@NO,DET,NO,24.0\nDET@NO,NO,DET,21.0\n",
+        encoding="utf-8",
+    )
+    environment = read_environment(env_path)
+    assert environment[("DET", "NO")].first_td == ""
+    pool = [_eval_leg("A TD", "a_td", "first_td", "DET", "NO")]
+    tickets = compose_tickets(
+        pool,
+        n_tickets=1,
+        sizes=[1],
+        min_odds=None,
+        max_odds=None,
+        markets=None,
+        environment=environment,
+    )
+    assert {leg.line.player_name for ticket in tickets for leg in ticket} == {"A TD"}
+
+
+def test_first_td_blank_env_value_stays_eligible(tmp_path: Path) -> None:
+    env_path = tmp_path / "env.csv"
+    env_path.write_text(
+        "game_id,team,opp,implied_total,first_td\nDET@NO,DET,NO,24.0,\n",
+        encoding="utf-8",
+    )
+    pool = [_eval_leg("A TD", "a_td", "first_td", "DET", "NO")]
+    tickets = compose_tickets(
+        pool,
+        n_tickets=1,
+        sizes=[1],
+        min_odds=None,
+        max_odds=None,
+        markets=None,
+        environment=read_environment(env_path),
+    )
+    assert {leg.line.player_name for ticket in tickets for leg in ticket} == {"A TD"}
+
+
+def test_compose_bars_receiving_line_at_50() -> None:
+    pool = [
+        _eval_leg("Rec High", "rec_high", "rec_yds", "CIN", "CLE"),
+        _eval_leg("Rec Low", "rec_low", "rec_yds", "DET", "GB"),
+    ]
+    pool[0].line.line = 50.5
+    pool[1].line.line = 49.5
+    barred = compose_tickets(
+        pool,
+        n_tickets=1,
+        sizes=[1],
+        min_odds=None,
+        max_odds=None,
+        markets=None,
+        environment=None,
+    )
+    assert {leg.line.player_name for t in barred for leg in t} == {"Rec Low"}
+    kept = compose_tickets(
+        pool,
+        n_tickets=1,
+        sizes=[1],
+        min_odds=None,
+        max_odds=None,
+        markets=None,
+        environment=None,
+        allow_high_receiving=True,
+    )
+    assert kept
+    assert len(kept[0]) == 1
+
+
+def test_compose_keeps_rush_60_5_even_without_the_rec_flag() -> None:
+    pool = [_eval_leg("Rush High", "rush_high", "rush_yds", "CIN", "CLE")]
+    pool[0].line.line = 60.5
+    tickets = compose_tickets(
+        pool,
+        n_tickets=1,
+        sizes=[1],
+        min_odds=None,
+        max_odds=None,
+        markets=None,
+        environment=None,
+    )
+    assert {leg.line.player_name for t in tickets for leg in t} == {"Rush High"}

@@ -145,3 +145,30 @@ def test_environment_flags_roof_exposure(tmp_path: Path) -> None:
     assert row.weather_exposed is False
     assert row.wind_mph == 0.0
     assert row.precip_pop == 0.0
+
+
+def test_first_td_column_is_optional_and_normalized(tmp_path: Path) -> None:
+    path = tmp_path / "env.csv"
+    path.write_text(
+        "game_id,team,opp,implied_total,first_td\n"
+        "DET@NO,DET,NO,24.0, NONE \n"
+        "DET@NO,NO,DET,21.0,No\n"
+        "ATL@PIT,ATL,PIT,22.0,False\n"
+        "ATL@PIT,PIT,ATL,23.0,YES\n",
+        encoding="utf-8",
+    )
+    env = read_environment(path)
+    assert env_for(env, "DET", "NO").first_td == "none"
+    assert env_for(env, "NO", "DET").first_td == "no"
+    assert env_for(env, "ATL", "PIT").first_td == "false"
+    assert env_for(env, "PIT", "ATL").first_td == "yes"
+
+
+def test_missing_first_td_column_is_blank(tmp_path: Path) -> None:
+    path = tmp_path / "env.csv"
+    path.write_text(
+        "game_id,team,opp,implied_total\nDET@NO,DET,NO,24.0\n",
+        encoding="utf-8",
+    )
+    row = read_environment(path)[("DET", "NO")]
+    assert row.first_td == ""

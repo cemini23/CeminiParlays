@@ -107,6 +107,7 @@ def test_run_cli_lists_scratches_and_does_not_vanish_players(tmp_path: Path, cap
                 "run",
                 "--lines",
                 str(ROOT / "examples" / "manual_lines.csv"),
+                "--allow-rec-line",
                 "--distributions",
                 str(ROOT / "examples" / "distributions.csv"),
                 "--platform",
@@ -340,6 +341,7 @@ def test_default_run_sportsbook_without_platform(tmp_path: Path, capsys) -> None
             "run",
             "--lines",
             str(ROOT / "examples" / "sportsbook_lines.csv"),
+            "--allow-rec-line",
             "--distributions",
             str(ROOT / "examples" / "distributions.csv"),
             "--slip-size",
@@ -363,6 +365,7 @@ def test_hardrock_run_example(tmp_path: Path, capsys) -> None:
             "run",
             "--lines",
             str(ROOT / "examples" / "hardrock_lines.csv"),
+            "--allow-rec-line",
             "--distributions",
             str(ROOT / "examples" / "distributions.csv"),
             "--platform",
@@ -420,6 +423,7 @@ def test_hardrock_displayed_odds_on_example_ticket(tmp_path: Path, capsys) -> No
             "rank",
             "--lines",
             str(ROOT / "examples" / "hardrock_ticket.csv"),
+            "--allow-rec-line",
             "--distributions",
             str(ROOT / "examples" / "distributions.csv"),
             "--platform",
@@ -444,6 +448,7 @@ def test_hardrock_displayed_odds_on_multi_row_slate_exits_two(
             "rank",
             "--lines",
             str(ROOT / "examples" / "hardrock_lines.csv"),
+            "--allow-rec-line",
             "--distributions",
             str(ROOT / "examples" / "distributions.csv"),
             "--platform",
@@ -795,6 +800,7 @@ def test_compose_auto_writes_five_tickets(tmp_path: Path, capsys) -> None:
             "--auto",
             "--lines",
             str(ROOT / "examples" / "sunday_lines.csv"),
+            "--allow-rec-line",
             "--environment",
             str(ROOT / "examples" / "environment.csv"),
             "--out-dir",
@@ -841,6 +847,7 @@ def test_compose_without_environment_skips_itt(tmp_path: Path) -> None:
             "--auto",
             "--lines",
             str(ROOT / "examples" / "sunday_lines.csv"),
+            "--allow-rec-line",
             "--out-dir",
             str(out_dir),
         ]
@@ -859,6 +866,7 @@ def test_compose_writes_empty_itt_when_no_tickets(tmp_path: Path) -> None:
             "1000",
             "--lines",
             str(ROOT / "examples" / "sunday_lines.csv"),
+            "--allow-rec-line",
             "--environment",
             str(ROOT / "examples" / "environment.csv"),
             "--out-dir",
@@ -920,6 +928,7 @@ def test_compose_from_ceminidfs_missing_file(tmp_path: Path, capsys) -> None:
             "1",
             "--lines",
             str(ROOT / "examples" / "sunday_lines.csv"),
+            "--allow-rec-line",
             "--out-dir",
             str(tmp_path / "compose"),
             "--from-ceminidfs",
@@ -940,6 +949,7 @@ def test_compose_from_ceminidfs_prints_exposure_notes(tmp_path: Path, capsys) ->
             "1",
             "--lines",
             str(ROOT / "examples" / "sunday_lines.csv"),
+            "--allow-rec-line",
             "--from-ceminidfs",
             str(ROOT / "examples" / "ceminidfs_handoff.csv"),
             "--out-dir",
@@ -1110,6 +1120,7 @@ def test_compose_card_md_is_redacted(tmp_path: Path, capsys) -> None:
             "1",
             "--lines",
             str(ROOT / "examples" / "sunday_lines.csv"),
+            "--allow-rec-line",
             "--card-md",
             "--out-dir",
             str(out_dir),
@@ -1138,6 +1149,7 @@ def test_compose_auto_window_can_leave_no_tickets(tmp_path: Path, capsys) -> Non
             "1000",
             "--lines",
             str(ROOT / "examples" / "sunday_lines.csv"),
+            "--allow-rec-line",
             "--out-dir",
             str(out_dir),
         ]
@@ -1169,6 +1181,7 @@ def test_compose_n_tickets_undershoot_exits_two(tmp_path: Path, capsys) -> None:
             "compose",
             "--lines",
             str(lines),
+            "--allow-rec-line",
             "--platform",
             "hardrock",
             "--legs",
@@ -1468,3 +1481,210 @@ def test_betmgm_platform_uses_displayed_american(tmp_path: Path, capsys) -> None
     assert code == 0
     assert "betmgm" in out
     assert "+260" in out
+
+
+def test_rank_games_flag_drops_off_card_leg(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [
+            _line_row(player_name="A One", team="KC", opp="BUF"),
+            _line_row(player_name="Off Card", team="DET", opp="NO"),
+        ],
+    )
+    dists = _write_distributions(tmp_path)
+    games = tmp_path / "games.csv"
+    games.write_text(
+        "slate_id,kick,away,home,away_itt,home_itt,spread_home,total,roof\n"
+        "s,13:00,KC,BUF,,,,,open\n",
+        encoding="utf-8",
+    )
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "underdog",
+            "--games",
+            str(games),
+            "--no-strict",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "dropped Off Card: off-card" in out
+
+
+def test_rank_without_games_flag_does_not_filter(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [
+            _line_row(player_name="A One", team="KC", opp="BUF"),
+            _line_row(player_name="B One", team="BUF", opp="KC"),
+        ],
+    )
+    dists = _write_distributions(tmp_path)
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "underdog",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "off-card" not in out
+
+
+def test_rank_allow_rec_line_keeps_a_50_5(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [
+            _line_row(player_name="Rec High", team="KC", opp="BUF", stat_type="rec_yds", line="50.5"),
+            _line_row(player_name="B One", team="BUF", opp="KC"),
+        ],
+    )
+    dists = _write_distributions(tmp_path)
+    barred = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "underdog",
+            "--out",
+            str(tmp_path / "barred.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert barred == 2
+    assert "rec-line-bar" in out
+    kept = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "underdog",
+            "--allow-rec-line",
+            "--out",
+            str(tmp_path / "kept.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert kept == 0
+    assert "rec-line-bar" not in out
+
+
+def test_compose_copies_typed_ticket_id_onto_the_card(tmp_path: Path, capsys) -> None:
+    import csv
+
+    lines = tmp_path / "lines.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,book_over,book_under,ticket_id\n"
+        "s,hardrock,A One,,CIN,TB,pass_yds,265.5,more,standard,-110,-110,B-7\n"
+        "s,hardrock,B One,,DET,NO,pass_yds,258.5,more,standard,-110,-110,B-7\n",
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--lines",
+            str(lines),
+            "--platform",
+            "hardrock",
+            "--legs",
+            "2",
+            "--n-tickets",
+            "1",
+            "--no-roster",
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    rows = list(csv.DictReader((out_dir / "ticket-001.csv").open(encoding="utf-8")))
+    assert {row["ticket_id"] for row in rows} == {"B-7"}
+    assert "ticket=B-7" in out
+
+
+def test_compose_keeps_compose_id_when_typed_id_is_blank(tmp_path: Path) -> None:
+    import csv
+
+    lines = tmp_path / "lines.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,book_over,book_under,ticket_id\n"
+        "s,hardrock,A One,,CIN,TB,pass_yds,265.5,more,standard,-110,-110,\n"
+        "s,hardrock,B One,,DET,NO,pass_yds,258.5,more,standard,-110,-110,\n",
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--lines",
+            str(lines),
+            "--platform",
+            "hardrock",
+            "--legs",
+            "2",
+            "--n-tickets",
+            "1",
+            "--no-roster",
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    assert code == 0
+    rows = list(csv.DictReader((out_dir / "ticket-001.csv").open(encoding="utf-8")))
+    assert {row["ticket_id"] for row in rows} == {"compose-001"}
+
+
+def test_compose_ticket_id_flag_is_exact_not_prefix(tmp_path: Path, capsys) -> None:
+    lines = tmp_path / "lines.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,book_over,book_under,ticket_id\n"
+        "s,hardrock,A One,,CIN,TB,pass_yds,265.5,more,standard,-110,-110,B-50\n"
+        "s,hardrock,B One,,DET,NO,pass_yds,258.5,more,standard,-110,-110,B-50\n"
+        "s,hardrock,C One,,BUF,HOU,pass_yds,252.5,more,standard,-110,-110,B-5\n",
+        encoding="utf-8",
+    )
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(_write_distributions(tmp_path)),
+            "--platform",
+            "hardrock",
+            "--no-roster",
+            "--ticket-id",
+            "B-5",
+            "--out",
+            str(tmp_path / "e.csv"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "lines=1" in out
+    assert "B-50" not in out

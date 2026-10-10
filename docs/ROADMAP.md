@@ -97,6 +97,16 @@ This repo **reads** a copied `ceminidfs_handoff.csv`. CeminiDFS owns the writer.
 - **`closings.py`** — `read_closing_lines` loads a local CSV keyed by season, week, and game (`AWAY@HOME`). `closing_correlation` computes the Pearson correlation of closing spread vs closing total and returns a 2×2 matrix via `nearest_correlation` for the copula. The operator appends typed closings; compose still uses operator-typed live lines. No download, no nflverse clone. This rho is between two closing columns — it does not estimate outcome co-movement and must not feed prop priors.
 - Hard Rock / FanDuel remain manual entry. No book login, no submit, no scraper.
 
+## Week 4 capture guards (ledger, not a scoring change)
+
+- **B1** `grade` refuses a row when the visible N-Bet does not match the captured legs, or when a book ticket id is not 18 or 19 digits. The row is `PARTIAL`. Exit 2. Do not invent a leg, a stake, or digits.
+- **B2** `--games` and `--card` tag an out-of-window game, or a ticket that is not on the compose card, as `off_card`. On-card PnL and off-card PnL are separate.
+- **B3** Ledger phrases `To Score 2+ TDs` and `Passing TDs` / `pass_td` map to `two_plus_td` and `pass_tds`.
+- **B4** `injury_status` `exit`, `left`, or `concussion` is an alert. The leg stays live. No auto-cashout. No invented void.
+- **B5** Compose already skips `first_td` when the environment says `none`. `replay_reversal` is a separate recap note.
+- **B6** `cash_pnl`, `bonus_in`, and `bonus_out` stay separate on the card and off the card.
+- **B7** `book_actual` and `official_actual` stay. The typed `actuals` column still grades the leg.
+
 ## Operator process + GEO (docs, not a math bump)
 
 Docs only. No math change.

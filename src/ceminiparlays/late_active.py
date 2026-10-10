@@ -74,7 +74,7 @@ def late_active_alerts(lines: list[LineRow], path: Path) -> list[str]:
                 exit_seen.add(marker)
                 alerts.append(
                     f"IN_GAME_EXIT: {row.player_name} status {status} — review, "
-                    "leg stays as typed"
+                    "leg stays live. No cashout."
                 )
             continue
         if status not in WATCH_STATUSES:

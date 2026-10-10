@@ -258,6 +258,8 @@ See `RESEARCH.md` for the wiki, CeminiDFS lessons, Gemini math, and social scan 
 
 `grade` accepts optional ledger columns `ticket_id`, `market`, `stake_kind` (`cash` / `bonus`), `paid` (Won-tab cash; that row is `paid - stake`), and `boost` (a note; payout uses the displayed multiplier only). Discrete ATD `yes`/`yes` and ML `win`/`win` are hits, never voids. Numeric `actual == line` still voids on yardage/totals/spreads. Ledger `multiplier` `+288` is American, not 288×. Unknown extra columns are ignored. Sportsbook void + miss still settles at `0×`. HIT with an empty multiplier still fails closed.
 
+Week 4 capture guards: a visible N-Bet that does not match the captured legs, or a book ticket id that is not 18–19 digits, is `PARTIAL` and `grade` exits 2. Do not invent a leg, a stake, or the missing digits. `--games` and `--card` tag an out-of-window or off-card ticket `off_card` and report that PnL apart from the on-card PnL. `cash_pnl`, `bonus_in`, and `bonus_out` stay separate. An in-game exit stays live: no auto-cashout and no invented void. `book_actual` and `official_actual` stay on the ledger. `two_plus_td` and `pass_td` are legal ledger markets.
+
 ## Support
 
 Thank you for your support — stars, issues, shares, and tips all help keep this CLI and the broader Cemini open-research stack alive.

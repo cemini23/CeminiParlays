@@ -243,6 +243,19 @@ never voids. Numeric `actual == line` still voids on yardage/totals/spreads.
 `multiplier` `+288` is American (`american_to_decimal`), not 288×. Sportsbook
 void + miss = `0×`. HIT with an empty multiplier still fails closed.
 
+`two_plus_td` and `pass_td` (alias of `pass_tds`) are legal ledger markets.
+`To Score 2+ TDs` maps to `two_plus_td`. `Passing TDs` maps to `pass_tds`.
+
+Capture guards (exit 2 when any row is partial):
+
+- The visible N-Bet must equal the captured legs. If it does not, the row is `PARTIAL`. Do not invent the missing legs.
+- A book ticket id must be 18 or 19 digits. A shorter digit string is clipped. The status is `PARTIAL-` plus the visible digits. Do not pad the id.
+- Pass `--games` for the slate window and `--card` for the compose card. A game outside that window, or a ticket id that is not on the card, is `off_card`. Its PnL is `off_card_pnl`, apart from `on_card_pnl`.
+- `cash_pnl`, `bonus_in`, and `bonus_out` stay separate. A No Sweat return is bonus. It is not a cash win.
+- `injury_status` of `exit`, `left`, or `concussion` prints `IN_GAME_EXIT`. The leg stays live. Grade the typed actual. No auto-cashout. No invented void.
+- `replay_reversal=yes` is a separate recap note. It does not change the grade.
+- Keep `book_actual` and `official_actual`. The typed `actuals` column still grades the leg.
+
 ## Full auto example (one command)
 
 ```bash

@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from ceminiparlays.io import read_games
 from ceminiparlays.markets import is_two_plus_td
 from ceminiparlays.odds import american_to_decimal
 from ceminiparlays.payouts import SPORTSBOOK_PLATFORMS, normalize_platform, resolve_payout
@@ -19,7 +20,32 @@ WIN_TOKENS = {"win", "won", "w"}
 LOSS_TOKENS = {"loss", "lose", "lost", "l"}
 #: Optional ledger columns. Unknown extra columns are ignored, never fatal.
 #: ``boost`` is a note. Payout uses ``multiplier`` only, never ``(1 + boost)``.
-OPTIONAL_LEDGER_COLUMNS = ("ticket_id", "market", "stake_kind", "paid", "boost", "slate_id", "book_actual", "official_actual")
+OPTIONAL_LEDGER_COLUMNS = (
+    "ticket_id",
+    "ticket_id_clipped",
+    "n_bet",
+    "visible_n_bet",
+    "market",
+    "stake_kind",
+    "paid",
+    "boost",
+    "slate_id",
+    "book_actual",
+    "official_actual",
+    "game",
+    "game_id",
+    "games",
+    "team",
+    "opp",
+    "opponent",
+    "player_name",
+    "injury_status",
+    "replay_reversal",
+    "off_card",
+)
+#: A Hard Rock ticket id from the bet slip is 18 or 19 digits. A shorter digit
+#: string is a clipped OCR read. Do not pad it.
+TICKET_ID_DIGITS = range(18, 20)
 
 
 @dataclass
@@ -42,6 +68,20 @@ class GradeSummary:
     hard_rock_rule_note: str = ""
     book_actuals: list[str] = field(default_factory=list)
     official_actuals: list[str] = field(default_factory=list)
+    partial_tickets: list[dict[str, object]] = field(default_factory=list)
+    on_card_pnl: float = 0.0
+    off_card_pnl: float = 0.0
+    on_card_cash_pnl: float = 0.0
+    off_card_cash_pnl: float = 0.0
+    on_card_bonus_in: float = 0.0
+    off_card_bonus_in: float = 0.0
+    on_card_bonus_out: float = 0.0
+    off_card_bonus_out: float = 0.0
+    off_card_tickets: list[str] = field(default_factory=list)
+    injury_alerts: list[str] = field(default_factory=list)
+    stay_live_rule: str = ""
+    replay_reversals: list[str] = field(default_factory=list)
+    stat_deltas: list[str] = field(default_factory=list)
 
 
 def _canonical_discrete(token: str) -> str | None:
@@ -108,6 +148,32 @@ def _discrete_expected(side: str) -> str | None:
 #: real cash and is never refunded, so the cash loss stands. Any book-returned
 #: amount is a bonus, never cash.
 NO_SWEAT_KINDS = {"no_sweat", "nosweat", "no-sweat"}
+#: Paper ticket phrases that map onto ledger markets. This is a name map.
+#: ``two_plus_td`` still uses the count rule. ``pass_td`` is ``pass_tds``.
+_LEDGER_MARKETS = {
+    "two_plus_td": "two_plus_td",
+    "two+td": "two_plus_td",
+    "2+td": "two_plus_td",
+    "2+ td": "two_plus_td",
+    "2+ tds": "two_plus_td",
+    "to score 2+ td": "two_plus_td",
+    "to score 2+ tds": "two_plus_td",
+    "pass_td": "pass_tds",
+    "pass_tds": "pass_tds",
+    "passing td": "pass_tds",
+    "passing tds": "pass_tds",
+}
+
+
+def canonical_ledger_market(token: str) -> str:
+    """Map a ledger market phrase onto the CLI token. Unknown text stays as typed."""
+
+    text = " ".join((token or "").strip().lower().split())
+    return _LEDGER_MARKETS.get(text, text)
+
+
+def _canonical_market_cell(cell: str) -> str:
+    return "|".join(canonical_ledger_market(part) for part in (cell or "").split("|"))
 
 
 def _grade_two_plus_td(side: str, actual: str | float, line: str | float) -> str:
@@ -177,7 +243,7 @@ def _leg_outcomes(raw: dict[str, str]) -> tuple[int, int, int]:
         actual = _parse_leg_token(actual_raw)
         line = _parse_leg_token(line_raw)
         stat_type = market_parts[index] if index < len(market_parts) else ""
-        result = _grade_leg(side, actual, line, stat_type)
+        result = _grade_leg(side, actual, line, canonical_ledger_market(stat_type))
         if result == "hit":
             hits += 1
         elif result == "void":
@@ -188,34 +254,172 @@ def _leg_outcomes(raw: dict[str, str]) -> tuple[int, int, int]:
 
 
 def _parse_n_bet_count(raw_n_legs: str, raw_legs: str) -> int | None:
-    """Parse the on-screen N-Bet count from n_legs or legs column.
-    
-    Returns the N-Bet count if clearly determinable, otherwise None.
-    - n_legs column: if valid integer, use it
-    - legs column: if pipe-separated list, count parts
-    - Otherwise: return None (don't enforce gate)
+    """Parse an integer N-Bet count. A non-integer is not a count."""
+
+    text = (raw_n_legs or "").strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def _visible_n_bet(raw: dict[str, str]) -> int | None:
+    """On-screen N-Bet. Prefer ``n_bet``, then ``n_legs``, then a pipe list.
+
+    A single label in ``legs`` is not an N-Bet. Do not invent a count.
     """
-    # First try n_legs column
-    raw_n_legs = (raw_n_legs or "").strip()
-    if raw_n_legs:
-        try:
-            return int(raw_n_legs)
-        except ValueError:
-            pass
-    
-    # Then try legs column if it's pipe-separated
-    raw_legs = (raw_legs or "").strip()
-    if raw_legs and "|" in raw_legs:
-        return len([p for p in raw_legs.split("|") if p.strip()])
-    
-    # Can't determine N-Bet count clearly
+
+    for key in ("n_bet", "visible_n_bet", "n_legs"):
+        count = _parse_n_bet_count(raw.get(key) or "", "")
+        if count is not None:
+            return count
+    legs = (raw.get("legs") or "").strip()
+    if "|" in legs:
+        return len([part for part in legs.split("|") if part.strip()])
     return None
 
 
 def _count_captured_legs(raw: dict[str, str]) -> int:
-    """Count the number of captured legs from sides/lines/actuals."""
-    sides = [p for p in raw.get("sides", "").split("|") if p.strip()]
-    return len(sides)
+    """Count captured legs from ``sides``. Do not invent a missing leg."""
+
+    return len([part for part in raw.get("sides", "").split("|") if part.strip()])
+
+
+def _flag_true(raw: str) -> bool:
+    return (raw or "").strip().lower() in {"1", "true", "yes", "y", "clipped"}
+
+
+def _classify_ticket_id(raw_id: str, clipped_raw: str) -> tuple[bool, bool, str]:
+    """Return ``(refuse, clipped, label)`` for one OCR or operator id.
+
+    A digit string of 18 or 19 characters is a full book id. Any other digit
+    string is clipped. The label is ``PARTIAL-`` plus the visible digits.
+    Do not pad and do not drop digits. A non-digit label is an operator id,
+    not an OCR book id, unless the clipped flag is set.
+    """
+
+    ticket_id = (raw_id or "").strip()
+    flagged = _flag_true(clipped_raw)
+    if ticket_id.startswith("PARTIAL-"):
+        return True, True, ticket_id
+    if ticket_id.isdigit():
+        # 18–19 digits is a full book id. 6 or more other digits is a clipped
+        # OCR read (T5 → 7145520). A 1–5 digit value is an operator index
+        # (Week 1 ticket ``3``), not an OCR id. Do not pad either one.
+        full = len(ticket_id) in TICKET_ID_DIGITS
+        if full and not flagged:
+            return False, False, ticket_id
+        if flagged or len(ticket_id) >= 6:
+            return True, True, f"PARTIAL-{ticket_id}"
+        return False, False, ticket_id
+    if not ticket_id:
+        if flagged:
+            return True, True, "PARTIAL"
+        return False, False, ""
+    if flagged:
+        return True, True, f"PARTIAL-{ticket_id}"
+    return False, False, ticket_id
+
+
+def _team_pair(away: str, home: str) -> tuple[str, str] | None:
+    left = (away or "").strip().upper()
+    right = (home or "").strip().upper()
+    if not left or not right:
+        return None
+    return tuple(sorted({left, right}))
+
+
+def _pairs_in_text(text: str) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for part in (text or "").split("|"):
+        piece = part.strip().upper().replace(" ", "")
+        if "@" not in piece:
+            continue
+        away, home = piece.split("@", 1)
+        pair = _team_pair(away, home)
+        if pair and pair not in pairs:
+            pairs.append(pair)
+    return pairs
+
+
+def _row_game_pairs(raw: dict[str, str]) -> list[tuple[str, str]]:
+    """Games named on the row. Do not invent a game that was not typed."""
+
+    pairs: list[tuple[str, str]] = []
+    for key in ("game", "game_id", "games"):
+        for pair in _pairs_in_text(raw.get(key) or ""):
+            if pair not in pairs:
+                pairs.append(pair)
+    if pairs:
+        return pairs
+    teams = [part.strip().upper() for part in (raw.get("team") or "").split("|") if part.strip()]
+    opp_text = raw.get("opp") or raw.get("opponent") or ""
+    opps = [part.strip().upper() for part in opp_text.split("|") if part.strip()]
+    for team, opp in zip(teams, opps, strict=False):
+        pair = _team_pair(team, opp)
+        if pair and pair not in pairs:
+            pairs.append(pair)
+    return pairs
+
+
+def _window_index(path: Path) -> dict[str, set[tuple[str, str]]]:
+    """Slate id → team pairs. The empty key holds every pair in the file."""
+
+    index: dict[str, set[tuple[str, str]]] = {"": set()}
+    for game in read_games(path):
+        pair = _team_pair(game.away, game.home)
+        if pair is None:
+            continue
+        index.setdefault(game.slate_id, set()).add(pair)
+        index[""].add(pair)
+    return index
+
+
+def _outside_window(raw: dict[str, str], index: dict[str, set[tuple[str, str]]]) -> bool:
+    """True when a typed game is outside the slate file, or no game was typed."""
+
+    slate = (raw.get("slate_id") or "").strip()
+    if slate and slate not in index:
+        return True
+    window = index[slate] if slate else index.get("", set())
+    pairs = _row_game_pairs(raw)
+    if not pairs:
+        return True
+    return any(pair not in window for pair in pairs)
+
+
+def _card_ticket_ids(path: Path) -> set[str]:
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if "ticket_id" not in set(reader.fieldnames or []):
+            raise ValueError(f"{path} missing column: ticket_id")
+        return {
+            (raw.get("ticket_id") or "").strip()
+            for raw in reader
+            if (raw.get("ticket_id") or "").strip()
+        }
+
+
+def _row_off_card(
+    raw: dict[str, str],
+    window: dict[str, set[tuple[str, str]]] | None,
+    card_ids: set[str] | None,
+) -> bool:
+    """Tag a booked ticket that is outside the slate window or off the card.
+
+    Either condition is enough. A missing window file does not invent a tag.
+    A missing card file does not invent a tag.
+    """
+
+    if _flag_true(raw.get("off_card") or ""):
+        return True
+    outside = window is not None and _outside_window(raw, window)
+    untraced = False
+    if card_ids is not None:
+        untraced = (raw.get("ticket_id") or "").strip() not in card_ids
+    return outside or untraced
 
 
 def _check_yards_review(line: float, actual: float, player: str, stat_type: str) -> str | None:
@@ -234,6 +438,72 @@ def _check_first_td_review(player: str, stat_type: str) -> str | None:
     return None
 
 
+#: Booked-leg statuses that mean the player left during the game.
+#: Not scratch tokens. Grade still uses the typed actual.
+IN_GAME_LEDGER_STATUSES = {"exit", "left", "concussion"}
+STAY_LIVE_RULE = (
+    "Stay-live: a player who leaves during the game does not void the leg "
+    "and does not cash out. Grade the typed actual. No auto-cashout. "
+    "No invented void."
+)
+
+
+def _injury_alerts(raw: dict[str, str]) -> list[str]:
+    """Alert for a booked player who left in-game. Do not void or cash out."""
+
+    statuses = [part.strip().lower() for part in (raw.get("injury_status") or "").split("|")]
+    players = [part.strip() for part in (raw.get("player_name") or "").split("|") if part.strip()]
+    if not players and raw.get("legs"):
+        players = [part.strip() for part in raw.get("legs", "").split("|") if part.strip()]
+    alerts: list[str] = []
+    for index, status in enumerate(statuses):
+        if status not in IN_GAME_LEDGER_STATUSES:
+            continue
+        player = players[index] if index < len(players) else f"leg {index + 1}"
+        alerts.append(
+            f"IN_GAME_EXIT: {player} status {status} — leg stays live. No cashout."
+        )
+    return alerts
+
+
+_REPLAY_TRUE = {"1", "true", "yes", "y", "reversal"}
+
+
+def _replay_notes(raw: dict[str, str]) -> list[str]:
+    """Near-miss notes for a replay reversal. They do not change the grade."""
+
+    flags = [part.strip().lower() for part in (raw.get("replay_reversal") or "").split("|")]
+    flags = [part for part in flags if part]
+    if not flags:
+        return []
+    players = [part.strip() for part in (raw.get("player_name") or "").split("|") if part.strip()]
+    if not players and raw.get("legs"):
+        players = [part.strip() for part in raw.get("legs", "").split("|") if part.strip()]
+    stats = [canonical_ledger_market(part) for part in (raw.get("market") or "").split("|") if part.strip()]
+    notes: list[str] = []
+    if len(flags) == 1:
+        if flags[0] not in _REPLAY_TRUE:
+            return []
+        who = " | ".join(players) if players else "ticket"
+        stat = stats[0] if len(stats) == 1 else ""
+        label = f"{who} {stat}".strip()
+        return [
+            f"REPLAY_REVERSAL: {label} — near-miss noted separately. "
+            "Grade uses the typed actual."
+        ]
+    for index, flag in enumerate(flags):
+        if flag not in _REPLAY_TRUE:
+            continue
+        player = players[index] if index < len(players) else f"leg {index + 1}"
+        stat = stats[index] if index < len(stats) else ""
+        label = f"{player} {stat}".strip()
+        notes.append(
+            f"REPLAY_REVERSAL: {label} — near-miss noted separately. "
+            "Grade uses the typed actual."
+        )
+    return notes
+
+
 def _hard_rock_injury_rule_note() -> str:
     """Return the Hard Rock rule for a player hurt after a snap, or NO_EVIDENCE."""
     return (
@@ -248,6 +518,8 @@ def grade_ledger(
     path: Path,
     profile_dir: Path | None = None,
     default_platform: str | None = None,
+    games_path: Path | None = None,
+    card_path: Path | None = None,
 ) -> GradeSummary:
     slips = 0
     hits = 0
@@ -264,26 +536,67 @@ def grade_ledger(
     review_flags: list[str] = []
     book_actuals: list[str] = []
     official_actuals: list[str] = []
+    partial_tickets: list[dict[str, object]] = []
+    on_card_pnl = 0.0
+    off_card_pnl = 0.0
+    on_card_cash_pnl = 0.0
+    off_card_cash_pnl = 0.0
+    on_card_bonus_in = 0.0
+    off_card_bonus_in = 0.0
+    on_card_bonus_out = 0.0
+    off_card_bonus_out = 0.0
+    off_card_tickets: list[str] = []
+    injury_alerts: list[str] = []
+    replay_reversals: list[str] = []
+    stat_deltas: list[str] = []
+    window = _window_index(games_path) if games_path is not None else None
+    card_ids = _card_ticket_ids(card_path) if card_path is not None else None
     with path.open(newline="", encoding="utf-8") as handle:
         for row_index, raw in enumerate(csv.DictReader(handle), start=2):
-            stake = float(raw.get("stake", 1.0) or 1.0)
             stake_kind = (raw.get("stake_kind") or "").strip().lower()
-            ticket_id = (raw.get("ticket_id") or "").strip()
+            raw_ticket_id = (raw.get("ticket_id") or "").strip()
             market = (raw.get("market") or "").strip()
             slate_id = (raw.get("slate_id") or "").strip()
-            raw_n_legs = raw.get("n_legs") or ""
-            raw_legs = raw.get("legs") or ""
-            n_bet_count = _parse_n_bet_count(raw_n_legs, raw_legs)
+            n_bet_count = _visible_n_bet(raw)
             captured_legs = _count_captured_legs(raw)
-            
-            # N-Bet count gate: stop/skip when captured legs != on-screen N-Bet count
-            if n_bet_count is not None and n_bet_count > 0 and captured_legs != n_bet_count:
-                review_flags.append(
-                    f"GATE: ticket {ticket_id or f'row {row_index}'} skipped — "
-                    f"captured legs ({captured_legs}) != N-Bet count ({n_bet_count})"
+            id_refuse, clipped, id_label = _classify_ticket_id(
+                raw_ticket_id,
+                raw.get("ticket_id_clipped") or "",
+            )
+            off_card = _row_off_card(raw, window, card_ids)
+            reasons: list[str] = []
+            if n_bet_count is not None and captured_legs != n_bet_count:
+                reasons.append("n_bet")
+            if id_refuse:
+                reasons.append("ticket_id")
+            if reasons:
+                # Refuse finalize. Keep the typed stake text. Do not fill a
+                # blank stake, a missing leg, or the cut-off digits.
+                status = id_label if id_label.startswith("PARTIAL") else "PARTIAL"
+                if not status:
+                    status = "PARTIAL"
+                note = f"{status}: capture incomplete"
+                if "n_bet" in reasons:
+                    note += f" — captured legs {captured_legs} != N-Bet {n_bet_count}"
+                if clipped:
+                    note += " — ticket_id clipped"
+                review_flags.append(note)
+                partial_tickets.append(
+                    {
+                        "status": status,
+                        "ticket_id": id_label,
+                        "clipped": clipped,
+                        "visible_n_bet": n_bet_count,
+                        "captured_legs": captured_legs,
+                        "stake": (raw.get("stake") or "").strip(),
+                        "reasons": reasons,
+                        "off_card": off_card,
+                    }
                 )
                 continue
-            
+
+            stake = float(raw.get("stake", 1.0) or 1.0)
+            ticket_id = id_label
             stake_total += stake
             if stake_kind:
                 if stake_kind not in stake_kinds:
@@ -293,8 +606,10 @@ def grade_ledger(
             
             if ticket_id and ticket_id not in ticket_ids:
                 ticket_ids.append(ticket_id)
-            if market and market not in markets:
-                markets.append(market)
+            if market:
+                canonical_market = _canonical_market_cell(market)
+                if canonical_market and canonical_market not in markets:
+                    markets.append(canonical_market)
             if slate_id and slate_id not in slate_ids:
                 slate_ids.append(slate_id)
             
@@ -312,6 +627,11 @@ def grade_ledger(
                 book_actuals.append(book_actual_raw)
             if official_actual_raw:
                 official_actuals.append(official_actual_raw)
+            if book_actual_raw and official_actual_raw and book_actual_raw != official_actual_raw:
+                stat_deltas.append(
+                    f"STAT_DELTA: book_actual={book_actual_raw} "
+                    f"official_actual={official_actual_raw}"
+                )
             
             hit_count, miss_count, void_count = _leg_outcomes(raw)
             effective_n_legs = n_bet_count if n_bet_count is not None else captured_legs
@@ -333,7 +653,8 @@ def grade_ledger(
                 actual = _parse_leg_token(actual_raw)
                 line = _parse_leg_token(line_raw)
                 player = players_per_leg[i] if i < len(players_per_leg) else f"leg {i+1}"
-                stat_type = markets_per_leg[i] if i < len(markets_per_leg) else market
+                raw_stat = markets_per_leg[i] if i < len(markets_per_leg) else market
+                stat_type = canonical_ledger_market(raw_stat)
                 
                 # ±2 yards review
                 yards_review = _check_yards_review(line, actual, player, stat_type)
@@ -344,61 +665,87 @@ def grade_ledger(
                 first_td_review = _check_first_td_review(player, stat_type)
                 if first_td_review:
                     review_flags.append(first_td_review)
-            
+
+            for alert in _injury_alerts(raw):
+                if alert not in injury_alerts:
+                    injury_alerts.append(alert)
+            for note in _replay_notes(raw):
+                if note not in replay_reversals:
+                    replay_reversals.append(note)
+
             slips += 1
-            
+            row_pnl = 0.0
+            row_cash = 0.0
+            row_bonus_in = 0.0
+            row_bonus_out = 0.0
             if paid_value is not None:
                 net = paid_value - stake
                 if stake_kind == "bonus":
-                    pnl += net
-                    bonus_in += stake
-                    bonus_out += paid_value
+                    row_pnl += net
+                    row_bonus_in += stake
+                    row_bonus_out += paid_value
                 elif stake_kind in NO_SWEAT_KINDS and miss_count > 0:
                     # A lost No Sweat ticket keeps the cash loss. The book
                     # return is a bonus. A winning No Sweat ticket stays cash.
-                    pnl -= stake
-                    cash_pnl -= stake
-                    bonus_out += paid_value
+                    row_pnl -= stake
+                    row_cash -= stake
+                    row_bonus_out += paid_value
                 else:
-                    pnl += net
-                    cash_pnl += net
-                continue
-            
-            sportsbook = platform in SPORTSBOOK_PLATFORMS
-            row_label = raw.get("legs") or raw.get("slip_id") or f"row {row_index}"
-            if void_count:
-                payout = _void_payout(
-                    platform,
-                    mode,
-                    effective_n_legs,
-                    void_count,
-                    hit_count,
-                    miss_count,
-                    displayed,
-                    profile_dir,
-                    row_label=str(row_label),
-                )
-            elif sportsbook and miss_count > 0:
-                payout = 0.0
+                    row_pnl += net
+                    row_cash += net
             else:
-                table = resolve_payout(
-                    platform,
-                    mode,
-                    effective_n_legs,
-                    displayed_multiplier=displayed,
-                    profile_dir=profile_dir,
-                )
-                payout = table.multiplier_for_hits(hit_count)
-            net = stake * (payout - 1.0)
-            pnl += net
-            if stake_kind == "bonus":
-                bonus_in += stake
-                bonus_out += stake * payout
-            elif stake_kind in NO_SWEAT_KINDS and miss_count > 0:
-                # A lost ticket keeps the cash loss. A hit uses the cash net.
-                cash_pnl -= stake
+                sportsbook = platform in SPORTSBOOK_PLATFORMS
+                row_label = raw.get("legs") or raw.get("slip_id") or f"row {row_index}"
+                if void_count:
+                    payout = _void_payout(
+                        platform,
+                        mode,
+                        effective_n_legs,
+                        void_count,
+                        hit_count,
+                        miss_count,
+                        displayed,
+                        profile_dir,
+                        row_label=str(row_label),
+                    )
+                elif sportsbook and miss_count > 0:
+                    payout = 0.0
+                else:
+                    table = resolve_payout(
+                        platform,
+                        mode,
+                        effective_n_legs,
+                        displayed_multiplier=displayed,
+                        profile_dir=profile_dir,
+                    )
+                    payout = table.multiplier_for_hits(hit_count)
+                net = stake * (payout - 1.0)
+                row_pnl += net
+                if stake_kind == "bonus":
+                    row_bonus_in += stake
+                    row_bonus_out += stake * payout
+                elif stake_kind in NO_SWEAT_KINDS and miss_count > 0:
+                    # A lost ticket keeps the cash loss. A hit uses the cash net.
+                    row_cash -= stake
+                else:
+                    row_cash += net
+            pnl += row_pnl
+            cash_pnl += row_cash
+            bonus_in += row_bonus_in
+            bonus_out += row_bonus_out
+            if off_card:
+                off_card_pnl += row_pnl
+                off_card_cash_pnl += row_cash
+                off_card_bonus_in += row_bonus_in
+                off_card_bonus_out += row_bonus_out
+                label = ticket_id or f"row {row_index}"
+                if label not in off_card_tickets:
+                    off_card_tickets.append(label)
             else:
-                cash_pnl += net
+                on_card_pnl += row_pnl
+                on_card_cash_pnl += row_cash
+                on_card_bonus_in += row_bonus_in
+                on_card_bonus_out += row_bonus_out
     
     hit_rate = hits / slips if slips else 0.0
     roi = pnl / stake_total if stake_total else 0.0
@@ -422,6 +769,20 @@ def grade_ledger(
         hard_rock_rule_note=hard_rock_note,
         book_actuals=book_actuals,
         official_actuals=official_actuals,
+        partial_tickets=partial_tickets,
+        on_card_pnl=on_card_pnl,
+        off_card_pnl=off_card_pnl,
+        on_card_cash_pnl=on_card_cash_pnl,
+        off_card_cash_pnl=off_card_cash_pnl,
+        on_card_bonus_in=on_card_bonus_in,
+        off_card_bonus_in=off_card_bonus_in,
+        on_card_bonus_out=on_card_bonus_out,
+        off_card_bonus_out=off_card_bonus_out,
+        off_card_tickets=off_card_tickets,
+        injury_alerts=injury_alerts,
+        stay_live_rule=STAY_LIVE_RULE,
+        replay_reversals=replay_reversals,
+        stat_deltas=stat_deltas,
     )
 
 

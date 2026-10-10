@@ -243,6 +243,18 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(grade)
     grade.add_argument("--ledger", type=Path, required=True)
     grade.add_argument("--out", type=Path, default=Path("runs/grade.json"))
+    grade.add_argument(
+        "--games",
+        type=Path,
+        default=None,
+        help="Slate window. A ticket whose game is outside this file is off_card.",
+    )
+    grade.add_argument(
+        "--card",
+        type=Path,
+        default=None,
+        help="Compose card CSV. A ticket_id that is not on this card is off_card.",
+    )
 
     devig = sub.add_parser("devig", help="De-vig a two-way American market")
     devig.add_argument("--over", type=int, required=True)
@@ -778,9 +790,19 @@ def _cmd_grade(args: argparse.Namespace) -> int:
         args.ledger,
         profile_dir=args.profile_dir,
         default_platform=normalize_platform(args.platform),
+        games_path=getattr(args, "games", None),
+        card_path=getattr(args, "card", None),
     )
     write_grade(summary, args.out)
     print(json.dumps(summary.__dict__, indent=2))
+    if summary.partial_tickets:
+        for item in summary.partial_tickets:
+            print(
+                f"PARTIAL {item['status']}: captured legs {item['captured_legs']}"
+                f" N-Bet {item['visible_n_bet']} clipped={item['clipped']}"
+            )
+        print(STANDARD_DISCLAIMER)
+        return 2
     print(STANDARD_DISCLAIMER)
     return 0
 

@@ -4,12 +4,14 @@ import argparse
 import json
 import sys
 from datetime import datetime, timezone
+from math import isnan
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from ceminiparlays import STANDARD_DISCLAIMER, __version__
 from ceminiparlays.bankroll import flat_stake, kelly_cap_stake
 from ceminiparlays.catalog import thin_catalog_games
+from ceminiparlays.closings import write_prop_closes
 from ceminiparlays.ceminidfs import exposure_notes, load_ceminidfs_handoff, merge_implied_totals
 from ceminiparlays.compose import (
     TICKET_FIELDS,
@@ -39,6 +41,7 @@ from ceminiparlays.fair import p_over_line, side_probability
 from ceminiparlays.fetch import load_fixture, rows_from_events, write_fetch_csv
 from ceminiparlays.grade import grade_ledger, write_grade
 from ceminiparlays.io import read_distributions, read_games, read_manual_lines, write_csv
+from ceminiparlays.kelly import stake_dollars
 from ceminiparlays.markets import AUTO_MARKETS, parse_markets
 from ceminiparlays.odds_api import (
     DEFAULT_REGIONS,
@@ -66,7 +69,10 @@ from ceminiparlays.payouts import (
 from ceminiparlays.report import PREDICTION_BANNER, fair_card, slip_card
 from ceminiparlays.roster import load_roster, lookup_player
 from ceminiparlays.slips import (
+    DEFAULT_MIN_EDGE,
     EDGE_FIELDS,
+    edge_failures,
+    edge_status,
     evaluate_legs,
     rank_slip_sizes,
     rank_slips,
@@ -253,7 +259,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--card",
         type=Path,
         default=None,
-        help="Compose card CSV. A ticket_id that is not on this card is off_card.",
+        help=(
+            "Compose card CSV or card.json. A ticket_id that is not on this card "
+            "is off_card. A null card puts every booked ticket off-card."
+        ),
+    )
+    grade.add_argument(
+        "--closings",
+        type=Path,
+        default=None,
+        help=(
+            "Per-prop closing snapshot CSV. Fills a blank close_* ledger cell by "
+            "(platform, player_key, stat_type, side) and computes CLV."
+        ),
     )
 
     devig = sub.add_parser("devig", help="De-vig a two-way American market")
@@ -388,6 +406,15 @@ def build_parser() -> argparse.ArgumentParser:
     compose.add_argument("--ticket-id", default=None)
     compose.add_argument("--mode", default="standard", choices=["standard", "power"])
     compose.add_argument("--devig-method", default="power", choices=["power", "multiplicative", "additive"])
+    compose.add_argument(
+        "--min-edge",
+        type=float,
+        default=DEFAULT_MIN_EDGE,
+        help=(
+            "Modeled-edge floor per leg (model P - market implied P). A leg below "
+            "the floor is marked on the card and compose exits 2. Default 0.01."
+        ),
+    )
     compose.add_argument("--bankroll", type=float, default=None)
     compose.add_argument("--out-dir", type=Path, default=None)
     compose.add_argument(
@@ -431,6 +458,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     bankroll.add_argument("--bankroll", type=float, required=True)
     bankroll.add_argument("--n-tickets", type=int, default=5)
+
+    closings = sub.add_parser(
+        "closings",
+        help="Snapshot per-prop closing lines into a CSV (for CLV)",
+    )
+    _add_common(closings)
+    closings.add_argument(
+        "--lines",
+        type=Path,
+        required=True,
+        help="A fresh lines CSV (run fetch near kickoff, then point here).",
+    )
+    closings.add_argument(
+        "--out", type=Path, default=Path("runs/closing_props.csv")
+    )
+    closings.add_argument(
+        "--force", action="store_true", help="Overwrite --out if it exists"
+    )
 
     fetch = sub.add_parser(
         "fetch",
@@ -522,6 +567,12 @@ def _cli_displayed_multiplier(args: argparse.Namespace) -> float | None:
             raise ValueError("conflicting --displayed-multiplier and --displayed-odds")
         return from_odds
     return decimal
+
+
+def _stake_rule(bankroll: float | None) -> str:
+    """Name the stake rule recorded on the card."""
+
+    return "no-bankroll" if bankroll is None else "quarter-kelly 5% cap"
 
 
 def _bankroll_note(bankroll: float | None, n_tickets: int) -> str | None:
@@ -792,6 +843,7 @@ def _cmd_grade(args: argparse.Namespace) -> int:
         default_platform=normalize_platform(args.platform),
         games_path=getattr(args, "games", None),
         card_path=getattr(args, "card", None),
+        closings_path=getattr(args, "closings", None),
     )
     write_grade(summary, args.out)
     print(json.dumps(summary.__dict__, indent=2))
@@ -937,6 +989,108 @@ def _weather_market_reviews(tickets: list, environment: dict) -> list[str]:
     return notes
 
 
+def _card_leg(leg, min_edge: float) -> dict[str, object]:
+    """One leg on the machine-readable card, with its modeled edge."""
+
+    line = leg.line
+    return {
+        "player_name": line.player_name,
+        "player_key": line.player_key,
+        "team": line.team,
+        "opp": line.opponent,
+        "stat_type": line.stat_type,
+        "side": line.side,
+        "line": None if isnan(line.line) else line.line,
+        "bet_over": line.book_over,
+        "bet_under": line.book_under,
+        "leg_odds": line.leg_odds,
+        "slip_odds": line.slip_odds,
+        "fair_p": leg.fair_p,
+        "model_p": leg.model_p,
+        "model_source": leg.edge_source,
+        "market_implied_p": leg.market_implied_p,
+        "prop_edge": leg.prop_edge,
+        "edge_status": edge_status(leg, min_edge),
+        "source": leg.source,
+        "warn": leg.warn,
+        "injury_status": line.injury_status,
+        "ticket_id": line.ticket_id,
+        "captured_at": line.captured_at,
+    }
+
+
+def _compose_card_payload(
+    *,
+    captured_at: str,
+    platform: str,
+    reason: str,
+    edge_gate: str,
+    min_edge: float,
+    tickets: list,
+    slips: dict[int, object],
+    dropped: list,
+    off_card_rows: list,
+    stake_by_ticket: dict[int, float | None],
+    stake_rule: str,
+    bankroll: float | None,
+) -> dict[str, object]:
+    """Build the machine-readable card. One object per ticket and per leg.
+
+    The card is the bet-time snapshot. It carries the line, both prices, the
+    model P, the market implied P, and the edge. Never rewrite it from box
+    scores. ``reason`` names why a ticket list is short or empty.
+    """
+
+    card_tickets: list[dict[str, object]] = []
+    for index, legs in enumerate(tickets, start=1):
+        typed_ids = {leg.line.ticket_id for leg in legs if leg.line.ticket_id}
+        composed_id = (
+            next(iter(typed_ids)) if len(typed_ids) == 1 else f"compose-{index:03d}"
+        )
+        slip = slips.get(index)
+        card_tickets.append(
+            {
+                "ticket_id": composed_id,
+                "n_legs": len(legs),
+                "multiplier": getattr(slip, "multiplier", None),
+                "multiplier_source": getattr(slip, "multiplier_source", ""),
+                "multiplier_unconfirmed": getattr(slip, "multiplier_unconfirmed", None),
+                "p_joint": getattr(slip, "p_joint", None),
+                "ev": getattr(slip, "ev", None),
+                "stake": stake_by_ticket.get(index),
+                "legs": [_card_leg(leg, min_edge) for leg in legs],
+            }
+        )
+    return {
+        "captured_at": captured_at,
+        "platform": platform,
+        "reason": reason,
+        "edge_gate": edge_gate,
+        "min_edge": min_edge,
+        "bankroll": bankroll,
+        "stake_rule": stake_rule,
+        "n_tickets": len(tickets),
+        "tickets": card_tickets,
+        "dropped": [
+            {
+                "player_name": leg.line.player_name,
+                "stat_type": leg.line.stat_type,
+                "warn": leg.warn,
+            }
+            for leg in dropped
+        ],
+        "off_card": [row.player_name for row in off_card_rows],
+        "do_not_submit": True,
+    }
+
+
+def _write_card_json(out_dir: Path, payload: dict[str, object]) -> Path:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "card.json"
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 def _cmd_compose(args: argparse.Namespace) -> int:
     _print_command_flags(
         legs=getattr(args, "legs", None),
@@ -1012,13 +1166,35 @@ def _cmd_compose(args: argparse.Namespace) -> int:
                 return 2
     if market_filter:
         lines = [row for row in lines if row.stat_type in market_filter]
-    if not lines:
-        raise ValueError(
-            f"no rows for platform {platform}; check --lines, --ticket-id, --markets"
-        )
     slate_ids = {row.slate_id for row in lines if row.slate_id}
     if len(slate_ids) > 1:
         raise ValueError(f"mixed slate_id values in lines file: {sorted(slate_ids)}")
+    out_dir = args.out_dir or Path("runs") / (next(iter(slate_ids), "compose"))
+    if not lines:
+        # No rows after the filters. Write a null card so the slate still keeps
+        # a card artifact, then fail closed.
+        reason = f"no rows for platform {platform}; check --lines, --ticket-id, --markets"
+        print(f"NULL-CARD: {reason}")
+        payload = _compose_card_payload(
+            captured_at=captured_at,
+            platform=platform,
+            reason="no-rows",
+            edge_gate="na",
+            min_edge=getattr(args, "min_edge", DEFAULT_MIN_EDGE),
+            tickets=[],
+            slips={},
+            dropped=[],
+            off_card_rows=off_card,
+            stake_by_ticket={},
+            stake_rule=_stake_rule(getattr(args, "bankroll", None)),
+            bankroll=getattr(args, "bankroll", None),
+        )
+        json_path = _write_card_json(out_dir, payload)
+        (out_dir / "card.txt").write_text(
+            f"NULL CARD — {reason}\n{STANDARD_DISCLAIMER}\n", encoding="utf-8"
+        )
+        print(f"wrote {json_path}")
+        return 2
 
     effective_m, unconfirmed_slate = _effective_multiplier(lines, None)
     if unconfirmed_slate and platform in PREDICTION_PLATFORMS:
@@ -1058,6 +1234,27 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         print(f"  dropped {row.player_name}: off-card")
     if strict and (dropped or off_card):
         print("strict mode: refusing to compose with dropped legs; fix the rows")
+        payload = _compose_card_payload(
+            captured_at=captured_at,
+            platform=platform,
+            reason="dropped-legs",
+            edge_gate="na",
+            min_edge=getattr(args, "min_edge", DEFAULT_MIN_EDGE),
+            tickets=[],
+            slips={},
+            dropped=dropped,
+            off_card_rows=off_card,
+            stake_by_ticket={},
+            stake_rule=_stake_rule(getattr(args, "bankroll", None)),
+            bankroll=getattr(args, "bankroll", None),
+        )
+        json_path = _write_card_json(out_dir, payload)
+        (out_dir / "card.txt").write_text(
+            "NULL CARD — strict mode refused to compose with dropped legs\n"
+            f"{STANDARD_DISCLAIMER}\n",
+            encoding="utf-8",
+        )
+        print(f"wrote {json_path}")
         return 2
 
     environment = read_environment(args.environment)
@@ -1105,7 +1302,6 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     if args.environment is not None:
         for note in _weather_market_reviews(tickets, environment):
             print(note)
-    out_dir = args.out_dir or Path("runs") / (next(iter(slate_ids), "compose"))
     out_dir.mkdir(parents=True, exist_ok=True)
     if args.environment is not None:
         games = {
@@ -1124,7 +1320,9 @@ def _cmd_compose(args: argparse.Namespace) -> int:
             source=source,
             rows=itt_rows,
         )
-    slips = []
+    min_edge = getattr(args, "min_edge", DEFAULT_MIN_EDGE)
+    bankroll = getattr(args, "bankroll", None)
+    priced_slips: dict[int, object] = {}
     for index, ticket_legs in enumerate(tickets, start=1):
         typed_ids = {leg.line.ticket_id for leg in ticket_legs if leg.line.ticket_id}
         # Copy the operator's typed id when it is unambiguous; otherwise keep
@@ -1158,12 +1356,76 @@ def _cmd_compose(args: argparse.Namespace) -> int:
             slip.notes.append(
                 "naive product of typed prices — confirm the ticket price in-app"
             )
-        slips.append(slip)
+        priced_slips[index] = slip
 
-    bankroll_note = _bankroll_note(getattr(args, "bankroll", None), len(tickets) or 1)
+    # Stake: quarter-Kelly of the bankroll, capped at 5% per ticket. A missing
+    # bankroll records no stake. The operator types the ticket in-app.
+    stake_by_ticket: dict[int, float | None] = {}
+    for index, slip in priced_slips.items():
+        stake_by_ticket[index] = (
+            None if bankroll is None else stake_dollars(bankroll, slip.kelly)
+        )
+
+    # Modeled-edge gate, over the legs that entered a card. ``weak-edge`` is a
+    # leg whose model P is known and loses to the market implied: it fails
+    # closed (exit 2). ``no-edge`` is a leg with no model P at all (no typed
+    # fair_p, no projection). It is flagged on the card and printed, but does
+    # not fail the run: with no projection feed the honest output is a loud
+    # flag, not a permanent null card.
+    card_legs = [leg for ticket in tickets for leg in ticket]
+    edge_fails = edge_failures(card_legs, min_edge)
+    weak_fails = [(leg, token) for leg, token in edge_fails if token == "weak-edge"]
+    if weak_fails:
+        edge_gate = "fail"
+    elif edge_fails:
+        edge_gate = "no-model"
+    elif live:
+        edge_gate = "pass"
+    else:
+        edge_gate = "na"
+    for leg, token in edge_fails:
+        shown = "na" if leg.prop_edge is None else f"{leg.prop_edge:+.4f}"
+        print(
+            f"EDGE-GATE {token}: {leg.line.player_name} {leg.line.stat_type} "
+            f"prop_edge={shown} (floor {min_edge:+.4f})"
+        )
+
+    slips = [priced_slips[index] for index in sorted(priced_slips)]
+    bankroll_note = _bankroll_note(bankroll, len(tickets) or 1)
     card = slip_card(slips, bankroll_note=bankroll_note)
+    extra: list[str] = []
+    if edge_fails:
+        extra.append(
+            f"EDGE-GATE {edge_gate} — floor {min_edge:+.4f}; "
+            "weak-edge fails, no-edge is flagged only:"
+        )
+        for leg, token in edge_fails:
+            shown = "na" if leg.prop_edge is None else f"{leg.prop_edge:+.4f}"
+            extra.append(
+                f"  {token}: {leg.line.player_name} {leg.line.stat_type} prop_edge={shown}"
+            )
+    for index, stake in sorted(stake_by_ticket.items()):
+        if stake is not None:
+            extra.append(f"  stake ticket-{index:03d}: ${stake:.2f} (quarter-Kelly, 5% cap)")
+    if extra:
+        card = card + "\n" + "\n".join(extra)
     card_path = out_dir / "card.txt"
     card_path.write_text(card + "\n", encoding="utf-8")
+    payload = _compose_card_payload(
+        captured_at=captured_at,
+        platform=platform,
+        reason="ok" if len(tickets) == n_tickets else "no-qualifying-legs",
+        edge_gate=edge_gate,
+        min_edge=min_edge,
+        tickets=tickets,
+        slips=priced_slips,
+        dropped=dropped,
+        off_card_rows=off_card,
+        stake_by_ticket=stake_by_ticket,
+        stake_rule=_stake_rule(bankroll),
+        bankroll=bankroll,
+    )
+    json_path = _write_card_json(out_dir, payload)
     card_md = getattr(args, "card_md", None)
     md_path: Path | None = None
     if card_md is not None:
@@ -1176,6 +1438,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         print(f"warning: {warning}")
     print(card)
     print(f"wrote {card_path}")
+    print(f"wrote {json_path}")
     if md_path is not None:
         print(f"wrote {md_path}")
     if args.environment is not None:
@@ -1186,6 +1449,8 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         counts = player_stat_ticket_counts(tickets)
         if any(count > max_n for count in counts.values()):
             return 2
+    if weak_fails:
+        return 2
     # P0: fewer tickets than --n-tickets is a hard fail. Do not pad the card.
     if len(tickets) != n_tickets:
         return 2
@@ -1310,6 +1575,42 @@ def _cmd_bankroll(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_closings(args: argparse.Namespace) -> int:
+    out = args.out
+    if out.exists() and not args.force:
+        print(f"exists: {out} (pass --force to overwrite)")
+        return 2
+    captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    platform = normalize_platform(args.platform)
+    lines = read_manual_lines(args.lines, strict=False)
+    rows: list[dict[str, object]] = []
+    for row in lines:
+        if not row.player_key or not row.stat_type:
+            continue
+        if row.book_over is None or row.book_under is None:
+            continue
+        if isnan(row.line):
+            continue
+        if row.platform and normalize_platform(row.platform) != platform:
+            continue
+        rows.append(
+            {
+                "platform": platform,
+                "player_key": row.player_key,
+                "stat_type": row.stat_type,
+                "side": row.side,
+                "line": row.line,
+                "over": row.book_over,
+                "under": row.book_under,
+                "captured_at": captured_at,
+            }
+        )
+    write_prop_closes(out, rows)
+    print(f"wrote {out} rows={len(rows)} captured_at={captured_at}")
+    print("closing snapshot only — do not submit")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1324,6 +1625,7 @@ def main(argv: list[str] | None = None) -> int:
         "compose": _cmd_compose,
         "diff": _cmd_diff,
         "bankroll": _cmd_bankroll,
+        "closings": _cmd_closings,
         "fetch": _cmd_fetch,
     }
     try:

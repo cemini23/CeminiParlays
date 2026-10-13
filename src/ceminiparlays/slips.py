@@ -70,6 +70,15 @@ class EvaluatedLeg:
     median: float
     warn: str
     p_over_at_median: float = 0.0
+    #: Model P for the edge gate. Typed ``fair_p`` first, else the projection.
+    #: ``None`` when the leg carries no model and cannot show an edge.
+    model_p: float | None = None
+    #: Market implied P. The de-vigged two-way book first, else the TD leg odds
+    #: or a prediction contract mid. ``None`` when the leg has no market price.
+    market_implied_p: float | None = None
+    #: ``model_p - market_implied_p`` when both exist, else ``None``.
+    prop_edge: float | None = None
+    edge_source: str = ""
 
 
 @dataclass
@@ -178,6 +187,80 @@ def fair_for_line(
     )
 
 
+def model_prob_for_line(
+    line: LineRow,
+    dist: DistRow | None,
+) -> tuple[float | None, str]:
+    """Model P for the edge gate. Typed ``fair_p`` first, else the projection.
+
+    This is the model side of the edge, kept apart from ``fair_for_line``, which
+    prefers the de-vigged book. When book odds exist, ``fair_for_line`` returns
+    the market implied as ``fair_p``, so ``fair_p - implied`` is zero by
+    construction. The edge needs the model, and the model comes from the typed
+    ``fair_p`` or the projected distribution. A leg with neither has no model P
+    and cannot show an edge.
+    """
+
+    if line.fair_p is not None:
+        if not 0.0 < line.fair_p < 1.0:
+            raise ValueError(f"fair_p must be between 0 and 1, got {line.fair_p}")
+        return line.fair_p, "fair_p"
+    if dist is not None:
+        family = dist.family or None
+        if is_two_plus_td(line.stat_type):
+            family = "poisson"
+        elif family not in {"lognormal", "normal", "poisson"}:
+            family = None
+        fair = p_over_line(
+            line=line.line,
+            median=dist.median,
+            sigma=dist.sigma,
+            family=family,
+            stat_type=line.stat_type,
+        )
+        return side_probability(fair, line.side), "distribution"
+    return None, ""
+
+
+def market_implied_for_line(
+    line: LineRow,
+    method: DevigMethod = "power",
+) -> tuple[float | None, str]:
+    """Market implied P for the edge gate.
+
+    The de-vigged two-way book first, else the TD ``leg_odds`` implied, else a
+    prediction contract mid. A leg with no market price has no market implied P
+    and cannot show an edge.
+    """
+
+    if line.book_over is not None and line.book_under is not None:
+        result = devig_two_way(line.book_over, line.book_under, method=method)
+        if line.side in MORE_SIDES:
+            return result.p_over, "book_devig"
+        if line.side in LESS_SIDES:
+            return result.p_under, "book_devig"
+        return None, ""
+    if is_td_market(line.stat_type) and line.leg_odds is not None:
+        implied = american_to_implied(int(line.leg_odds))
+        if line.side in LESS_SIDES:
+            implied = 1.0 - implied
+        elif line.side not in MORE_SIDES:
+            return None, ""
+        return implied, "leg_odds_implied"
+    if line.contract_price is not None:
+        if not 0.0 < line.contract_price < 1.0:
+            raise ValueError(
+                f"contract_price must be between 0 and 1, got {line.contract_price}"
+            )
+        implied = line.contract_price
+        if line.side in LESS_SIDES:
+            implied = 1.0 - implied
+        elif line.side not in MORE_SIDES:
+            return None, ""
+        return implied, "contract_price"
+    return None, ""
+
+
 def _american_ok(odds: int | None) -> bool:
     if odds is None:
         return True
@@ -281,6 +364,19 @@ def evaluate_legs(
         if fair is not None and fair.note:
             family = f"{family} ({fair.note})"
         edge = (fair_p - implied_p) if implied_p > 0.0 else 0.0
+        try:
+            model_p, edge_source = model_prob_for_line(line, dist)
+        except (KeyError, ValueError):
+            model_p, edge_source = None, ""
+        try:
+            market_implied, _market_source = market_implied_for_line(line, method)
+        except (KeyError, ValueError):
+            market_implied = None
+        prop_edge = (
+            model_p - market_implied
+            if model_p is not None and market_implied is not None
+            else None
+        )
         live.append(
             EvaluatedLeg(
                 line=line,
@@ -292,9 +388,40 @@ def evaluate_legs(
                 median=fair.median if fair else 0.0,
                 warn=warn,
                 p_over_at_median=fair.fair_p_at_median if fair else 0.0,
+                model_p=model_p,
+                market_implied_p=market_implied,
+                prop_edge=prop_edge,
+                edge_source=edge_source,
             )
         )
     return live, excluded
+
+
+#: Default modeled-edge floor for a leg to enter a card: one probability point.
+#: It absorbs the devig error band and the book price you actually get.
+DEFAULT_MIN_EDGE = 0.01
+
+
+def edge_status(leg: EvaluatedLeg, min_edge: float) -> str:
+    """Return "" when a leg clears the edge floor, else the failing token.
+
+    ``no-edge`` means the leg carries no model P (or no market price), so no
+    edge can be computed. ``weak-edge`` means the edge is below the floor.
+    """
+
+    if leg.prop_edge is None:
+        return "no-edge"
+    if leg.prop_edge < min_edge:
+        return "weak-edge"
+    return ""
+
+
+def edge_failures(
+    legs: list[EvaluatedLeg], min_edge: float
+) -> list[tuple[EvaluatedLeg, str]]:
+    """Return ``(leg, token)`` for each leg that fails the edge floor, in order."""
+
+    return [(leg, token) for leg in legs if (token := edge_status(leg, min_edge))]
 
 
 def _slip_label(legs: list[EvaluatedLeg]) -> str:

@@ -70,6 +70,10 @@ def slip_card(slips: list[EvaluatedSlip], bankroll_note: str | None = None) -> s
             detail = f"fair_p={leg.fair_p:.3f}"
             if leg.implied_p > 0.0:
                 detail += f" implied_p={leg.implied_p:.3f} edge={leg.edge:+.3f}"
+            if leg.prop_edge is not None:
+                detail += f" prop_edge={leg.prop_edge:+.4f}"
+            else:
+                detail += " prop_edge=na"
             leg_ticket = f" ticket={leg.line.ticket_id}" if leg.line.ticket_id else ""
             lines.append(
                 f"  {leg.line.player_name} {leg.line.side} {leg.line.line} "

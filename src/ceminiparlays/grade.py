@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from ceminiparlays.closings import line_clv, read_prop_closes, side_implied
 from ceminiparlays.io import read_games
 from ceminiparlays.markets import is_two_plus_td
 from ceminiparlays.odds import american_to_decimal
@@ -42,6 +43,17 @@ OPTIONAL_LEDGER_COLUMNS = (
     "injury_status",
     "replay_reversal",
     "off_card",
+    "player_key",
+    "bet_over",
+    "bet_under",
+    "close_over",
+    "close_under",
+    "close_lines",
+    "clv_pp",
+    "clv_line",
+    "promo_terms",
+    "promo_value",
+    "promo_settled",
 )
 #: A Hard Rock ticket id from the bet slip is 18 or 19 digits. A shorter digit
 #: string is a clipped OCR read. Do not pad it.
@@ -82,6 +94,12 @@ class GradeSummary:
     stay_live_rule: str = ""
     replay_reversals: list[str] = field(default_factory=list)
     stat_deltas: list[str] = field(default_factory=list)
+    clv_by_ticket: list[dict[str, object]] = field(default_factory=list)
+    clv_mean_pp: float = 0.0
+    promo_terms: list[str] = field(default_factory=list)
+    promo_value: float = 0.0
+    promo_confirmed: bool = True
+    net_pnl: float = 0.0
 
 
 def _canonical_discrete(token: str) -> str | None:
@@ -391,6 +409,23 @@ def _outside_window(raw: dict[str, str], index: dict[str, set[tuple[str, str]]])
 
 
 def _card_ticket_ids(path: Path) -> set[str]:
+    """Read the ticket ids off a compose card. CSV or card.json is allowed.
+
+    A CSV card carries a ``ticket_id`` column. A ``card.json`` carries a
+    ``tickets`` list, each with a ``ticket_id``. An empty ticket list (a null
+    card) is legal and yields no ids, so every booked ticket is off-card.
+    """
+
+    if path.suffix.lower() == ".json":
+        data = json.loads(path.read_text(encoding="utf-8"))
+        tickets = data.get("tickets") if isinstance(data, dict) else None
+        if not isinstance(tickets, list):
+            raise ValueError(f"{path} has no tickets list")
+        return {
+            str(item.get("ticket_id", "")).strip()
+            for item in tickets
+            if isinstance(item, dict) and str(item.get("ticket_id", "")).strip()
+        }
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         if "ticket_id" not in set(reader.fieldnames or []):
@@ -514,12 +549,115 @@ def _hard_rock_injury_rule_note() -> str:
     )
 
 
+def _cells(raw: dict[str, str], key: str) -> list[str]:
+    """Split a ``|``-joined ledger cell. Blank parts are dropped."""
+
+    return [part.strip() for part in (raw.get(key) or "").split("|") if part.strip()]
+
+
+def _cell_int(parts: list[str], index: int) -> int | None:
+    if index >= len(parts):
+        return None
+    text = parts[index]
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def _cell_float(parts: list[str], index: int) -> float | None:
+    if index >= len(parts):
+        return None
+    try:
+        return float(parts[index])
+    except ValueError:
+        return None
+
+
+def _row_clv(
+    raw: dict[str, str],
+    closes: dict | None,
+    platform: str,
+    method: str = "power",
+) -> dict[str, object]:
+    """Per-leg CLV for one ledger row. Blank when the prices are not typed.
+
+    The bet-time and closing prices come from the ledger cells ``bet_over`` /
+    ``bet_under`` / ``close_over`` / ``close_under``. A blank close cell is
+    filled from the closing snapshot by (platform, player_key, stat_type, side).
+    CLV is the closing implied minus the bet implied. Positive beats the close.
+    """
+
+    sides = _cells(raw, "sides")
+    lines = _cells(raw, "lines")
+    keys = _cells(raw, "player_key")
+    stats = [canonical_ledger_market(part) for part in _cells(raw, "market")]
+    bet_over = _cells(raw, "bet_over")
+    bet_under = _cells(raw, "bet_under")
+    close_over = _cells(raw, "close_over")
+    close_under = _cells(raw, "close_under")
+    close_lines = _cells(raw, "close_lines")
+
+    legs: list[dict[str, object]] = []
+    values: list[float] = []
+    for index, side in enumerate(sides):
+        stat = stats[index] if index < len(stats) else ""
+        player_key = keys[index] if index < len(keys) else ""
+        close = None
+        if closes is not None and player_key and stat:
+            close = closes.get((platform, player_key, stat, side.lower()))
+        over_bet = _cell_int(bet_over, index)
+        under_bet = _cell_int(bet_under, index)
+        over_close = _cell_int(close_over, index)
+        under_close = _cell_int(close_under, index)
+        if close is not None:
+            if over_close is None:
+                over_close = close.over
+            if under_close is None:
+                under_close = close.under
+        bet_line = _cell_float(lines, index)
+        close_line = _cell_float(close_lines, index)
+        if close_line is None and close is not None:
+            close_line = close.line
+
+        bet_implied = side_implied(side, over_bet, under_bet, method=method)
+        close_implied = side_implied(side, over_close, under_close, method=method)
+        clv_pp = (
+            close_implied - bet_implied
+            if bet_implied is not None and close_implied is not None
+            else None
+        )
+        clv_move = (
+            line_clv(side, bet_line, close_line)
+            if bet_line is not None and close_line is not None
+            else None
+        )
+        if clv_pp is not None:
+            values.append(clv_pp)
+        legs.append(
+            {
+                "player_key": player_key,
+                "stat_type": stat,
+                "side": side,
+                "bet_line": bet_line,
+                "close_line": close_line,
+                "bet_implied_p": bet_implied,
+                "close_implied_p": close_implied,
+                "clv_pp": clv_pp,
+                "clv_line": clv_move,
+            }
+        )
+    mean = sum(values) / len(values) if values else 0.0
+    return {"legs": legs, "mean_pp": mean, "n": len(values)}
+
+
 def grade_ledger(
     path: Path,
     profile_dir: Path | None = None,
     default_platform: str | None = None,
     games_path: Path | None = None,
     card_path: Path | None = None,
+    closings_path: Path | None = None,
 ) -> GradeSummary:
     slips = 0
     hits = 0
@@ -549,8 +687,15 @@ def grade_ledger(
     injury_alerts: list[str] = []
     replay_reversals: list[str] = []
     stat_deltas: list[str] = []
+    clv_by_ticket: list[dict[str, object]] = []
+    clv_total = 0.0
+    clv_count = 0
+    promo_terms: list[str] = []
+    promo_value = 0.0
+    promo_confirmed = True
     window = _window_index(games_path) if games_path is not None else None
     card_ids = _card_ticket_ids(card_path) if card_path is not None else None
+    closes = read_prop_closes(closings_path) if closings_path is not None else None
     with path.open(newline="", encoding="utf-8") as handle:
         for row_index, raw in enumerate(csv.DictReader(handle), start=2):
             stake_kind = (raw.get("stake_kind") or "").strip().lower()
@@ -617,6 +762,29 @@ def grade_ledger(
             platform = normalize_platform(
                 raw_platform or default_platform or "underdog"
             )
+
+            clv = _row_clv(raw, closes, platform)
+            if clv["n"]:
+                clv_by_ticket.append(
+                    {"ticket_id": ticket_id or f"row {row_index}", **clv}
+                )
+                clv_total += float(clv["mean_pp"]) * int(clv["n"])
+                clv_count += int(clv["n"])
+            promo_terms_raw = (raw.get("promo_terms") or "").strip()
+            if promo_terms_raw and promo_terms_raw not in promo_terms:
+                promo_terms.append(promo_terms_raw)
+            promo_row = _parse_paid(raw.get("promo_value"))
+            if promo_row is not None:
+                promo_value += promo_row
+            if promo_terms_raw and not _flag_true(raw.get("promo_settled") or ""):
+                promo_confirmed = False
+                promo_flag = (
+                    f"PROMO_UNCONFIRMED: {promo_terms_raw} — record the settled "
+                    "result before you count the bonus"
+                )
+                if promo_flag not in review_flags:
+                    review_flags.append(promo_flag)
+
             mode = raw.get("mode") or "standard"
             displayed = _parse_multiplier(raw.get("multiplier"))
             paid_value = _parse_paid(raw.get("paid"))
@@ -783,6 +951,12 @@ def grade_ledger(
         stay_live_rule=STAY_LIVE_RULE,
         replay_reversals=replay_reversals,
         stat_deltas=stat_deltas,
+        clv_by_ticket=clv_by_ticket,
+        clv_mean_pp=(clv_total / clv_count if clv_count else 0.0),
+        promo_terms=promo_terms,
+        promo_value=promo_value,
+        promo_confirmed=promo_confirmed,
+        net_pnl=cash_pnl + promo_value,
     )
 
 

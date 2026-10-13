@@ -110,9 +110,29 @@ ceminiparlays fetch --fixture tests/fixtures/odds_api_nfl.json --out /tmp/lines.
 # Compose 5 tickets with the auto defaults (2-leg, +150..+400, yards markets)
 ceminiparlays compose --auto --lines runs/slate/lines.csv \
   --environment examples/2026-w02-sun-environment.csv --out-dir runs/2026-w02-sun
-# -> ticket-001.csv .. ticket-005.csv + card.txt + compose_itt.json
+# -> ticket-001.csv .. ticket-005.csv + card.txt + card.json + compose_itt.json
 # compose_itt.json is the bet-time ITT snapshot. Do not rewrite it from box scores.
 # Omit --environment to skip the file.
+# card.json is the machine-readable card: per leg the line, both prices, the
+# modeled edge, and the ticket stake. compose ALWAYS writes a card. A card with
+# no qualifying leg is a NULL CARD and exits 2.
+#
+# Every leg is gated on a modeled edge (model P - market implied P):
+#   --min-edge 0.01   leg below the floor -> edge_gate fail, exit 2
+#   model P is a typed fair_p or a --distributions projection
+#   a leg with no model P is flagged no-edge on the card
+#   --bankroll 100    quarter-Kelly stake per ticket, 5% cap, written to card.json
+
+# Snapshot the per-prop closing lines near kickoff (for CLV). No key needed.
+ceminiparlays closings --lines runs/slate/lines_close.csv \
+  --out runs/2026-w05-sun/closing_props.csv
+
+# Grade with the card and the closing snapshot. Off-card and CLV are reported.
+ceminiparlays grade --ledger examples/ledger_week5.csv \
+  --card runs/2026-w05-sun/compose/card.json \
+  --closings runs/2026-w05-sun/closing_props.csv
+# --card accepts a card CSV or card.json. A null card puts every ticket off-card.
+# --closings fills a blank close_* ledger cell and computes clv_pp per leg.
 
 # Optional: copy a CeminiDFS handoff, then compose. FPPG is not a prop fair.
 # Missing file prints CEMINIDFS_HANDOFF_MISSING and continues.

@@ -111,11 +111,37 @@ leg prints `WEATHER_MARKET_REVIEW` and the leg stays on the ticket.
 
 **SGP weather discount**: `apply_weather_discount` (called by `sgp_from_score_marginals`) applies a numeric haircut to a marginal only when `weather_exposed=true` and wind or precip was typed. Gates: indoor (dome/indoor/closed) = no discount; retractable-closed = no discount; not exposed = no discount; exposed but both fields blank = no discount + `WEATHER_FIELDS_BLANK` note; otherwise wind `min(0.04, max(0, wind-10)*0.002)` + precip `min(0.04, (precip/25)*0.01)`, cap 0.08. `compose` still only prints `WEATHER_MARKET_REVIEW` and keeps the leg.
 
-It writes `ticket-001.csv` … `ticket-005.csv` plus `card.txt`, and prints
-`do not submit`. Tickets diversify games and prefer higher implied team totals
-when `--environment` is present. `--environment` also writes `compose_itt.json`
-(bet-time ITT snapshot). Do not rewrite that file from box scores. Omit
-`--environment` to skip the snapshot.
+It writes `ticket-001.csv` … `ticket-005.csv` plus `card.txt` and `card.json`,
+and prints `do not submit`. Tickets diversify games and prefer higher implied
+team totals when `--environment` is present. `--environment` also writes
+`compose_itt.json` (bet-time ITT snapshot). Do not rewrite that file from box
+scores. Omit `--environment` to skip the snapshot.
+
+`compose` writes a card on **every** run. A run with no qualifying leg writes a
+**null card** with the reason and exits 2. Run it every slate week. A skipped
+week is a process gap, not a missing file.
+
+**Modeled edge.** Every leg is gated on `model P - market implied P`. The model
+P is a typed `fair_p` or a `--distributions` projection. A leg below
+`--min-edge` (default `+0.01`) sets `edge_gate: fail` and exits 2. A leg with no
+model P is flagged `no-edge` on the card. Pass `--distributions` or type `fair_p`
+so the gate can work. Record the edge on the card: `card.json` carries it per leg.
+
+**Stake.** Pass `--bankroll N`. Each ticket gets a quarter-Kelly stake, capped at
+5% of the bankroll. `card.json` records the `stake` and the `stake_rule`.
+
+## 4. Snapshot the closing lines (near kickoff)
+
+```bash
+ceminiparlays fetch --date 2026-10-11 --out runs/slate/lines_close.csv
+ceminiparlays closings --lines runs/slate/lines_close.csv \
+  --out runs/2026-w05-sun/closing_props.csv
+```
+
+`closings` writes one row per prop: `platform,player_key,stat_type,side,line,over,under,captured_at`.
+Run it as close to kickoff as practical. It is the only per-prop closing source.
+`grade --closings` fills a blank `close_*` ledger cell from it by
+`(platform, player_key, stat_type, side)` and computes `clv_pp`.
 
 **CeminiDFS handoff** (optional, copy the file; this CLI only reads):
 

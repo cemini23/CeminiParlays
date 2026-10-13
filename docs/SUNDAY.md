@@ -140,6 +140,7 @@ ceminiparlays closings --lines runs/slate/lines_close.csv \
 
 `closings` writes one row per prop: `platform,player_key,stat_type,side,line,over,under,captured_at`.
 Run it as close to kickoff as practical. It is the only per-prop closing source.
+Run this snapshot every slate. CLV cannot exist when the snapshot is missing.
 `grade --closings` fills a blank `close_*` ledger cell from it by
 `(platform, player_key, stat_type, side)` and computes `clv_pp`.
 
@@ -169,8 +170,9 @@ same-player same-stat concentration.
   research step fills wind and precip.
 - **Roof**: DAL@HOU is retractable and stays weather-exposed until an official
   roof call. No call means treat it as exposed; do not fade on a guess.
-- **Jev**: `jev_verify` each live leg against the lines file and the CeminiDFS
-  handoff row. If Jev contradicts the row, do not type that ticket.
+- **Jev**: run the mandatory gate in *Run the Jev gate* below. It writes
+  `jev_gate_report.csv`. Do not type a `do_not_type` row or a
+  `thesis_unsupported` row.
 - **Flags**: `--enforce-market-depth` only after a fetch that includes
   `h2h,spreads` — a yards-only fetch will halt (exit 2). `--alert-late-active`
   only if an inactives file exists — a missing file exits 2.
@@ -209,11 +211,34 @@ ceminiparlays compose --auto --markets rush_yds --legs 3 --max-odds +250 \
 ceminiparlays compose --auto --platform betmgm --lines runs/slate/lines.csv
 ```
 
-**Optional jev HITL** (after compose, before you type): run `jev_verify` on each
-live leg against the lines file and the CeminiDFS handoff row. If Jev contradicts
-the row, do not type that ticket. Optional `jev_find` is a type/skip read and may
-label a ticket `promo_hedge`, `real_hedge`, or `straight_bet`. Jev does not set
-odds, Kelly, or ITT.
+### Run the Jev gate (after compose, before you type)
+
+Run `ceminiparlays jev-gate` on the composed card. This step is mandatory every
+week. It is one of the four checks above.
+
+```bash
+ceminiparlays jev-gate \
+  --card runs/2026-w05-sun/compose/card.json \
+  --lines runs/2026-w05-sun/lines.csv \
+  --environment examples/environment.csv \
+  --late-active runs/2026-w05-sun/inactives.csv \
+  --promo-terms 'Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose' \
+  --out-dir runs/2026-w05-sun/jev
+```
+
+The gate writes `jev_gate_report.csv` in `--out-dir`. The report has one row per
+check per leg or card. The `action` cell tells you what to do.
+
+- `pass`: type the leg.
+- `do_not_type`: do not type the leg. The lines file contradicts it.
+- `thesis_unsupported`: do not type the leg. The environment contradicts the
+  thesis.
+- `review`: an operator reads the row. Jev is not confident enough to mark it.
+- `block`: the gate had no evidence or no server. The run exits 2.
+
+The gate marks each row. It does not reprice, void, rewrite, or submit a ticket.
+`do_not_type` and `thesis_unsupported` exit 0. A `block` row exits 2. Read the
+report before you type.
 
 ## 4. Price one ticket before you build it (2 min)
 

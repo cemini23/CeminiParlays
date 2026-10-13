@@ -40,6 +40,15 @@ from ceminiparlays.late_active import late_active_alerts
 from ceminiparlays.fair import p_over_line, side_probability
 from ceminiparlays.fetch import load_fixture, rows_from_events, write_fetch_csv
 from ceminiparlays.grade import grade_ledger, write_grade
+from ceminiparlays.jev_gate import (
+    append_card_verdict,
+    evaluate_gate,
+    format_mark,
+    gate_exit_code,
+    load_card,
+    verdict_line,
+    write_jev_gate_report,
+)
 from ceminiparlays.io import read_distributions, read_games, read_manual_lines, write_csv
 from ceminiparlays.kelly import stake_dollars
 from ceminiparlays.markets import AUTO_MARKETS, parse_markets
@@ -475,6 +484,50 @@ def build_parser() -> argparse.ArgumentParser:
     )
     closings.add_argument(
         "--force", action="store_true", help="Overwrite --out if it exists"
+    )
+
+    jev = sub.add_parser(
+        "jev-gate",
+        help="Mark a composed card with Jev before you type",
+        description=(
+            "Run after compose and before you type. "
+            "Writes jev_gate_report.csv. "
+            "The gate marks each row. It does not reprice, void, rewrite, or submit. "
+            "do_not_type and thesis_unsupported still exit 0. "
+            "A block row exits 2."
+        ),
+    )
+    jev.add_argument("--card", type=Path, required=True, help="compose card.json")
+    jev.add_argument("--lines", type=Path, required=True, help="Lines CSV used as evidence")
+    jev.add_argument(
+        "--environment",
+        type=Path,
+        default=None,
+        help="Environment CSV. Required for a pass_yds thesis. A missing file blocks.",
+    )
+    jev.add_argument(
+        "--late-active",
+        type=Path,
+        default=None,
+        help="Late-active or inactives CSV. A missing file marks review and does not call Jev.",
+    )
+    jev.add_argument(
+        "--promo-terms",
+        default="",
+        help="Promo terms text. Blank marks review and does not call Jev.",
+    )
+    jev.add_argument("--out-dir", type=Path, required=True, help="Folder for jev_gate_report.csv")
+    jev.add_argument(
+        "--fixture",
+        type=Path,
+        default=None,
+        help="Recorded Jev exchanges. Skips the server. No key and no network.",
+    )
+    jev.add_argument(
+        "--record-fixture",
+        type=Path,
+        default=None,
+        help="Append each live exchange to this JSON file.",
     )
 
     fetch = sub.add_parser(
@@ -1575,6 +1628,32 @@ def _cmd_bankroll(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_jev_gate(args: argparse.Namespace) -> int:
+    card = load_card(args.card)
+    lines_text = args.lines.read_text(encoding="utf-8")
+    rows = evaluate_gate(
+        card,
+        lines_text=lines_text,
+        environment_path=args.environment,
+        late_active_path=args.late_active,
+        promo_terms=args.promo_terms,
+        fixture_path=args.fixture,
+        record_path=args.record_fixture,
+    )
+    report_path = args.out_dir / "jev_gate_report.csv"
+    write_jev_gate_report(report_path, rows)
+    line = verdict_line(rows)
+    append_card_verdict(args.card.parent / "card.md", line)
+    for row in rows:
+        if row["action"] == "pass":
+            continue
+        print(format_mark(row))
+    print(line)
+    print(f"wrote {report_path}")
+    print("The gate marks. It does not reprice or submit.")
+    return gate_exit_code(rows)
+
+
 def _cmd_closings(args: argparse.Namespace) -> int:
     out = args.out
     if out.exists() and not args.force:
@@ -1626,6 +1705,7 @@ def main(argv: list[str] | None = None) -> int:
         "diff": _cmd_diff,
         "bankroll": _cmd_bankroll,
         "closings": _cmd_closings,
+        "jev-gate": _cmd_jev_gate,
         "fetch": _cmd_fetch,
     }
     try:

@@ -1,0 +1,5 @@
+slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,line_type,captured_at,injury_status,book_over,book_under,leg_odds,slip_odds,slip_multiplier,ticket_id,fair_p,contract_price
+2026-w05-sun,hardrock,Jameis Winston,jameis_winston,NYG,SEA,pass_yds,200.5,less,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,
+2026-w05-sun,hardrock,Braelon Allen,braelon_allen,NYJ,MIA,rush_yds,71.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,
+2026-w05-sun,hardrock,D'Andre Swift,dandre_swift,CHI,MIN,rush_yds,85.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,
+2026-w05-sun,hardrock,Jaylen Warren,jaylen_warren,PIT,CLE,rush_yds,69.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,

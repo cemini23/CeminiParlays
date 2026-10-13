@@ -75,3 +75,7 @@ The edge is `model P - market implied P`. The model P is a typed `fair_p` or a p
 ## C18. Book the stake and the promo at value
 
 `compose --bankroll` sizes each ticket with quarter-Kelly, capped at 5% of the bankroll, and records `stake` and `stake_rule` on `card.json`. A flat stake is not a Kelly stake. Record the promo terms and the settled result on the ledger. Carry the bonus's expected cash value in `promo_value`. `net_pnl` is `cash_pnl + promo_value`. An unsettled promo raises `PROMO_UNCONFIRMED` and is never counted.
+
+## C19. The Jev gate is mandatory and marks only
+
+Run `ceminiparlays jev-gate` after `compose` and before the operator types. It is mandatory every slate week. It writes `jev_gate_report.csv` and one verdict line on `card.md`. It **marks** a row `pass`, `do_not_type`, `thesis_unsupported`, `review`, or `block`. It never reprices, voids, rewrites, or submits a ticket. A missing key, a missing server, or a malformed answer fails closed: every pending row is `block` and the run exits 2. A `do_not_type` or `thesis_unsupported` row prints loud and exits 0. The gate answers questions only. It is not an optimizer and holds no card, stake, or payout. Player names and public status strings only — no PII.

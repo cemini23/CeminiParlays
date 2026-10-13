@@ -1,0 +1,793 @@
+{
+  "exchanges": [
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "Ada Lovelace is expected to be active for this game.",
+          "Grace Hopper is expected to be active for this game."
+        ],
+        "evidence": "player_name,status\nAda Lovelace,ACTIVE\nGrace Hopper,ACTIVE\n",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "Ada Lovelace is expected to be active for this game.",
+            "verdict": "verified",
+            "confidence": 0.96,
+            "action": "auto"
+          },
+          {
+            "id": "claim1",
+            "claim": "Grace Hopper is expected to be active for this game.",
+            "verdict": "verified",
+            "confidence": 0.96,
+            "action": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "The lines file shows line 200.5 for Ada Lovelace pass_yds on less at hardrock.",
+          "The lines file shows line 71.5 for Grace Hopper rush_yds on more at hardrock."
+        ],
+        "evidence": "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,book_over,book_under\ndemo,hardrock,Ada Lovelace,ada_lovelace,NYG,SEA,pass_yds,200.5,less,-115,-115\ndemo,hardrock,Grace Hopper,grace_hopper,NYJ,MIA,rush_yds,71.5,more,-115,-115\n",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "The lines file shows line 200.5 for Ada Lovelace pass_yds on less at hardrock.",
+            "verdict": "contradicted",
+            "confidence": 0.95,
+            "action": "auto"
+          },
+          {
+            "id": "claim1",
+            "claim": "The lines file shows line 71.5 for Grace Hopper rush_yds on more at hardrock.",
+            "verdict": "verified",
+            "confidence": 0.95,
+            "action": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "NYG is projected for low passing volume, given the spread, the total, and the implied team total."
+        ],
+        "evidence": "slate_id,game_id,team,opp,implied_total,spread,roof,weather_exposed,wind_mph,precip_pop\ndemo,SEA@NYG,NYG,SEA,17.5,3.5,open,true,12,20\nslate_id,platform,player_name,player_key,team,opp,stat_type,line,side,book_over,book_under\ndemo,hardrock,Ada Lovelace,ada_lovelace,NYG,SEA,pass_yds,200.5,less,-115,-115\ndemo,hardrock,Grace Hopper,grace_hopper,NYJ,MIA,rush_yds,71.5,more,-115,-115\n",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "NYG is projected for low passing volume, given the spread, the total, and the implied team total.",
+            "verdict": "verified",
+            "confidence": 0.95,
+            "action": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "Player props qualify for this promo: Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose"
+        ],
+        "evidence": "Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "Player props qualify for this promo: Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose",
+            "verdict": "verified",
+            "confidence": 0.95,
+            "action": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_find",
+      "arguments": {
+        "query": "Which ticket type is this: Ada Lovelace less 200.5 pass_yds; Grace Hopper more 71.5 rush_yds?",
+        "candidates": [
+          {
+            "id": "promo_hedge",
+            "text": "A promo hedge uses a book promotion and is not a priced edge."
+          },
+          {
+            "id": "real_hedge",
+            "text": "A real hedge offsets exposure on the other side of a position."
+          },
+          {
+            "id": "straight_bet",
+            "text": "A straight bet is a normal parlay or single with no hedge."
+          }
+        ],
+        "top_k": 3
+      },
+      "result": {
+        "tool": "jev_find",
+        "model": "jev-latest",
+        "query": "Which ticket type is this: Ada Lovelace less 200.5 pass_yds; Grace Hopper more 71.5 rush_yds?",
+        "exists": 0.9,
+        "exists_verdict": "partial",
+        "top": [
+          {
+            "id": "straight_bet",
+            "probability": 0.91,
+            "text": "straight_bet"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "The lines file shows line 199.5 for Ada Lovelace pass_yds on less at hardrock.",
+          "The lines file shows line 70.5 for Grace Hopper rush_yds on more at hardrock."
+        ],
+        "evidence": "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,book_over,book_under\ndemo,hardrock,Ada Lovelace,ada_lovelace,NYG,SEA,pass_yds,199.5,less,-115,-115\ndemo,hardrock,Grace Hopper,grace_hopper,NYJ,MIA,rush_yds,70.5,more,-115,-115\n",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "The lines file shows line 199.5 for Ada Lovelace pass_yds on less at hardrock.",
+            "verdict": "contradicted",
+            "confidence": 0.42,
+            "action": "review"
+          },
+          {
+            "id": "claim1",
+            "claim": "The lines file shows line 70.5 for Grace Hopper rush_yds on more at hardrock.",
+            "verdict": "verified",
+            "confidence": 0.95,
+            "action": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "NYG is projected for low passing volume, given the spread, the total, and the implied team total."
+        ],
+        "evidence": "slate_id,game_id,team,opp,implied_total,spread,roof,weather_exposed,wind_mph,precip_pop\ndemo,SEA@NYG,NYG,SEA,17.5,3.5,open,true,12,20\nslate_id,platform,player_name,player_key,team,opp,stat_type,line,side,book_over,book_under\ndemo,hardrock,Ada Lovelace,ada_lovelace,NYG,SEA,pass_yds,199.5,less,-115,-115\ndemo,hardrock,Grace Hopper,grace_hopper,NYJ,MIA,rush_yds,70.5,more,-115,-115\n",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "NYG is projected for low passing volume, given the spread, the total, and the implied team total.",
+            "verdict": "verified",
+            "confidence": 0.95,
+            "action": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "Player props qualify for this promo: Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose"
+        ],
+        "evidence": "Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "Player props qualify for this promo: Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose",
+            "verdict": "verified",
+            "confidence": 0.95,
+            "action": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_find",
+      "arguments": {
+        "query": "Which ticket type is this: Ada Lovelace less 199.5 pass_yds; Grace Hopper more 70.5 rush_yds?",
+        "candidates": [
+          {
+            "id": "promo_hedge",
+            "text": "A promo hedge uses a book promotion and is not a priced edge."
+          },
+          {
+            "id": "real_hedge",
+            "text": "A real hedge offsets exposure on the other side of a position."
+          },
+          {
+            "id": "straight_bet",
+            "text": "A straight bet is a normal parlay or single with no hedge."
+          }
+        ],
+        "top_k": 3
+      },
+      "result": {
+        "tool": "jev_find",
+        "model": "jev-latest",
+        "query": "Which ticket type is this: Ada Lovelace less 199.5 pass_yds; Grace Hopper more 70.5 rush_yds?",
+        "exists": 0.4,
+        "exists_verdict": "partial",
+        "top": [
+          {
+            "id": "straight_bet",
+            "probability": 0.63,
+            "text": "straight_bet"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "The lines file shows line 180.5 for Ada Lovelace pass_yds on less at hardrock.",
+          "The lines file shows line 60.5 for Grace Hopper rush_yds on more at hardrock."
+        ],
+        "evidence": "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,book_over,book_under\ndemo,hardrock,Ada Lovelace,ada_lovelace,NYG,SEA,pass_yds,180.5,less,-115,-115\ndemo,hardrock,Grace Hopper,grace_hopper,NYJ,MIA,rush_yds,60.5,more,-115,-115\n",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "The lines file shows line 180.5 for Ada Lovelace pass_yds on less at hardrock.",
+            "verdict": "verified",
+            "confidence": 0.95,
+            "action": "auto"
+          },
+          {
+            "id": "claim1",
+            "claim": "The lines file shows line 60.5 for Grace Hopper rush_yds on more at hardrock.",
+            "verdict": "verified",
+            "confidence": 0.95,
+            "action": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "NYG is projected for low passing volume, given the spread, the total, and the implied team total."
+        ],
+        "evidence": "slate_id,game_id,team,opp,implied_total,spread,roof,weather_exposed,wind_mph,precip_pop\ndemo,SEA@NYG,NYG,SEA,17.5,3.5,open,true,12,20\nslate_id,platform,player_name,player_key,team,opp,stat_type,line,side,book_over,book_under\ndemo,hardrock,Ada Lovelace,ada_lovelace,NYG,SEA,pass_yds,180.5,less,-115,-115\ndemo,hardrock,Grace Hopper,grace_hopper,NYJ,MIA,rush_yds,60.5,more,-115,-115\n",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "NYG is projected for low passing volume, given the spread, the total, and the implied team total.",
+            "verdict": "contradicted",
+            "confidence": 0.93,
+            "action": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "Player props qualify for this promo: Site credit for a single moneyline only"
+        ],
+        "evidence": "Site credit for a single moneyline only",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "Player props qualify for this promo: Site credit for a single moneyline only",
+            "verdict": "contradicted",
+            "confidence": 0.88,
+            "action": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_find",
+      "arguments": {
+        "query": "Which ticket type is this: Ada Lovelace less 180.5 pass_yds; Grace Hopper more 60.5 rush_yds?",
+        "candidates": [
+          {
+            "id": "promo_hedge",
+            "text": "A promo hedge uses a book promotion and is not a priced edge."
+          },
+          {
+            "id": "real_hedge",
+            "text": "A real hedge offsets exposure on the other side of a position."
+          },
+          {
+            "id": "straight_bet",
+            "text": "A straight bet is a normal parlay or single with no hedge."
+          }
+        ],
+        "top_k": 3
+      },
+      "result": {
+        "tool": "jev_find",
+        "model": "jev-latest",
+        "query": "Which ticket type is this: Ada Lovelace less 180.5 pass_yds; Grace Hopper more 60.5 rush_yds?",
+        "exists": 0.7,
+        "exists_verdict": "partial",
+        "top": [
+          {
+            "id": "straight_bet",
+            "probability": 0.6,
+            "text": "straight_bet"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "The lines file shows line 200.5 for Jameis Winston pass_yds on less at hardrock.",
+          "The lines file shows line 71.5 for Braelon Allen rush_yds on more at hardrock.",
+          "The lines file shows line 85.5 for D'Andre Swift rush_yds on more at hardrock.",
+          "The lines file shows line 69.5 for Jaylen Warren rush_yds on more at hardrock."
+        ],
+        "evidence": "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,line_type,captured_at,injury_status,book_over,book_under,leg_odds,slip_odds,slip_multiplier,ticket_id,fair_p,contract_price\n2026-w05-sun,hardrock,Jameis Winston,jameis_winston,NYG,SEA,pass_yds,200.5,less,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,Braelon Allen,braelon_allen,NYJ,MIA,rush_yds,71.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,D'Andre Swift,dandre_swift,CHI,MIN,rush_yds,85.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,Jaylen Warren,jaylen_warren,PIT,CLE,rush_yds,69.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "auto_accept": 0.8,
+        "summary": {
+          "verified": 4,
+          "contradicted": 0,
+          "unsupported": 0,
+          "needs_review": 0
+        },
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "The lines file shows line 200.5 for Jameis Winston pass_yds on less at hardrock.",
+            "verdict": "verified",
+            "probabilities": {
+              "supports": 1,
+              "contradicts": 0,
+              "says_nothing": 0
+            },
+            "confidence": 1,
+            "action": "auto",
+            "supporting_evidence": null
+          },
+          {
+            "id": "claim1",
+            "claim": "The lines file shows line 71.5 for Braelon Allen rush_yds on more at hardrock.",
+            "verdict": "verified",
+            "probabilities": {
+              "supports": 1,
+              "contradicts": 0,
+              "says_nothing": 0
+            },
+            "confidence": 1,
+            "action": "auto",
+            "supporting_evidence": null
+          },
+          {
+            "id": "claim2",
+            "claim": "The lines file shows line 85.5 for D'Andre Swift rush_yds on more at hardrock.",
+            "verdict": "verified",
+            "probabilities": {
+              "supports": 1,
+              "contradicts": 0,
+              "says_nothing": 0
+            },
+            "confidence": 1,
+            "action": "auto",
+            "supporting_evidence": null
+          },
+          {
+            "id": "claim3",
+            "claim": "The lines file shows line 69.5 for Jaylen Warren rush_yds on more at hardrock.",
+            "verdict": "verified",
+            "probabilities": {
+              "supports": 1,
+              "contradicts": 0,
+              "says_nothing": 0
+            },
+            "confidence": 1,
+            "action": "auto",
+            "supporting_evidence": null
+          }
+        ],
+        "usage": {
+          "input_tokens": 1371,
+          "output_tokens": 175
+        }
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "NYG is projected for low passing volume, given the spread, the total, and the implied team total."
+        ],
+        "evidence": "slate_id,game_id,team,opp,implied_total,spread,roof,weather_exposed,wind_mph,precip_pop\n2026-w01-sun,TB@CIN,TB,CIN,23.50,,open,true,,\n2026-w01-sun,TB@CIN,CIN,TB,27.00,,open,true,,\n2026-w01-sun,NO@DET,NO,DET,21.25,,dome,false,,\n2026-w01-sun,NO@DET,DET,NO,28.25,,dome,false,,\n2026-w01-sun,CHI@CAR,CHI,CAR,25.25,,open,true,,\n2026-w01-sun,CHI@CAR,CAR,CHI,22.25,,open,true,,\n2026-w01-sun,BAL@IND,BAL,IND,25.50,,retractable,true,,\n2026-w01-sun,BAL@IND,IND,BAL,22.00,,retractable,true,,\n2026-w01-sun,ARI@LAC,ARI,LAC,19.00,9.5,semi_open,false,,\n2026-w01-sun,ARI@LAC,LAC,ARI,28.50,-9.5,semi_open,false,,\n2026-w01-sun,GB@MIN,GB,MIN,22.00,,dome,false,,\n2026-w01-sun,GB@MIN,MIN,GB,24.50,,dome,false,,\n2026-w01-sun,BUF@HOU,BUF,HOU,23.00,,retractable,true,,\n2026-w01-sun,BUF@HOU,HOU,BUF,21.50,,retractable,true,,\n2026-w01-sun,WAS@PHI,WAS,PHI,19.25,,open,true,,\n2026-w01-sun,WAS@PHI,PHI,WAS,25.25,,open,true,,\n2026-w01-sun,ATL@PIT,ATL,PIT,17.75,,open,true,,\n2026-w01-sun,ATL@PIT,PIT,ATL,23.75,,open,true,,\n2026-w01-sun,MIA@LV,MIA,LV,18.75,,dome,false,,\n2026-w01-sun,MIA@LV,LV,MIA,21.75,,dome,false,,\n2026-w01-sun,CLE@JAX,CLE,JAX,15.50,8.5,open,true,,\n2026-w01-sun,CLE@JAX,JAX,CLE,24.00,-8.5,open,true,,\n2026-w01-sun,NYJ@TEN,NYJ,TEN,18.50,,open,true,,\n2026-w01-sun,NYJ@TEN,TEN,NYJ,20.00,,open,true,,\nslate_id,platform,player_name,player_key,team,opp,stat_type,line,side,line_type,captured_at,injury_status,book_over,book_under,leg_odds,slip_odds,slip_multiplier,ticket_id,fair_p,contract_price\n2026-w05-sun,hardrock,Jameis Winston,jameis_winston,NYG,SEA,pass_yds,200.5,less,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,Braelon Allen,braelon_allen,NYJ,MIA,rush_yds,71.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,D'Andre Swift,dandre_swift,CHI,MIN,rush_yds,85.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,Jaylen Warren,jaylen_warren,PIT,CLE,rush_yds,69.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "auto_accept": 0.8,
+        "summary": {
+          "verified": 0,
+          "contradicted": 0,
+          "unsupported": 1,
+          "needs_review": 1
+        },
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "NYG is projected for low passing volume, given the spread, the total, and the implied team total.",
+            "verdict": "unsupported",
+            "probabilities": {
+              "supports": 0.25,
+              "contradicts": 0.03,
+              "says_nothing": 0.72
+            },
+            "confidence": 0.58,
+            "action": "review",
+            "supporting_evidence": null
+          }
+        ],
+        "usage": {
+          "input_tokens": 1595,
+          "output_tokens": 50
+        }
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "Player props qualify for this promo: Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose"
+        ],
+        "evidence": "Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "auto_accept": 0.8,
+        "summary": {
+          "verified": 0,
+          "contradicted": 0,
+          "unsupported": 1,
+          "needs_review": 0
+        },
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "Player props qualify for this promo: Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose",
+            "verdict": "unsupported",
+            "probabilities": {
+              "supports": 0.03,
+              "contradicts": 0.05,
+              "says_nothing": 0.92
+            },
+            "confidence": 0.88,
+            "action": "auto",
+            "supporting_evidence": null
+          }
+        ],
+        "usage": {
+          "input_tokens": 505,
+          "output_tokens": 50
+        }
+      }
+    },
+    {
+      "tool": "jev_find",
+      "arguments": {
+        "query": "Which ticket type is this: Jameis Winston less 200.5 pass_yds; Braelon Allen more 71.5 rush_yds; D'Andre Swift more 85.5 rush_yds; Jaylen Warren more 69.5 rush_yds?",
+        "candidates": [
+          {
+            "id": "promo_hedge",
+            "text": "A promo hedge uses a book promotion and is not a priced edge."
+          },
+          {
+            "id": "real_hedge",
+            "text": "A real hedge offsets exposure on the other side of a position."
+          },
+          {
+            "id": "straight_bet",
+            "text": "A straight bet is a normal parlay or single with no hedge."
+          }
+        ],
+        "top_k": 3
+      },
+      "result": {
+        "tool": "jev_find",
+        "model": "jev-latest",
+        "query": "Which ticket type is this: Jameis Winston less 200.5 pass_yds; Braelon Allen more 71.5 rush_yds; D'Andre Swift more 85.5 rush_yds; Jaylen Warren more 69.5 rush_yds?",
+        "exists": 0.85,
+        "exists_verdict": "answered",
+        "top": [
+          {
+            "id": "straight_bet",
+            "probability": 0.98,
+            "text": "A straight bet is a normal parlay or single with no hedge."
+          },
+          {
+            "id": "real_hedge",
+            "probability": 0.02,
+            "text": "A real hedge offsets exposure on the other side of a position."
+          },
+          {
+            "id": "promo_hedge",
+            "probability": 0,
+            "text": "A promo hedge uses a book promotion and is not a priced edge."
+          }
+        ],
+        "usage": {
+          "input_tokens": 664,
+          "output_tokens": 65
+        }
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "The lines file shows line 200.5 for Jameis Winston pass_yds on less at hardrock.",
+          "The lines file shows line 71.5 for Braelon Allen rush_yds on more at hardrock.",
+          "The lines file shows line 85.5 for D'Andre Swift rush_yds on more at hardrock.",
+          "The lines file shows line 69.5 for Jaylen Warren rush_yds on more at hardrock."
+        ],
+        "evidence": "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,line_type,captured_at,injury_status,book_over,book_under,leg_odds,slip_odds,slip_multiplier,ticket_id,fair_p,contract_price\n2026-w05-sun,hardrock,Jameis Winston,jameis_winston,NYG,SEA,pass_yds,200.5,less,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,Braelon Allen,braelon_allen,NYJ,MIA,rush_yds,71.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,D'Andre Swift,dandre_swift,CHI,MIN,rush_yds,85.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,Jaylen Warren,jaylen_warren,PIT,CLE,rush_yds,69.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "auto_accept": 0.8,
+        "summary": {
+          "verified": 4,
+          "contradicted": 0,
+          "unsupported": 0,
+          "needs_review": 0
+        },
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "The lines file shows line 200.5 for Jameis Winston pass_yds on less at hardrock.",
+            "verdict": "verified",
+            "probabilities": {
+              "supports": 1,
+              "contradicts": 0,
+              "says_nothing": 0
+            },
+            "confidence": 1,
+            "action": "auto",
+            "supporting_evidence": null
+          },
+          {
+            "id": "claim1",
+            "claim": "The lines file shows line 71.5 for Braelon Allen rush_yds on more at hardrock.",
+            "verdict": "verified",
+            "probabilities": {
+              "supports": 1,
+              "contradicts": 0,
+              "says_nothing": 0
+            },
+            "confidence": 1,
+            "action": "auto",
+            "supporting_evidence": null
+          },
+          {
+            "id": "claim2",
+            "claim": "The lines file shows line 85.5 for D'Andre Swift rush_yds on more at hardrock.",
+            "verdict": "verified",
+            "probabilities": {
+              "supports": 1,
+              "contradicts": 0,
+              "says_nothing": 0
+            },
+            "confidence": 1,
+            "action": "auto",
+            "supporting_evidence": null
+          },
+          {
+            "id": "claim3",
+            "claim": "The lines file shows line 69.5 for Jaylen Warren rush_yds on more at hardrock.",
+            "verdict": "verified",
+            "probabilities": {
+              "supports": 1,
+              "contradicts": 0,
+              "says_nothing": 0
+            },
+            "confidence": 1,
+            "action": "auto",
+            "supporting_evidence": null
+          }
+        ],
+        "usage": {
+          "input_tokens": 1371,
+          "output_tokens": 175
+        }
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "NYG is projected for low passing volume, given the spread, the total, and the implied team total."
+        ],
+        "evidence": "slate_id,game_id,team,opp,implied_total,spread,roof,weather_exposed,wind_mph,precip_pop\n2026-w01-sun,TB@CIN,TB,CIN,23.50,,open,true,,\n2026-w01-sun,TB@CIN,CIN,TB,27.00,,open,true,,\n2026-w01-sun,NO@DET,NO,DET,21.25,,dome,false,,\n2026-w01-sun,NO@DET,DET,NO,28.25,,dome,false,,\n2026-w01-sun,CHI@CAR,CHI,CAR,25.25,,open,true,,\n2026-w01-sun,CHI@CAR,CAR,CHI,22.25,,open,true,,\n2026-w01-sun,BAL@IND,BAL,IND,25.50,,retractable,true,,\n2026-w01-sun,BAL@IND,IND,BAL,22.00,,retractable,true,,\n2026-w01-sun,ARI@LAC,ARI,LAC,19.00,9.5,semi_open,false,,\n2026-w01-sun,ARI@LAC,LAC,ARI,28.50,-9.5,semi_open,false,,\n2026-w01-sun,GB@MIN,GB,MIN,22.00,,dome,false,,\n2026-w01-sun,GB@MIN,MIN,GB,24.50,,dome,false,,\n2026-w01-sun,BUF@HOU,BUF,HOU,23.00,,retractable,true,,\n2026-w01-sun,BUF@HOU,HOU,BUF,21.50,,retractable,true,,\n2026-w01-sun,WAS@PHI,WAS,PHI,19.25,,open,true,,\n2026-w01-sun,WAS@PHI,PHI,WAS,25.25,,open,true,,\n2026-w01-sun,ATL@PIT,ATL,PIT,17.75,,open,true,,\n2026-w01-sun,ATL@PIT,PIT,ATL,23.75,,open,true,,\n2026-w01-sun,MIA@LV,MIA,LV,18.75,,dome,false,,\n2026-w01-sun,MIA@LV,LV,MIA,21.75,,dome,false,,\n2026-w01-sun,CLE@JAX,CLE,JAX,15.50,8.5,open,true,,\n2026-w01-sun,CLE@JAX,JAX,CLE,24.00,-8.5,open,true,,\n2026-w01-sun,NYJ@TEN,NYJ,TEN,18.50,,open,true,,\n2026-w01-sun,NYJ@TEN,TEN,NYJ,20.00,,open,true,,\nslate_id,platform,player_name,player_key,team,opp,stat_type,line,side,line_type,captured_at,injury_status,book_over,book_under,leg_odds,slip_odds,slip_multiplier,ticket_id,fair_p,contract_price\n2026-w05-sun,hardrock,Jameis Winston,jameis_winston,NYG,SEA,pass_yds,200.5,less,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,Braelon Allen,braelon_allen,NYJ,MIA,rush_yds,71.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,D'Andre Swift,dandre_swift,CHI,MIN,rush_yds,85.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n2026-w05-sun,hardrock,Jaylen Warren,jaylen_warren,PIT,CLE,rush_yds,69.5,more,standard,2026-10-11T16:00:00Z,,-115,-115,,,,,,\n",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "auto_accept": 0.8,
+        "summary": {
+          "verified": 0,
+          "contradicted": 0,
+          "unsupported": 1,
+          "needs_review": 1
+        },
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "NYG is projected for low passing volume, given the spread, the total, and the implied team total.",
+            "verdict": "unsupported",
+            "probabilities": {
+              "supports": 0.26,
+              "contradicts": 0.03,
+              "says_nothing": 0.71
+            },
+            "confidence": 0.56,
+            "action": "review",
+            "supporting_evidence": null
+          }
+        ],
+        "usage": {
+          "input_tokens": 1595,
+          "output_tokens": 50
+        }
+      }
+    },
+    {
+      "tool": "jev_verify",
+      "arguments": {
+        "claims": [
+          "Player props qualify for this promo: Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose"
+        ],
+        "evidence": "Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose",
+        "auto_accept": 0.8
+      },
+      "result": {
+        "tool": "jev_verify",
+        "model": "jev-latest",
+        "auto_accept": 0.8,
+        "summary": {
+          "verified": 0,
+          "contradicted": 0,
+          "unsupported": 1,
+          "needs_review": 0
+        },
+        "results": [
+          {
+            "id": "claim0",
+            "claim": "Player props qualify for this promo: Up to $10 back as a Bonus Bet if your 2+ leg NFL bets lose",
+            "verdict": "unsupported",
+            "probabilities": {
+              "supports": 0.03,
+              "contradicts": 0.06,
+              "says_nothing": 0.91
+            },
+            "confidence": 0.86,
+            "action": "auto",
+            "supporting_evidence": null
+          }
+        ],
+        "usage": {
+          "input_tokens": 505,
+          "output_tokens": 50
+        }
+      }
+    },
+    {
+      "tool": "jev_find",
+      "arguments": {
+        "query": "Which ticket type is this: Jameis Winston less 200.5 pass_yds; Braelon Allen more 71.5 rush_yds; D'Andre Swift more 85.5 rush_yds; Jaylen Warren more 69.5 rush_yds?",
+        "candidates": [
+          {
+            "id": "promo_hedge",
+            "text": "A promo hedge uses a book promotion and is not a priced edge."
+          },
+          {
+            "id": "real_hedge",
+            "text": "A real hedge offsets exposure on the other side of a position."
+          },
+          {
+            "id": "straight_bet",
+            "text": "A straight bet is a normal parlay or single with no hedge."
+          }
+        ],
+        "top_k": 3
+      },
+      "result": {
+        "tool": "jev_find",
+        "model": "jev-latest",
+        "query": "Which ticket type is this: Jameis Winston less 200.5 pass_yds; Braelon Allen more 71.5 rush_yds; D'Andre Swift more 85.5 rush_yds; Jaylen Warren more 69.5 rush_yds?",
+        "exists": 0.85,
+        "exists_verdict": "answered",
+        "top": [
+          {
+            "id": "straight_bet",
+            "probability": 0.98,
+            "text": "A straight bet is a normal parlay or single with no hedge."
+          },
+          {
+            "id": "real_hedge",
+            "probability": 0.02,
+            "text": "A real hedge offsets exposure on the other side of a position."
+          },
+          {
+            "id": "promo_hedge",
+            "probability": 0,
+            "text": "A promo hedge uses a book promotion and is not a priced edge."
+          }
+        ],
+        "usage": {
+          "input_tokens": 664,
+          "output_tokens": 65
+        }
+      }
+    }
+  ]
+}

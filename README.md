@@ -134,6 +134,19 @@ ceminiparlays grade --ledger examples/ledger_week5.csv \
 # --card accepts a card CSV or card.json. A null card puts every ticket off-card.
 # --closings fills a blank close_* ledger cell and computes clv_pp per leg.
 
+# Run the Jev gate after compose and before you type. Mandatory every slate.
+ceminiparlays jev-gate \
+  --card runs/2026-w05-sun/compose/card.json \
+  --lines runs/2026-w05-sun/lines.csv \
+  --environment examples/environment.csv \
+  --promo-terms 'Up to $10 back as a Bonus Bet if your 2+ leg NFL bet loses' \
+  --out-dir runs/2026-w05-sun/jev
+# Writes jev_gate_report.csv + one verdict line on card.md.
+# It marks: pass, do_not_type, thesis_unsupported, review, block.
+# It never reprices, voids, rewrites, or submits. Fail closed: a missing key or
+# a missing server blocks every row and exits 2.
+# Offline / CI: --fixture tests/fixtures/jev_gate_fixture.json needs no key.
+
 # Optional: copy a CeminiDFS handoff, then compose. FPPG is not a prop fair.
 # Missing file prints CEMINIDFS_HANDOFF_MISSING and continues.
 ceminiparlays compose --auto --lines runs/slate/lines.csv \

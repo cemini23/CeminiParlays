@@ -418,3 +418,72 @@ def test_compose_keeps_rush_60_5_even_without_the_rec_flag() -> None:
         environment=None,
     )
     assert {leg.line.player_name for t in tickets for leg in t} == {"Rush High"}
+
+
+def _leg(name, team, opp, *, side="more", stat="pass_yds", fair_p=0.5,
+         book_over=-110, book_under=-110, prop_edge=None, leg_odds=None):
+    from ceminiparlays.io import LineRow
+
+    line = LineRow(
+        slate_id="s", platform="hardrock", player_name=name,
+        player_key=name.lower().replace(" ", "_"), team=team, opponent=opp,
+        stat_type=stat, line=250.5, side=side, line_type="standard",
+        captured_at="", displayed_multiplier=None, injury_status="",
+        book_over=book_over, book_under=book_under, leg_odds=leg_odds,
+    )
+    return EvaluatedLeg(
+        line=line, fair_p=fair_p, implied_p=0.5, edge=0.0, source="distribution",
+        family="lognormal", median=0.0, warn="", prop_edge=prop_edge,
+    )
+
+
+def test_score_ranks_by_modeled_edge_not_fair_p() -> None:
+    from ceminiparlays.compose import _score
+
+    strong = _leg("Strong", "KC", "BUF", fair_p=0.4, prop_edge=0.05)
+    weak = _leg("Weak", "DAL", "PHI", fair_p=0.7, prop_edge=0.01)
+    assert _score([strong], None)[0] > _score([weak], None)[0]
+
+
+def test_score_itt_tiebreak_is_side_aware() -> None:
+    from ceminiparlays.compose import _score
+    from ceminiparlays.environment import EnvRow
+
+    game = {("KC", "BUF"): EnvRow(game_id="", team="KC", opponent="BUF", implied_total=28.0)}
+    over = _leg("Over Guy", "KC", "BUF", side="more")
+    under = _leg("Under Guy", "KC", "BUF", side="less")
+    # In a high-total game an Over is preferred and an Under is not.
+    assert _score([over], game)[1] > _score([under], game)[1]
+
+
+def test_leg_decimal_uses_the_book_price_not_one_over_fair_p() -> None:
+    from ceminiparlays.compose import _leg_decimal
+
+    leg = _leg("A", "KC", "BUF", side="more", book_over=-115, book_under=-115, fair_p=0.5)
+    # -115 is 1.8696x, not 1 / 0.5 = 2.0x.
+    assert abs(_leg_decimal(leg) - 1.8695652173913044) < 1e-9
+    under = _leg("B", "KC", "BUF", side="less", book_over=-115, book_under=-125)
+    assert abs(_leg_decimal(under) - 1.8) < 1e-9
+
+
+def test_estimate_multiplier_confirms_a_cross_game_product() -> None:
+    a = _leg("A", "KC", "BUF", book_over=-115, book_under=-115)
+    b = _leg("B", "DAL", "PHI", book_over=-115, book_under=-115)
+    multiplier, source, unconfirmed = estimate_multiplier([a, b])
+    assert source == "leg_odds_naive"
+    assert unconfirmed is False
+    assert abs(multiplier - 1.8695652173913044 ** 2) < 1e-9
+
+
+def test_estimate_multiplier_keeps_a_same_game_product_unconfirmed() -> None:
+    a = _leg("A", "KC", "BUF", book_over=-115, book_under=-115)
+    b = _leg("B", "BUF", "KC", book_over=-115, book_under=-115)
+    _multiplier, source, unconfirmed = estimate_multiplier([a, b])
+    assert source == "leg_odds_naive"
+    assert unconfirmed is True
+
+
+def test_estimate_multiplier_has_no_fair_naive_fallback() -> None:
+    a = _leg("A", "KC", "BUF", book_over=None, book_under=None, fair_p=0.5)
+    b = _leg("B", "DAL", "PHI", book_over=None, book_under=None, fair_p=0.5)
+    assert estimate_multiplier([a, b]) == (None, "none", False)

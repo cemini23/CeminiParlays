@@ -13,7 +13,7 @@ from itertools import combinations
 from ceminiparlays.environment import Environment, env_for
 from ceminiparlays.markets import GAME_STATS, is_first_td
 from ceminiparlays.odds import american_to_decimal
-from ceminiparlays.slips import EvaluatedLeg
+from ceminiparlays.slips import LESS_SIDES, MORE_SIDES, EvaluatedLeg
 
 #: Largest pool the composer enumerates. 14 choose 5 is still tiny.
 COMPOSE_POOL = 14
@@ -58,8 +58,23 @@ def _leg_key(leg: EvaluatedLeg) -> tuple[str, str, str]:
     )
 
 
+def _side_price(leg: EvaluatedLeg) -> int | None:
+    """The posted two-way price for this leg's side, or ``None``."""
+
+    if leg.line.side in MORE_SIDES:
+        return leg.line.book_over
+    if leg.line.side in LESS_SIDES:
+        return leg.line.book_under
+    return None
+
+
 def _leg_decimal(leg: EvaluatedLeg) -> float | None:
-    """Single-leg decimal estimate for the odds-window screen."""
+    """Single-leg decimal estimate for the odds-window screen.
+
+    Never ``1 / fair_p``: a model probability is not a price. Use the typed
+    single-leg price, a contract mid, or the posted two-way book price for the
+    leg's side (A-05).
+    """
 
     if leg.line.leg_odds is not None:
         try:
@@ -69,16 +84,40 @@ def _leg_decimal(leg: EvaluatedLeg) -> float | None:
     price = leg.line.contract_price
     if price is not None and 0.0 < price < 1.0:
         return 1.0 / price
-    if 0.0 < leg.fair_p < 1.0:
-        return 1.0 / leg.fair_p
+    side_price = _side_price(leg)
+    if side_price is not None:
+        try:
+            return american_to_decimal(int(side_price))
+        except ValueError:
+            return None
     return None
+
+
+def _any_same_game(legs: list[EvaluatedLeg]) -> bool:
+    """True when two legs share a game (their team/opp pairs overlap)."""
+
+    games = [
+        {leg.line.team, leg.line.opponent}
+        for leg in legs
+        if leg.line.team and leg.line.opponent
+    ]
+    for index, left in enumerate(games):
+        for right in games[index + 1 :]:
+            if left & right:
+                return True
+    return False
 
 
 def estimate_multiplier(legs: list[EvaluatedLeg]) -> tuple[float | None, str, bool]:
     """Estimate a combo decimal from typed prices.
 
     Returns ``(multiplier, source, unconfirmed)``. ``source`` is ``row``,
-    ``slip_odds``, ``leg_odds_naive``, ``fair_naive``, ``conflict`` or ``none``.
+    ``slip_odds``, ``leg_odds_naive``, ``contract_product``, ``conflict`` or
+    ``none``.
+
+    A product of independent single-leg prices is the real payout, so a
+    cross-game combo is confirmed; a same-game combo (an SGP) pays less than the
+    product, so it stays unconfirmed until the operator types the in-app price.
     """
 
     row_ms = sorted(
@@ -105,13 +144,10 @@ def estimate_multiplier(legs: list[EvaluatedLeg]) -> tuple[float | None, str, bo
     product = 1.0
     for decimal in decimals:
         product *= decimal
-    if all(leg.line.leg_odds is not None for leg in legs):
-        source = "leg_odds_naive"
-    elif all(leg.line.contract_price is not None for leg in legs):
-        source = "contract_product"
-    else:
-        source = "fair_naive"
-    return product, source, True
+    if all(leg.line.contract_price is not None for leg in legs):
+        return product, "contract_product", True
+    same_game = _any_same_game(legs)
+    return product, "leg_odds_naive", same_game
 
 
 def _over_market_cap(
@@ -149,19 +185,34 @@ def _in_window(
     return True
 
 
+#: Score for a leg that carries no model P, so it ranks below any modeled leg.
+_NO_MODEL_SCORE = -2.0
+
+
 def _score(
     legs: list[EvaluatedLeg] | tuple[EvaluatedLeg, ...],
     environment: Environment | None,
-) -> tuple[float, float]:
+) -> tuple[float, float, float]:
+    """Rank a leg or a combo: ``(modeled_edge, side_aware_itt, fair_total)``.
+
+    The primary key is the modeled edge (``model P - market implied P``), never
+    ``sum(fair_p)``, which alone prefers every Over. The implied-team-total
+    tie-break counts an Over positively in a high-total game and an Under
+    positively in a low-total game, so a shootout does not lift an Under (A-05).
+    """
+
+    edges = [leg.prop_edge for leg in legs if leg.prop_edge is not None]
+    primary = sum(edges) / len(edges) if edges else _NO_MODEL_SCORE
     itt_total = 0.0
     have_itt = False
     for leg in legs:
         row = env_for(environment, leg.line.team, leg.line.opponent)
         if row is not None and row.implied_total is not None:
-            itt_total += row.implied_total
+            direction = -1.0 if leg.line.side in LESS_SIDES else 1.0
+            itt_total += direction * row.implied_total
             have_itt = True
     fair_total = sum(leg.fair_p for leg in legs)
-    return (itt_total if have_itt else 0.0, fair_total)
+    return (primary, itt_total if have_itt else 0.0, fair_total)
 
 
 def compose_tickets(
@@ -216,7 +267,7 @@ def compose_tickets(
             break
         if size < 1:
             raise ValueError("leg count must be >= 1")
-        scored: list[tuple[tuple[float, float], float, tuple[EvaluatedLeg, ...]]] = []
+        scored: list[tuple[tuple[float, float, float], float, tuple[EvaluatedLeg, ...]]] = []
         for combo in combinations(candidate_pool, size):
             if len({_leg_key(leg) for leg in combo}) < size:
                 continue
@@ -233,7 +284,14 @@ def compose_tickets(
             if not _in_window(multiplier, min_odds, max_odds):
                 continue
             scored.append((_score(list(combo), environment), multiplier, combo))
-        scored.sort(key=lambda item: (-item[0][0], -item[0][1], item[1]))
+        scored.sort(
+            key=lambda item: (
+                -item[0][0],
+                -item[0][1],
+                -item[0][2],
+                item[1],
+            )
+        )
         # Pass 1: no leg appears on two tickets (maximum diversification).
         used: set[tuple[str, str, str]] = set()
         for _score_value, _multiplier, combo in scored:

@@ -36,7 +36,10 @@ from ceminiparlays.environment import (
     read_environment,
     write_compose_itt,
 )
-from ceminiparlays.late_active import late_active_alerts
+from ceminiparlays.late_active import (
+    apply_inactive_scratch,
+    in_game_exit_warnings,
+)
 from ceminiparlays.fair import p_over_line, side_probability
 from ceminiparlays.fetch import load_fixture, rows_from_events, write_fetch_csv
 from ceminiparlays.grade import grade_ledger, write_grade
@@ -225,6 +228,16 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
         help=(
             "Price a same-game pair that has no prior in correlation_priors.json "
             "with the old guessed fallback. Default skips the combo."
+        ),
+    )
+    parser.add_argument(
+        "--max-line-age",
+        type=float,
+        default=None,
+        help=(
+            "Drop a line whose captured_at is older than this many minutes. "
+            "Omitted means no age check. A leg whose game has already kicked "
+            "off by commence_time is always dropped."
         ),
     )
     parser.add_argument(
@@ -855,6 +868,7 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         allow_high_receiving=bool(getattr(args, "allow_rec_line", False)),
         require_model=bool(getattr(args, "require_model", False)),
         environment=environment,
+        max_line_age_minutes=getattr(args, "max_line_age", None),
     )
     if environment:
         kept = drop_unavailable_first_td(live, environment)
@@ -1273,7 +1287,9 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         lines = [row for row in lines if row.ticket_id == str(ticket_id)]
     lines, off_card = _off_card_filter(lines, getattr(args, "games", None))
     if late_path is not None:
-        for note in late_active_alerts(lines, late_path):
+        for name in apply_inactive_scratch(lines, late_path):
+            print(f"scratch (late status): {name}")
+        for note in in_game_exit_warnings(lines):
             print(note)
     if getattr(args, "enforce_market_depth", False):
         thin = thin_catalog_games(lines)
@@ -1344,6 +1360,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         allow_high_receiving=bool(getattr(args, "allow_rec_line", False)),
         require_model=bool(getattr(args, "require_model", False)),
         environment=environment,
+        max_line_age_minutes=getattr(args, "max_line_age", None),
     )
     dropped = [leg for leg in excluded if leg.warn not in {"scratch"}]
     print(

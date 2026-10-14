@@ -790,3 +790,61 @@ def test_weather_discount_moves_a_model_marginal() -> None:
     )
     assert live[0].fair_p < 0.5
     assert "WEATHER_DISCOUNT" in live[0].family
+
+
+def test_already_kicked_leg_is_dropped() -> None:
+    from datetime import datetime, timezone
+
+    leg = _line("QB One", "KC", "BUF", stat="pass_yds")
+    leg.commence_time = "2026-09-13T17:00:00Z"
+    now = datetime(2026, 9, 13, 18, 0, tzinfo=timezone.utc)
+    table = resolve_payout("underdog", "standard", 2)
+    live, excluded = evaluate_legs(
+        [leg], {}, implied_p=breakeven_per_leg(table.all_hit, 2),
+        allow_high_receiving=True, now=now,
+    )
+    assert live == []
+    assert excluded[0].warn == "already-kicked"
+
+
+def test_future_kickoff_leg_is_kept() -> None:
+    from datetime import datetime, timezone
+
+    leg = _line("QB One", "KC", "BUF", stat="pass_yds")
+    leg.commence_time = "2026-09-13T17:00:00Z"
+    now = datetime(2026, 9, 13, 12, 0, tzinfo=timezone.utc)
+    table = resolve_payout("underdog", "standard", 2)
+    live, _ = evaluate_legs(
+        [leg], {}, implied_p=breakeven_per_leg(table.all_hit, 2),
+        allow_high_receiving=True, now=now,
+    )
+    assert len(live) == 1
+
+
+def test_stale_line_is_dropped_when_max_age_is_set() -> None:
+    from datetime import datetime, timezone
+
+    leg = _line("QB One", "KC", "BUF", stat="pass_yds")
+    leg.captured_at = "2026-09-13T08:00:00Z"
+    now = datetime(2026, 9, 13, 12, 0, tzinfo=timezone.utc)
+    table = resolve_payout("underdog", "standard", 2)
+    live, excluded = evaluate_legs(
+        [leg], {}, implied_p=breakeven_per_leg(table.all_hit, 2),
+        allow_high_receiving=True, now=now, max_line_age_minutes=60.0,
+    )
+    assert live == []
+    assert excluded[0].warn == "stale-line"
+
+
+def test_fresh_line_survives_the_age_check() -> None:
+    from datetime import datetime, timezone
+
+    leg = _line("QB One", "KC", "BUF", stat="pass_yds")
+    leg.captured_at = "2026-09-13T11:45:00Z"
+    now = datetime(2026, 9, 13, 12, 0, tzinfo=timezone.utc)
+    table = resolve_payout("underdog", "standard", 2)
+    live, _ = evaluate_legs(
+        [leg], {}, implied_p=breakeven_per_leg(table.all_hit, 2),
+        allow_high_receiving=True, now=now, max_line_age_minutes=60.0,
+    )
+    assert len(live) == 1

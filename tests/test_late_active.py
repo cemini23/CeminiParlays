@@ -2,7 +2,7 @@ from pathlib import Path
 
 from ceminiparlays.cli import main
 from ceminiparlays.io import LineRow
-from ceminiparlays.late_active import late_active_alerts
+from ceminiparlays.late_active import apply_inactive_scratch, in_game_exit_warnings, read_out_keys
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,7 +21,7 @@ def _row(**overrides: object) -> LineRow:
         line_type="standard",
         captured_at="",
         displayed_multiplier=None,
-        injury_status="q",
+        injury_status="",
         book_over=-110,
         book_under=-110,
     )
@@ -29,52 +29,46 @@ def _row(**overrides: object) -> LineRow:
     return LineRow(**row)  # type: ignore[arg-type]
 
 
-def test_q_player_later_active_alerts_once(tmp_path: Path) -> None:
-    path = tmp_path / "active.csv"
+def test_out_player_is_scratched(tmp_path: Path) -> None:
+    path = tmp_path / "inactives.csv"
+    path.write_text("player_name,status\nMalik Nabers,INACTIVE\n", encoding="utf-8")
+    line = _row()
+    scratched = apply_inactive_scratch([line], path)
+    assert scratched == ["Malik Nabers"]
+    assert line.injury_status == "inactive"
+
+
+def test_doubtful_and_ir_are_scratched(tmp_path: Path) -> None:
+    path = tmp_path / "inactives.csv"
+    path.write_text("player_key,status\nmalik_nabers,doubtful\n", encoding="utf-8")
+    assert read_out_keys(path) == {"malik_nabers"}
+    line = _row()
+    apply_inactive_scratch([line], path)
+    assert line.injury_status == "inactive"
+
+
+def test_active_player_is_not_scratched(tmp_path: Path) -> None:
+    path = tmp_path / "status.csv"
     path.write_text("player_name,status\nMalik Nabers,ACTIVE\n", encoding="utf-8")
-    notes = late_active_alerts([_row(), _row()], path)
-    assert notes == [
-        "OPERATOR_ACTION_REQUIRED: Malik Nabers excluded as q later ACTIVE"
-    ]
+    line = _row()
+    assert apply_inactive_scratch([line], path) == []
+    assert line.injury_status == ""
 
 
-def test_out_player_later_active_still_alerts(tmp_path: Path) -> None:
-    path = tmp_path / "active.csv"
-    path.write_text("player_key,status\nmalik_nabers,active\n", encoding="utf-8")
-    notes = late_active_alerts([_row(injury_status="out")], path)
-    assert "excluded as out later ACTIVE" in notes[0]
+def test_already_out_row_keeps_its_status(tmp_path: Path) -> None:
+    path = tmp_path / "inactives.csv"
+    path.write_text("player_name,status\nMalik Nabers,INACTIVE\n", encoding="utf-8")
+    line = _row(injury_status="out")
+    assert apply_inactive_scratch([line], path) == []
+    assert line.injury_status == "out"
 
 
-def test_healthy_player_does_not_alert(tmp_path: Path) -> None:
-    path = tmp_path / "active.csv"
-    path.write_text("player_name,status\nMalik Nabers,ACTIVE\n", encoding="utf-8")
-    assert late_active_alerts([_row(injury_status="")], path) == []
-
-
-def test_inactive_status_in_alert_file_does_not_trigger(tmp_path: Path) -> None:
-    path = tmp_path / "active.csv"
-    path.write_text("player_name,status\nMalik Nabers,inactive\n", encoding="utf-8")
-    assert late_active_alerts([_row()], path) == []
-
-
-def test_in_game_exit_is_a_warning_only(tmp_path: Path) -> None:
-    path = tmp_path / "active.csv"
-    path.write_text("player_name,status\nMalik Nabers,ACTIVE\n", encoding="utf-8")
-    notes = late_active_alerts([_row(injury_status="exit")], path)
+def test_in_game_exit_is_a_warning_only() -> None:
+    notes = in_game_exit_warnings([_row(injury_status="exit")])
     assert len(notes) == 1
     assert notes[0].startswith("IN_GAME_EXIT: Malik Nabers")
     assert "review" in notes[0]
-    # No void / scratch / OPERATOR_ACTION_REQUIRED rewrite.
-    assert "OPERATOR_ACTION_REQUIRED" not in notes[0]
     assert "void" not in notes[0]
-
-
-def test_in_game_left_is_a_warning_only(tmp_path: Path) -> None:
-    path = tmp_path / "active.csv"
-    path.write_text("player_name,status\nMalik Nabers,ACTIVE\n", encoding="utf-8")
-    notes = late_active_alerts([_row(injury_status="left")], path)
-    assert len(notes) == 1
-    assert notes[0].startswith("IN_GAME_EXIT: Malik Nabers")
 
 
 def test_in_game_exit_tokens_stay_out_of_out_statuses() -> None:
@@ -99,16 +93,16 @@ def test_in_game_exit_leg_still_grades_on_typed_actual(tmp_path: Path) -> None:
     assert abs(summary.pnl - 5.0) < 1e-9
 
 
-def test_compose_alert_late_active_prints_and_exits_zero(tmp_path: Path, capsys) -> None:
+def test_compose_alert_late_active_scratches_the_inactive(tmp_path: Path, capsys) -> None:
     lines = tmp_path / "lines.csv"
     source = (ROOT / "examples" / "sunday_lines.csv").read_text(encoding="utf-8")
     extra = (
         "2026-w01-sun,hardrock,Malik Nabers,,NYG,DAL,rec_yds,69.5,more,standard,,"
-        "q,-110,-110,-110,,,,,\n"
+        ",-110,-110,-110,,,,,\n"
     )
     lines.write_text(source + extra, encoding="utf-8")
-    alert = tmp_path / "active.csv"
-    alert.write_text("player_name,status\nMalik Nabers,ACTIVE\n", encoding="utf-8")
+    alert = tmp_path / "inactives.csv"
+    alert.write_text("player_name,status\nMalik Nabers,INACTIVE\n", encoding="utf-8")
     code = main(
         [
             "compose",
@@ -124,7 +118,7 @@ def test_compose_alert_late_active_prints_and_exits_zero(tmp_path: Path, capsys)
     )
     out = capsys.readouterr().out
     assert code == 0
-    assert "OPERATOR_ACTION_REQUIRED: Malik Nabers excluded as q later ACTIVE" in out
+    assert "scratch (late status): Malik Nabers" in out
 
 
 def test_missing_late_active_file_exits_two(tmp_path: Path, capsys) -> None:

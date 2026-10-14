@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from itertools import combinations
 from math import comb, isnan
 from pathlib import Path
@@ -58,6 +59,8 @@ EXCLUDED_WARNS = {
     "rec-line-bar",
     "no-model-marginal",
     "bad-distribution",
+    "already-kicked",
+    "stale-line",
 }
 #: Scratch is expected (a listed player is out); every other exclusion is a
 #: data problem and aborts the default strict rank.
@@ -316,6 +319,23 @@ def market_implied_for_line(
     return None, ""
 
 
+def _parse_utc(value: str) -> datetime | None:
+    """Parse an ISO-8601 UTC timestamp (``2026-09-13T17:00:00Z``), else ``None``."""
+
+    text = (value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
 def _american_ok(odds: int | None) -> bool:
     if odds is None:
         return True
@@ -337,6 +357,8 @@ def evaluate_legs(
     allow_high_receiving: bool = False,
     require_model: bool = False,
     environment: "Environment | None" = None,
+    now: datetime | None = None,
+    max_line_age_minutes: float | None = None,
 ) -> tuple[list[EvaluatedLeg], list[EvaluatedLeg]]:
     """Split lines into rankable legs and named exclusions.
 
@@ -353,6 +375,7 @@ def evaluate_legs(
     )
     allow_integers = bool(allow_integer_lines) and not sportsbook
     stored_implied = implied_p if implied_p > 0.0 else 0.0
+    reference_now = now if now is not None else datetime.now(timezone.utc)
     live: list[EvaluatedLeg] = []
     excluded: list[EvaluatedLeg] = []
     for line in lines:
@@ -360,6 +383,17 @@ def evaluate_legs(
         if is_scratched(line.injury_status):
             excluded.append(_excluded_leg(line, stored_implied, "scratch"))
             continue
+        kick = _parse_utc(line.commence_time)
+        if kick is not None and reference_now >= kick:
+            excluded.append(_excluded_leg(line, stored_implied, "already-kicked"))
+            continue
+        if max_line_age_minutes is not None:
+            captured = _parse_utc(line.captured_at)
+            if captured is not None:
+                age_minutes = (reference_now - captured).total_seconds() / 60.0
+                if age_minutes > max_line_age_minutes:
+                    excluded.append(_excluded_leg(line, stored_implied, "stale-line"))
+                    continue
         if not line.team or not line.opponent:
             excluded.append(_excluded_leg(line, stored_implied, "no-team"))
             continue

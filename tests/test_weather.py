@@ -189,3 +189,29 @@ def test_sgp_from_score_marginals_fewer_rows_than_marginals() -> None:
     assert "WEATHER_DISCOUNT" in notes[0]
     assert "no env row provided" in notes[1]
     assert "no env row provided" in notes[2]
+
+def _windy_row() -> EnvRow:
+    return EnvRow(
+        game_id="g",
+        team="AAA",
+        opponent="BBB",
+        roof="open",
+        weather_exposed=True,
+        wind_mph=25.0,
+        precip_pop=80.0,
+    )
+
+
+def test_weather_haircuts_the_over_and_lifts_the_under() -> None:
+    over = apply_weather_discount(0.5, _windy_row(), side="more", stat_type="pass_yds")
+    under = apply_weather_discount(0.5, _windy_row(), side="less", stat_type="pass_yds")
+    assert over.adjusted < 0.5
+    assert under.adjusted > 0.5
+    # The pair stays consistent: P(over) + P(under) = 1.
+    assert abs(over.adjusted + under.adjusted - 1.0) < 1e-9
+
+
+def test_weather_ignores_a_non_weather_stat() -> None:
+    result = apply_weather_discount(0.5, _windy_row(), side="more", stat_type="sacks")
+    assert result.adjusted == 0.5
+    assert "not weather-sensitive" in result.note

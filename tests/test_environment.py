@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from ceminiparlays.environment import (
     env_for,
     env_rows_for_games,
@@ -40,10 +42,23 @@ def test_sofi_stadium_is_semi_open_not_a_dome() -> None:
     assert ari.precip_pop is None
 
 
-def test_read_environment_missing_file_is_empty(tmp_path: Path) -> None:
-    assert read_environment(tmp_path / "nope.csv") == {}
+def test_read_environment_missing_file_fails_closed(tmp_path: Path) -> None:
+    # An explicitly passed path that does not exist is a typo, not "no env".
+    with pytest.raises(FileNotFoundError, match="environment file missing"):
+        read_environment(tmp_path / "nope.csv")
     assert read_environment(None) == {}
     assert env_for({}, "CIN", "TB") is None
+
+
+def test_read_environment_non_numeric_cell_fails_closed(tmp_path: Path) -> None:
+    path = tmp_path / "env.csv"
+    path.write_text(
+        "team,opp,roof,weather_exposed,wind_mph,precip_pop\n"
+        "CIN,TB,open,true,20mph,10\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="not numeric"):
+        read_environment(path)
 
 
 def test_env_rows_for_games_keeps_only_composed_games() -> None:

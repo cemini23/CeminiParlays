@@ -14,8 +14,33 @@ class WeatherDiscountResult:
     note: str
 
 
-def apply_weather_discount(marginal: float, row: EnvRow) -> WeatherDiscountResult:
-    """Apply a weather haircut to a marginal probability.
+#: Stat families whose production falls in bad weather.
+WEATHER_SENSITIVE_STATS = frozenset(
+    {
+        "pass_yds",
+        "pass_tds",
+        "pass_att",
+        "pass_cmp",
+        "rec_yds",
+        "receptions",
+        "rec_tds",
+        "rush_rec_yds",
+        "pass_rush_yds",
+        "anytime_td",
+        "first_td",
+    }
+)
+_MORE = {"more", "over", "higher", "o"}
+
+
+def apply_weather_discount(
+    marginal: float,
+    row: EnvRow,
+    *,
+    side: str = "more",
+    stat_type: str = "",
+) -> WeatherDiscountResult:
+    """Apply a weather adjustment to a marginal probability.
 
     Gates (in order):
     1. Indoor roofs (dome, indoor, closed) → no discount.
@@ -24,13 +49,27 @@ def apply_weather_discount(marginal: float, row: EnvRow) -> WeatherDiscountResul
     4. weather_exposed is true but both wind_mph and precip_pop are None → no discount, note says fields blank.
     5. Otherwise apply wind + precip haircut (capped at 0.08 total), clip to [1e-9, 1-1e-9].
 
+    The haircut has the correct sign per side and stat: bad weather cuts an Over
+    on a weather-sensitive stat and adds the boost back to the matching Under.
+    A stat that weather does not touch (a kicking or defensive prop) is
+    unchanged.
+
     Args:
         marginal: The fair probability for one leg (e.g., from devig or a typed median).
         row: EnvRow with roof, weather_exposed, wind_mph, precip_pop.
+        side: The leg side (``more`` / ``over`` vs ``less`` / ``under``).
+        stat_type: The leg stat family.
 
     Returns:
         WeatherDiscountResult with adjusted marginal and a note describing which gate fired.
     """
+
+    stat = (stat_type or "").strip().lower()
+    if stat and stat not in WEATHER_SENSITIVE_STATS:
+        return WeatherDiscountResult(
+            adjusted=marginal,
+            note="WEATHER_NO_DISCOUNT: stat not weather-sensitive",
+        )
     roof = (row.roof or "").strip().lower()
 
     # Gate 1: indoor roofs
@@ -79,12 +118,16 @@ def apply_weather_discount(marginal: float, row: EnvRow) -> WeatherDiscountResul
 
     total_haircut = min(0.08, wind_haircut + precip_haircut)
 
-    adjusted = marginal - total_haircut
+    # Bad weather reduces an Over and lifts the matching Under by the same
+    # amount, keeping the pair consistent (P(over) + P(under) = 1).
+    signed = -total_haircut if side.strip().lower() in _MORE else total_haircut
+    adjusted = marginal + signed
     # Clip to avoid 0/1 which breaks norm.ppf
     adjusted = float(np.clip(adjusted, 1e-9, 1.0 - 1e-9))
 
+    direction = "haircut on the Over" if signed < 0 else "boost on the Under"
     note = (
-        f"WEATHER_DISCOUNT: haircut_pp={total_haircut:.6f} "
+        f"WEATHER_DISCOUNT: haircut_pp={total_haircut:.6f} ({direction}) "
         f"marginal {marginal:.6f} -> {adjusted:.6f}"
     )
     return WeatherDiscountResult(adjusted=adjusted, note=note)

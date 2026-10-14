@@ -843,6 +843,7 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         implied = implied_slip_win(table.all_hit)
         per_leg = breakeven_per_leg(table.all_hit, banner_size)
     roster = None if getattr(args, "no_roster", False) else load_roster(args.roster)
+    environment = read_environment(getattr(args, "environment", None))
     live, excluded = evaluate_legs(
         lines,
         dists,
@@ -853,8 +854,8 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         roster=roster,
         allow_high_receiving=bool(getattr(args, "allow_rec_line", False)),
         require_model=bool(getattr(args, "require_model", False)),
+        environment=environment,
     )
-    environment = read_environment(getattr(args, "environment", None))
     if environment:
         kept = drop_unavailable_first_td(live, environment)
         for leg in live:
@@ -1331,6 +1332,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         per_leg = 0.0
     dists = read_distributions(args.distributions) if args.distributions else {}
     roster = None if getattr(args, "no_roster", False) else load_roster(args.roster)
+    environment = read_environment(args.environment)
     live, excluded = evaluate_legs(
         lines,
         dists,
@@ -1341,6 +1343,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         roster=roster,
         allow_high_receiving=bool(getattr(args, "allow_rec_line", False)),
         require_model=bool(getattr(args, "require_model", False)),
+        environment=environment,
     )
     dropped = [leg for leg in excluded if leg.warn not in {"scratch"}]
     print(
@@ -1376,7 +1379,6 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         print(f"wrote {json_path}")
         return 2
 
-    environment = read_environment(args.environment)
     handoff = None
     dfs_path = getattr(args, "from_ceminidfs", None)
     if dfs_path is not None:

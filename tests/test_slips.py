@@ -770,3 +770,23 @@ def test_allow_unmodeled_correlation_prices_the_combo() -> None:
     )
     assert slips
     assert not any("unmodeled-corr" in note for note in notes)
+
+
+def test_weather_discount_moves_a_model_marginal() -> None:
+    from ceminiparlays.environment import EnvRow
+
+    leg = _line("QB One", "KC", "BUF", stat="pass_yds", line=250.5)
+    leg.fair_p = 0.5
+    env = {
+        ("KC", "BUF"): EnvRow(
+            game_id="", team="KC", opponent="BUF", roof="open",
+            weather_exposed=True, wind_mph=25.0, precip_pop=80.0,
+        )
+    }
+    table = resolve_payout("underdog", "standard", 2)
+    live, _ = evaluate_legs(
+        [leg], {}, implied_p=breakeven_per_leg(table.all_hit, 2),
+        allow_high_receiving=True, environment=env,
+    )
+    assert live[0].fair_p < 0.5
+    assert "WEATHER_DISCOUNT" in live[0].family

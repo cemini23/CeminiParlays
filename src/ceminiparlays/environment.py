@@ -23,8 +23,11 @@ def _optional_float(value: str | None) -> float | None:
         return None
     try:
         return float(text)
-    except ValueError:
-        return None
+    except ValueError as exc:
+        # A non-blank, non-numeric cell is an operator typo (e.g. ``20mph``),
+        # not "no value". Failing closed beats silently skipping the weather
+        # gate for the whole game (A-11).
+        raise ValueError(f"environment value is not numeric: {text!r}") from exc
 
 
 def _truthy(value: str | None) -> bool:
@@ -54,13 +57,17 @@ Environment = dict[tuple[str, str] | str, EnvRow]
 
 
 def read_environment(path: Path | None) -> Environment:
-    """Read ``environment.csv``. A missing / ``None`` path returns ``{}``."""
+    """Read ``environment.csv``. ``None`` returns ``{}``.
+
+    An explicitly passed path that does not exist fails closed: a typo would
+    otherwise skip the first_td, ITT, and weather gates silently (A-11).
+    """
 
     if path is None:
         return {}
     resolved = Path(path)
     if not resolved.is_file():
-        return {}
+        raise FileNotFoundError(f"environment file missing: {resolved}")
     out: Environment = {}
     with resolved.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)

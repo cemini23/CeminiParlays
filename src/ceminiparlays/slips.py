@@ -15,6 +15,7 @@ from ceminiparlays.correlation import (
     correlation_matrix,
     load_priors,
 )
+from ceminiparlays.environment import Environment, env_for
 from ceminiparlays.fair import FairResult, p_over_line, side_probability
 from ceminiparlays.io import DistRow, LineRow, is_flagged, is_scratched
 from ceminiparlays.kelly import slip_kelly
@@ -38,6 +39,7 @@ from ceminiparlays.payouts import (
     resolve_payout,
 )
 from ceminiparlays.roster import Roster, roster_mismatch
+from ceminiparlays.weather import apply_weather_discount
 
 MORE_SIDES = {"more", "over", "higher", "o"}
 LESS_SIDES = {"less", "under", "lower", "u"}
@@ -55,6 +57,7 @@ EXCLUDED_WARNS = {
     "wrong-team",
     "rec-line-bar",
     "no-model-marginal",
+    "bad-distribution",
 }
 #: Scratch is expected (a listed player is out); every other exclusion is a
 #: data problem and aborts the default strict rank.
@@ -333,6 +336,7 @@ def evaluate_legs(
     roster: Roster | None = None,
     allow_high_receiving: bool = False,
     require_model: bool = False,
+    environment: "Environment | None" = None,
 ) -> tuple[list[EvaluatedLeg], list[EvaluatedLeg]]:
     """Split lines into rankable legs and named exclusions.
 
@@ -426,12 +430,31 @@ def evaluate_legs(
         edge = (fair_p - implied_p) if implied_p > 0.0 else 0.0
         try:
             model_p, edge_source = model_prob_for_line(line, dist)
-        except (KeyError, ValueError):
+        except KeyError:
             model_p, edge_source = None, ""
+        except ValueError:
+            excluded.append(_excluded_leg(line, stored_implied, "bad-distribution"))
+            continue
         try:
             market_implied, _market_source = market_implied_for_line(line, method)
         except (KeyError, ValueError):
             market_implied = None
+        # Weather moves a model marginal only; a market-only marginal already
+        # carries the book's own weather price (A-07).
+        if environment is not None and source in {"fair_p", "distribution"}:
+            env_row = env_for(environment, line.team, line.opponent)
+            if env_row is not None:
+                weather = apply_weather_discount(
+                    fair_p,
+                    env_row,
+                    side=line.side,
+                    stat_type=line.stat_type,
+                )
+                if abs(weather.adjusted - fair_p) > 1e-12:
+                    fair_p = weather.adjusted
+                    if model_p is not None:
+                        model_p = weather.adjusted
+                    family = f"{family} [{weather.note}]"
         prop_edge = (
             model_p - market_implied
             if model_p is not None and market_implied is not None

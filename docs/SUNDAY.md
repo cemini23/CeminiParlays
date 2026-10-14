@@ -8,7 +8,7 @@ CLI only fetches two-way lines, picks, and prices.
 Grok Bot.app. Charters live in OSINT WORKSPACE
 (`briefs/2026-09-01_grok-bot-charters.md` §17 / §19). Product copy:
 [`GROK-BOTS.md`](GROK-BOTS.md). Before lock, open Slate Desk → `environment.csv`.
-After the games, open Recap Desk → ledger for step 7. Do not create new Bots.
+After the games, open Recap Desk → ledger for step 8. Do not create new Bots.
 The Bot does not fetch or submit. Slate Desk defaults to Sunday afternoon only,
 so name **SNF DET@CAR** if you open it this Sunday; ATL@NO is Monday.
 
@@ -62,7 +62,12 @@ ceminiparlays fetch --date 2026-10-04 --out runs/slate/lines.csv
 # --utc-date YYYY-MM-DD keeps the old UTC calendar window.
 # Game markets: add --markets h2h,spreads,totals if you want ML/spread/total rows.
 # writes SLATE_FIELDS CSV: line + book_over/book_under for yard props;
-# TD / h2h rows leave line blank and set leg_odds + raw implied fair_p.
+# moneyline and spread rows are paired two-way (book_over/book_under);
+# TD rows leave line blank and set leg_odds + a de-vigged pool ref_p.
+# A raw implied probability is never written as fair_p.
+# --reference-book R stamps R's de-vigged quote as ref_* on every other book's
+# rows (auto-picked from draftkings/fanduel/betmgm). A rostered player who is on
+# neither team in the event is dropped with roster-event-mismatch.
 # prints x-requests-remaining / x-requests-used, then
 # do not submit — type the ticket in-app
 
@@ -79,7 +84,7 @@ ceminiparlays fetch --fixture tests/fixtures/odds_api_nfl.json --out /tmp/lines.
 
 Fetch is **not** an SGP quote. Do not type a product of legs into `slip_odds`.
 The displayed American is still one in-app price per ticket (`--displayed-odds`
-in step 4). Existing `--out` is refused unless you pass `--force`.
+in step 5). Existing `--out` is refused unless you pass `--force`.
 
 Roster still wins team codes: DJ Moore is BUF, never invented CHI. Unknown Odds
 API markets are skipped with a `no-odds-api-market` note.
@@ -109,7 +114,7 @@ leg prints `WEATHER_MARKET_REVIEW` and the leg stays on the ticket.
 
 **Pick'em gap report** (`ceminiparlays compare`): prints the de-juiced fair decimal versus the fixed pick'em all-hit multiplier. The operator's typed `displayed_multiplier` is echoed but does not replace the table in the gap. The typed ticket price stays the in-app price.
 
-**SGP weather discount**: `apply_weather_discount` (called by `sgp_from_score_marginals`) applies a numeric haircut to a marginal only when `weather_exposed=true` and wind or precip was typed. Gates: indoor (dome/indoor/closed) = no discount; retractable-closed = no discount; not exposed = no discount; exposed but both fields blank = no discount + `WEATHER_FIELDS_BLANK` note; otherwise wind `min(0.04, max(0, wind-10)*0.002)` + precip `min(0.04, (precip/25)*0.01)`, cap 0.08. `compose` still only prints `WEATHER_MARKET_REVIEW` and keeps the leg.
+**Weather discount.** `apply_weather_discount` is wired into `evaluate_legs` when `--environment` is present. It moves the **model** marginal of a weather-sensitive stat (`pass_yds`, `pass_tds`, `rec_yds`, `receptions`, `anytime_td`, ...) only when `weather_exposed=true` and wind or precip was typed. Gates: indoor (dome/indoor/closed) = no discount; retractable-closed = no discount; not exposed = no discount; a non-weather stat = no discount; exposed but both fields blank = no discount + `WEATHER_FIELDS_BLANK` note; otherwise the magnitude is wind `min(0.04, max(0, wind-10)*0.002)` + precip `min(0.04, (precip/25)*0.01)`, cap 0.08. The sign is side-aware: the haircut lands on an **Over** and the boost on the matching **Under**. A market-only marginal is left alone. `compose` still prints `WEATHER_MARKET_REVIEW` and keeps the leg. An explicitly passed `--environment` path that does not exist raises, and a non-numeric cell (`20mph`) raises.
 
 It writes `ticket-001.csv` … `ticket-005.csv` plus `card.txt` and `card.json`,
 and prints `do not submit`. Tickets diversify games and prefer higher implied
@@ -121,11 +126,28 @@ scores. Omit `--environment` to skip the snapshot.
 **null card** with the reason and exits 2. Run it every slate week. A skipped
 week is a process gap, not a missing file.
 
-**Modeled edge.** Every leg is gated on `model P - market implied P`. The model
-P is a typed `fair_p` or a `--distributions` projection. A leg below
-`--min-edge` (default `+0.01`) sets `edge_gate: fail` and exits 2. A leg with no
-model P is flagged `no-edge` on the card. Pass `--distributions` or type `fair_p`
-so the gate can work. Record the edge on the card: `card.json` carries it per leg.
+**Modeled edge and the fair marginal.** Every leg is gated on
+`model P - market implied P`. The model P is a typed `fair_p` or a
+`--distributions` projection. A leg below `--min-edge` (default `+0.01`) sets
+`edge_gate: fail` and exits 2. A leg with no model P is flagged `no-edge` on the
+card. Pass `--distributions` or type `fair_p` so the gate can work. Record the
+edge on the card: `card.json` carries it per leg.
+
+The marginal that drives the copula, EV, and Kelly is the **model**, not the book
+you bet. Precedence: typed `fair_p` → a `--distributions` projection → `ref_p` →
+`ref_book_over`/`ref_book_under` → the ticket book's own two-way de-vig → TD
+`leg_odds` → a `contract_price` mid. So a projection now **beats** the ticket
+book. A leg whose only fair value is a market price is priced but marked
+`no-edge`; pass `--require-model` to drop it instead. `rank` takes the same
+`--min-edge` and fails closed (exit 2) on a weak edge when it is set.
+
+A same-game pair with no entry in `config/correlation_priors.json` is skipped
+(`skip unmodeled-corr`), never priced from a guessed fallback. Pass
+`--allow-unmodeled-correlation` to restore the old guess.
+
+**Staleness.** `fetch` records `commence_time`. A leg whose game has already
+kicked off is dropped (`already-kicked`). Pass `--max-line-age MINUTES` to drop a
+line older than that (`stale-line`).
 
 **Stake.** Pass `--bankroll N`. Each ticket gets a quarter-Kelly stake, capped at
 5% of the bankroll. `card.json` records the `stake` and the `stake_rule`.
@@ -175,7 +197,8 @@ same-player same-stat concentration.
   `thesis_unsupported` row.
 - **Flags**: `--enforce-market-depth` only after a fetch that includes
   `h2h,spreads` — a yards-only fetch will halt (exit 2). `--alert-late-active`
-  only if an inactives file exists — a missing file exits 2.
+  only if an inactives file exists — a missing file exits 2. A `status` of
+  `out` / `inactive` / `ir` / `doubtful` **scratches** that player before pricing.
 
 Report-only compose flags (default off):
 
@@ -188,12 +211,14 @@ ceminiparlays compose --auto --enforce-market-depth \
 # --allow-thin-catalog prints the same note and continues
 # compose --auto without the flag (yards only) does not halt
 
-# TG-03 late active: FLAG/OUT on the lines file, later ACTIVE in this CSV
+# TG-03 late status: scratch a player marked out/inactive/ir/doubtful in this CSV
 # Use only when the inactives file exists. Missing file exits 2.
 ceminiparlays compose --auto --alert-late-active inactives.csv \
   --lines runs/slate/lines.csv --out-dir runs/slate
-# OPERATOR_ACTION_REQUIRED: {player} excluded as {status} later ACTIVE
-# exit 0 (alert only). Missing file exits 2. No void, no reprice, no haircut.
+# scratch (late status): {player}   — the leg is scratched before pricing
+# A missing file exits 2. No void, no reprice, no haircut of a live leg.
+# (An in-game `exit` / `left` token on a row still prints IN_GAME_EXIT and keeps
+# the leg live.)
 ```
 
 Want a different card?
@@ -237,10 +262,14 @@ check per leg or card. The `action` cell tells you what to do.
 - `block`: the gate had no evidence or no server. The run exits 2.
 
 The gate marks each row. It does not reprice, void, rewrite, or submit a ticket.
-`do_not_type` and `thesis_unsupported` exit 0. A `block` row exits 2. Read the
-report before you type.
+It **fails closed**: a `block`, a `do_not_type`, or a `thesis_unsupported` row
+exits 2. `review` does not fail. Pass `--allow-flagged` to let a contradiction
+through on purpose. A `pass_yds` thesis is side-aware — an Over asks for high
+passing volume and an Under asks for low — and a leg whose team is absent from
+`environment.csv` blocks. The verdict line goes on `card.md` only when that file
+already exists. Read the report before you type.
 
-## 4. Price one ticket before you build it (2 min)
+## 5. Price one ticket before you build it (2 min)
 
 Once you have the in-app American on one ticket:
 
@@ -255,7 +284,7 @@ ceminiparlays run --lines runs/2026-w04-sun/compose/ticket-001.csv \
 matches the default; a 4-leg first-TD file needs `--legs 4`. A shared
 `ticket_id` does not let one American price every subset.
 
-## 5. Size the card (1 min)
+## 6. Size the card (1 min)
 
 ```bash
 ceminiparlays bankroll --bankroll 25 --n-tickets 5
@@ -265,7 +294,7 @@ ceminiparlays bankroll --bankroll 25 --n-tickets 5
 
 Pick flat **or** the cap for the whole ticket — never split Kelly across legs.
 
-## 6. Type the tickets in-app (3 min)
+## 7. Type the tickets in-app (3 min)
 
 Open Hard Rock / FanDuel / DraftKings / BetMGM and enter the legs. Confirm every
 line and the displayed American. The CLI never submits.
@@ -281,7 +310,7 @@ ceminiparlays diff --card examples/card_ticket_c.csv \
 # --accept-booked --emit-ledger PATH writes booked rows (not the card)
 ```
 
-## 7. Grade after the games
+## 8. Grade after the games
 
 ```bash
 ceminiparlays grade --ledger my_ledger.csv --out runs/grade.json
@@ -291,8 +320,12 @@ Optional ledger columns `ticket_id`, `market`, `stake_kind` (`cash` / `bonus`),
 and `paid` (Won-tab cash → that row is `paid - stake`) are accepted; unknown
 extra columns are ignored. Discrete ATD `yes`/`yes` and ML `win`/`win` are hits,
 never voids. Numeric `actual == line` still voids on yardage/totals/spreads.
-`multiplier` `+288` is American (`american_to_decimal`), not 288×. Sportsbook
-void + miss = `0×`. HIT with an empty multiplier still fails closed.
+`multiplier` needs an explicit sign to read as American: `+288` and `-110` are
+prices, but a bare integer is a decimal. `120` is **120×**, not +120 (2.2×) — an
+8-leg Underdog slip pays `120`. Sportsbook void + miss = `0×`. A 3-leg Flex with
+one void steps down to the 2-leg Standard payout (`3.5×`), not a refund. A HIT
+with an empty multiplier still fails closed, and a **blank `stake` cell now fails
+closed** instead of defaulting to `$1.00`.
 
 `two_plus_td` and `pass_td` (alias of `pass_tds`) are legal ledger markets.
 `To Score 2+ TDs` maps to `two_plus_td`. `Passing TDs` maps to `pass_tds`.

@@ -17,7 +17,7 @@ The Never list is the product, not a buried limit.
 
 Numbered rules: [`docs/canon.md`](docs/canon.md). Machine index: [`llms.txt`](llms.txt).
 
-**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/canon.md`](docs/canon.md) is the citable rules. [`llms.txt`](llms.txt) lists the public docs. [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3; grade + ET fetch + game markets = v0.4; Week 1 report flags + ITT snapshot = v0.5; CeminiDFS handoff reader = v0.6; pick'em gap report + SGP weather discount = v0.7). The typed ticket price stays the in-app price.
+**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/canon.md`](docs/canon.md) is the citable rules. [`llms.txt`](llms.txt) lists the public docs. [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3; grade + ET fetch + game markets = v0.4; Week 1 report flags + ITT snapshot = v0.5; CeminiDFS handoff reader = v0.6; pick'em gap report + SGP weather discount = v0.7; model-first fair value + fail-closed inputs = v0.8). The typed ticket price stays the in-app price.
 
 ## Install
 
@@ -192,7 +192,11 @@ ceminiparlays bankroll --bankroll 25 --n-tickets 5
 
 Default `--platform` is **hardrock**. Choices: `hardrock`, `fanduel`, `draftkings`, `betmgm`, `polymarket`, `kalshi`, `underdog`, `prizepicks`. A blank CSV `platform` column matches any book.
 
-**Auto defaults** (`compose --auto`, any omitted knob): `--markets pass_yds,rush_yds,rec_yds`, `--legs 2`, `--min-odds +150`, `--max-odds +400`, `--n-tickets 5`. Pass any of those flags to override just that knob. A single odds bound keeps the other default unless that would make the window empty: `--max-odds +250` keeps the `+150` floor, while `--min-odds +800` drops the `+400` cap so a first-TD longshot still composes. Compose diversifies games, skips same-game `first_td`, prefers higher implied team totals when `--environment` is present, and only writes files — it never submits.
+**Auto defaults** (`compose --auto`, any omitted knob): `--markets pass_yds,rush_yds,rec_yds`, `--legs 2`, `--min-odds +150`, `--max-odds +400`, `--n-tickets 5`. Pass any of those flags to override just that knob. A single odds bound keeps the other default unless that would make the window empty: `--max-odds +250` keeps the `+150` floor, while `--min-odds +800` drops the `+400` cap so a first-TD longshot still composes. Compose diversifies games, skips same-game `first_td`, ranks each leg by its modeled edge (and prefers a high implied team total for an Over, a low one for an Under, when `--environment` is present), and only writes files — it never submits.
+
+**Weather.** When `--environment` is present, an exposed game with wind or precip adjusts the **model** marginal for a weather-sensitive stat (`pass_yds`, `pass_tds`, `rec_yds`, `receptions`, `anytime_td`, ...): the haircut (capped at 8 points) applies to an Over and the boost to the matching Under, so the pair stays consistent. Indoor, retractable-closed, and not-exposed games get no adjustment, and a market-only marginal is left alone. `compose` still prints `WEATHER_MARKET_REVIEW` and keeps the leg.
+
+**Missing inputs fail closed.** An explicitly passed `--environment` path that does not exist raises, rather than silently skipping the ITT, first_td, and weather gates. A non-numeric environment cell (`20mph`) raises too.
 
 `--legs` sets how many legs to rank (`4`, `2,3,4`, or `2-4`). It overrides `--slip-size` when present. `--min-odds` / `--max-odds` keep slips in an American window after pricing (minimum = at least this long; maximum = no longer than this). `--displayed-odds` still prices **one** ticket and needs a single leg count.
 
@@ -247,7 +251,10 @@ A leg is dropped, never silently skipped, when:
 - only one of `book_over` / `book_under` is typed
 - a `book_line` disagrees with the lounge `line`
 - the line is an integer and `--allow-integer-lines` is off (push mass is voided, not folded into Under). Sportsbook integer lines stay excluded even with the flag (push / reduced-ticket payout is not modeled). Pick'em still honors `--allow-integer-lines`.
-- there is no distribution and no both-sided book odds (TD markets may instead carry `fair_p` or `leg_odds`; prediction legs may carry `contract_price`)
+- there is no distribution, no typed `fair_p`, no `ref_p` / `ref_book_*`, and no both-sided book odds (TD markets may instead carry `fair_p` or `leg_odds`; prediction legs may carry `contract_price`)
+- `--require-model` is set and the only fair value is a market price (`no-model-marginal`)
+- the leg's game has already kicked off by `commence_time` (`already-kicked`), or `captured_at` is older than `--max-line-age` minutes (`stale-line`)
+- a typed distribution is corrupt, e.g. `median <= 0` or `sd < 0` (`bad-distribution`)
 
 Same-game and same-player multi-stat are legal on sportsbooks. Duplicate
 `(player, stat)` is not. Pick'em still rejects same-player multi-stat and same-team

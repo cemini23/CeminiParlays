@@ -2,7 +2,9 @@ import pytest
 
 from ceminiparlays.odds import (
     american_to_decimal,
+    american_to_implied,
     decimal_to_american,
+    devig_multiway,
     devig_spread,
     devig_two_way,
     market_width_cents,
@@ -66,3 +68,34 @@ def test_devig_spread_flags_unstable_market() -> None:
     spread = devig_spread(-300, 200)
     assert spread["spread_pp"] > 1.5
     assert spread["unstable"] is True
+
+
+def test_devig_multiway_power_strips_pool_overround() -> None:
+    # A first_td pool: raw implied probabilities sum well above 1 (the pool vig).
+    # Power de-vig scales each one down so the pool sums to 1.
+    result = devig_multiway([200, 150, 120, 100], method="power")
+    assert abs(sum(result.probs) - 1.0) < 1e-9
+    raw = [american_to_implied(o) for o in (200, 150, 120, 100)]
+    assert all(p < r for p, r in zip(result.probs, raw))
+    assert result.k_exponent > 1.0
+
+
+def test_devig_multiway_incomplete_pool_is_not_inflated() -> None:
+    # Sum < 1 means outcomes are missing. Normalizing would inflate every leg, so
+    # the raw implied probability is kept.
+    result = devig_multiway([320, 145], method="power")
+    assert abs(result.probs[0] - american_to_implied(320)) < 1e-12
+    assert "incomplete" in result.note
+
+
+def test_devig_multiway_hold_haircuts_a_one_way_pool() -> None:
+    plain = devig_multiway([145, 320], method="power")
+    held = devig_multiway([145, 320], method="power", hold_pct=0.15)
+    assert held.probs[0] < plain.probs[0]
+    assert abs(held.probs[0] - plain.probs[0] * 0.85) < 1e-12
+    assert "hold" in held.note
+
+
+def test_devig_multiway_rejects_empty_pool() -> None:
+    with pytest.raises(ValueError, match="at least one price"):
+        devig_multiway([])

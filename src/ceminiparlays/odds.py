@@ -20,6 +20,17 @@ class DevigResult:
     raw_overround: float
 
 
+@dataclass(frozen=True)
+class MultiwayResult:
+    """De-vigged probabilities for an N-way market, in input order."""
+
+    probs: tuple[float, ...]
+    method: DevigMethod
+    k_exponent: float
+    raw_overround: float
+    note: str = ""
+
+
 def american_to_decimal(odds: int) -> float:
     """Convert American odds to decimal odds.
 
@@ -104,6 +115,92 @@ def devig_two_way(
         return DevigResult(p_over, p_under, method, k_opt, width, overround)
 
     raise ValueError(f"unknown de-vig method: {method}")
+
+
+def _power_k_multi(implied: list[float]) -> float:
+    """Solve ``sum(pi_i ** k) = 1`` for ``k``. Overround means ``k > 1``."""
+
+    total = sum(implied)
+    if total <= 1.0:
+        return 1.0
+
+    def objective(k: float) -> float:
+        return sum(p**k for p in implied) - 1.0
+
+    # The objective is continuous and strictly decreasing in k, and it straddles
+    # zero between k=1 (sum > 1) and a wide upper bracket.
+    for high in (8.0, 32.0, 128.0):
+        try:
+            return float(brentq(objective, 1.0, high))
+        except ValueError:  # bracket did not straddle a root
+            continue
+    raise ValueError("power de-vig could not bracket k for the multiway market")
+
+
+def devig_multiway(
+    odds: list[int] | tuple[int, ...],
+    method: DevigMethod = "power",
+    *,
+    hold_pct: float = 0.0,
+) -> MultiwayResult:
+    """Strip vig from an N-way market (TD pools, ``first_td`` / ``anytime_td``).
+
+    ``power`` solves ``sum(pi_i ** k) = 1``; ``multiplicative`` normalizes by the
+    raw overround; ``additive`` removes an equal share of the overround.
+
+    ``hold_pct`` applies a conservative multiplicative haircut to each de-vigged
+    probability. Use it for a one-way pool that may be incomplete (e.g. an
+    ``anytime_td`` market with no "No" price): the pool sum can understate the
+    true book margin, so a straight normalization would overstate the leg.
+    """
+
+    if not odds:
+        raise ValueError("devig_multiway needs at least one price")
+    implied = [american_to_implied(int(price)) for price in odds]
+    total = sum(implied)
+    if total <= 0.0:
+        raise ValueError("devig_multiway probabilities must be positive")
+    overround = total - 1.0
+    k_exponent = 1.0
+    note = ""
+
+    # A pool whose raw implied probabilities sum to 1 or less has no book margin
+    # to strip: the pool is INCOMPLETE (some outcomes are missing). Normalizing
+    # it would inflate every leg, so the raw implied probabilities are kept and
+    # the optional hold is the only haircut.
+    incomplete = total <= 1.0
+
+    if incomplete:
+        probs = list(implied)
+        note = "pool sum<1 (incomplete); raw implied kept"
+    elif method == "multiplicative":
+        probs = [p / total for p in implied]
+    elif method == "additive":
+        shift = overround / len(implied)
+        raw = [max(p - shift, 0.0) for p in implied]
+        scale = sum(raw) or 1.0
+        probs = [p / scale for p in raw]
+    elif method == "power":
+        k_exponent = _power_k_multi(implied)
+        raw = [p**k_exponent for p in implied]
+        scale = sum(raw) or 1.0
+        probs = [p / scale for p in raw]
+    else:
+        raise ValueError(f"unknown de-vig method: {method}")
+
+    if hold_pct > 0.0:
+        if not 0.0 < hold_pct < 1.0:
+            raise ValueError("hold_pct must be between 0 and 1")
+        probs = [max(p * (1.0 - hold_pct), 1e-9) for p in probs]
+        note = (note + "; " if note else "") + f"one-way pool hold {hold_pct:.2f}"
+
+    return MultiwayResult(
+        probs=tuple(probs),
+        method=method,
+        k_exponent=k_exponent,
+        raw_overround=overround,
+        note=note,
+    )
 
 
 def devig_spread(odds_over: int, odds_under: int, unstable_pp: float = 1.5) -> dict[str, float | bool]:

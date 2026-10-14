@@ -4,6 +4,7 @@ import csv
 from dataclasses import dataclass
 from pathlib import Path
 
+from ceminiparlays.markets import canonical_stat
 from ceminiparlays.names import resolve_player_key
 
 # Hard outs: never priced, always listed as a scratch.
@@ -35,6 +36,13 @@ class LineRow:
     ticket_id: str = ""
     fair_p: float | None = None
     contract_price: float | None = None
+    #: Independent (sharp / other-book) fair inputs. They ride on the bet row so
+    #: a reference book survives the platform filter in ``rank`` / ``compose``.
+    ref_p: float | None = None
+    ref_book_over: int | None = None
+    ref_book_under: int | None = None
+    #: ISO-8601 kickoff time for the leg's game, from The Odds API.
+    commence_time: str = ""
 
 
 @dataclass
@@ -123,7 +131,7 @@ def read_manual_lines(
                 player_key=resolve_player_key(name, overrides, raw.get("player_key")),
                 team=raw.get("team", "").upper(),
                 opponent=raw.get("opp", raw.get("opponent", "")).upper(),
-                stat_type=raw["stat_type"].strip(),
+                stat_type=canonical_stat(raw["stat_type"]),
                 line=_line_value(raw.get("line")),
                 side=raw["side"].strip().lower(),
                 line_type=raw.get("line_type", "standard") or "standard",
@@ -138,6 +146,10 @@ def read_manual_lines(
                 ticket_id=(raw.get("ticket_id") or "").strip(),
                 fair_p=_optional_float(raw.get("fair_p", "")),
                 contract_price=_optional_float(raw.get("contract_price", "")),
+                ref_p=_optional_float(raw.get("ref_p", "")),
+                ref_book_over=_optional_int(raw.get("ref_book_over", "")),
+                ref_book_under=_optional_int(raw.get("ref_book_under", "")),
+                commence_time=(raw.get("commence_time") or "").strip(),
             )
             if not row.team or not row.opponent:
                 if invalid is not None:

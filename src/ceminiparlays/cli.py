@@ -103,6 +103,7 @@ SLATE_FIELDS = [
     "side",
     "line_type",
     "captured_at",
+    "commence_time",
     "injury_status",
     "book_over",
     "book_under",
@@ -112,6 +113,9 @@ SLATE_FIELDS = [
     "ticket_id",
     "fair_p",
     "contract_price",
+    "ref_p",
+    "ref_book_over",
+    "ref_book_under",
 ]
 PLATFORM_CHOICES = [
     "hardrock",
@@ -575,6 +579,16 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--force", action="store_true", help="Overwrite --out if it exists")
     fetch.add_argument("--roster", type=Path, default=None)
     fetch.add_argument("--no-roster", action="store_true")
+    fetch.add_argument(
+        "--reference-book",
+        default=None,
+        choices=PLATFORM_CHOICES,
+        help=(
+            "Stamp this book's de-vigged quotes on every other book's rows as "
+            "ref_book_over/ref_book_under (ref_p for TD pools). Default: pick the "
+            "sharpest fetched book that is not the bet platform."
+        ),
+    )
     return parser
 
 
@@ -1557,6 +1571,19 @@ def _cmd_diff(args: argparse.Namespace) -> int:
     return 2
 
 
+#: Sharp reference books in preference order, used to auto-pick ``--reference-book``.
+SHARP_REFERENCE_PRIORITY = ("draftkings", "fanduel", "betmgm")
+
+
+def _resolve_reference_book(requested: str | None, platforms: list[str]) -> str | None:
+    """The book whose quotes become ``ref_*``. Never the default bet book."""
+
+    if requested:
+        return requested
+    available = [book for book in SHARP_REFERENCE_PRIORITY if book in platforms]
+    return available[0] if available else None
+
+
 def _cmd_fetch(args: argparse.Namespace) -> int:
     notes: list[str] = []
     captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1592,6 +1619,9 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
         used = meta.get("x-requests-used", "")
         print(f"host=api.the-odds-api.com remaining={remaining} used={used}")
 
+    reference_book = _resolve_reference_book(
+        getattr(args, "reference_book", None), platforms
+    )
     rows = rows_from_events(
         events,
         platform_filter=set(platforms),
@@ -1599,7 +1629,10 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
         slate_id=slate_id,
         captured_at=captured_at,
         notes=notes,
+        reference_book=reference_book,
     )
+    if reference_book:
+        print(f"reference-book={reference_book}")
     if stats:
         rows = [row for row in rows if row["stat_type"] in stats]
     write_fetch_csv(args.out, rows, force=args.force)

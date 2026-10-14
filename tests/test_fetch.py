@@ -57,28 +57,39 @@ def test_rows_from_fixture_maps_two_way_and_td() -> None:
     assert caleb_fd["book_over"] == -108
     assert caleb_fd["book_under"] == -112
 
-    gibbs = next(
+    # A rostered player on neither team in the event is dropped, not written with
+    # a half-populated opp (A-04).
+    assert "roster-event-mismatch:Jahmyr Gibbs" in notes
+    assert "roster-event-mismatch:DJ Moore" in notes
+    assert not any(row["player_name"] == "Jahmyr Gibbs" for row in rows)
+    assert not any(row["player_name"] == "DJ Moore" for row in rows)
+
+    td = next(
         row
         for row in rows
-        if row["player_name"] == "Jahmyr Gibbs" and row["stat_type"] == "anytime_td"
+        if row["player_name"] == "Caleb Williams" and row["stat_type"] == "anytime_td"
         and row["platform"] == "hardrock"
     )
-    assert gibbs["line"] == ""
-    assert gibbs["leg_odds"] == 145
-    assert float(gibbs["fair_p"]) > 0
-    assert gibbs["team"] == "DET"
-    assert gibbs["opp"] != "CHI"
-
-    moore = next(row for row in rows if row["player_name"] == "DJ Moore")
-    assert moore["team"] == "BUF"
-    assert moore["opp"] != "CHI"
-    assert moore["stat_type"] == "rec_yds"
+    assert td["line"] == ""
+    assert td["leg_odds"] == 320
+    # The pool-normalized de-vig, never the raw implied probability.
+    assert 0.0 < float(td["ref_p"]) < 1.0
+    assert float(td["ref_p"]) < 100 / 420
+    assert td["fair_p"] == ""
+    assert td["team"] == "CHI"
+    assert td["opp"] == "CAR"
 
     ml = next(row for row in rows if row["stat_type"] == "moneyline")
     assert ml["player_name"] in {"Chicago Bears", "Carolina Panthers"}
     assert ml["line"] == ""
     assert ml["leg_odds"] in {-175, 145}
     assert ml["slip_odds"] == ""
+    # Moneyline is paired two-way and never priced from a raw implied probability.
+    assert ml["book_over"] in {-175, 145}
+    assert ml["book_under"] in {-175, 145}
+    assert ml["book_over"] != ml["book_under"]
+    assert ml["fair_p"] == ""
+    assert ml["commence_time"] == "2026-09-13T17:00:00Z"
     total = next(row for row in rows if row["stat_type"] == "total")
     assert "total" in str(total["player_name"]).lower()
     assert total["line"] == 46.5

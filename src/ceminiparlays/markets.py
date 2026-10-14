@@ -40,6 +40,19 @@ ANYTIME_TD = "anytime_td"
 TWO_PLUS_TD = "two_plus_td"
 
 
+def canonical_stat(stat_type: str) -> str:
+    """Fold a typed ``stat_type`` onto its canonical token.
+
+    ``pass_td`` becomes ``pass_tds`` so a prior keyed on the canonical spelling
+    still matches. An unknown token is returned lower-cased and stripped, never
+    guessed.
+    """
+
+    token = (stat_type or "").strip()
+    folded = MARKET_ALIASES.get(token.lower())
+    return folded if folded is not None else token
+
+
 def is_two_plus_td(stat_type: str) -> bool:
     return (stat_type or "").strip().lower() == TWO_PLUS_TD
 

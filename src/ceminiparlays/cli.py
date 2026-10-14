@@ -536,8 +536,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Run after compose and before you type. "
             "Writes jev_gate_report.csv. "
             "The gate marks each row. It does not reprice, void, rewrite, or submit. "
-            "do_not_type and thesis_unsupported still exit 0. "
-            "A block row exits 2."
+            "It fails closed: a block, a do_not_type, or a thesis_unsupported row "
+            "exits 2. Pass --allow-flagged to let a contradiction through."
         ),
     )
     jev.add_argument("--card", type=Path, required=True, help="compose card.json")
@@ -571,6 +571,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Append each live exchange to this JSON file.",
+    )
+    jev.add_argument(
+        "--allow-flagged",
+        action="store_true",
+        help=(
+            "Let a do_not_type or thesis_unsupported row through (exit 0). A "
+            "block row still exits 2. Default fails closed on all three."
+        ),
     )
 
     fetch = sub.add_parser(
@@ -986,8 +994,10 @@ def _cmd_grade(args: argparse.Namespace) -> int:
                 f"PARTIAL {item['status']}: captured legs {item['captured_legs']}"
                 f" N-Bet {item['visible_n_bet']} clipped={item['clipped']}"
             )
+        print("do not submit — type the ticket in-app")
         print(STANDARD_DISCLAIMER)
         return 2
+    print("do not submit — type the ticket in-app")
     print(STANDARD_DISCLAIMER)
     return 0
 
@@ -1636,6 +1646,7 @@ def _cmd_diff(args: argparse.Namespace) -> int:
             print(f"wrote {emit}")
         return 0
     print(BOOKED_WINS)
+    print("do not submit — type the ticket in-app")
     if args.accept_booked:
         print(ACCEPTED)
         if emit is not None:
@@ -1750,7 +1761,16 @@ def _cmd_jev_gate(args: argparse.Namespace) -> int:
     report_path = args.out_dir / "jev_gate_report.csv"
     write_jev_gate_report(report_path, rows)
     line = verdict_line(rows)
-    append_card_verdict(args.card.parent / "card.md", line)
+    card_md = args.card.parent / "card.md"
+    if not append_card_verdict(card_md, line):
+        # No card.md (compose ran without --card-md). Never create a card
+        # holding only a verdict; keep the verdict beside the report instead.
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+        (args.out_dir / "card_verdict.txt").write_text(
+            f"{line}\ndo not submit — type every ticket in-app\n{STANDARD_DISCLAIMER}\n",
+            encoding="utf-8",
+        )
+        print(f"no card.md at {card_md}; wrote the verdict to the report folder")
     for row in rows:
         if row["action"] == "pass":
             continue
@@ -1758,7 +1778,8 @@ def _cmd_jev_gate(args: argparse.Namespace) -> int:
     print(line)
     print(f"wrote {report_path}")
     print("The gate marks. It does not reprice or submit.")
-    return gate_exit_code(rows)
+    print("do not submit — type every ticket in-app")
+    return gate_exit_code(rows, allow_flagged=bool(getattr(args, "allow_flagged", False)))
 
 
 def _cmd_closings(args: argparse.Namespace) -> int:

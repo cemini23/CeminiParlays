@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
+from io import StringIO
 from pathlib import Path
 from typing import Protocol
 
@@ -91,9 +92,16 @@ def status_claim(player: str) -> str:
     return f"{player} is expected to be active for this game."
 
 
-def thesis_claim(team: str) -> str:
+def thesis_claim(team: str, side: str = "more") -> str:
+    """The passing-volume claim for a ``pass_yds`` leg, per its side.
+
+    An Over needs high volume and an Under needs low volume (A-06).
+    """
+
+    token = (side or "").strip().lower()
+    volume = "low" if token in {"less", "under", "lower", "u"} else "high"
     return (
-        f"{team} is projected for low passing volume, given the spread, "
+        f"{team} is projected for {volume} passing volume, given the spread, "
         "the total, and the implied team total."
     )
 
@@ -521,6 +529,25 @@ def environment_has_rows(path: Path | None) -> bool:
     return len(lines) >= 2
 
 
+def environment_teams(path: Path | None) -> set[str]:
+    """Every team code named in the environment file's team / opp columns."""
+
+    if path is None or not path.is_file():
+        return set()
+    try:
+        text = _read_text(path)
+    except OSError:
+        return set()
+    reader = csv.DictReader(StringIO(text))
+    teams: set[str] = set()
+    for raw in reader:
+        for column in ("team", "opp", "opponent"):
+            value = (raw.get(column) or "").strip().upper()
+            if value:
+                teams.add(value)
+    return teams
+
+
 def _ready(
     template: RowTemplate, *, result: str, action: str
 ) -> dict[str, str]:
@@ -621,7 +648,17 @@ def _build_batches(
         if str(leg["stat_type"]).strip() == "pass_yds"
     ]
     if pass_legs:
-        if not environment_has_rows(environment_path):
+        teams = environment_teams(environment_path)
+        have_env = environment_has_rows(environment_path)
+        # A leg whose team is absent from environment.csv (or with no env file at
+        # all) cannot be checked against a game total: block it (A-06).
+        unmodeled = [
+            (ticket_id, index, leg)
+            for ticket_id, index, leg in pass_legs
+            if not have_env or str(leg["team"]).strip().upper() not in teams
+        ]
+        passive = [item for item in pass_legs if item not in unmodeled]
+        if unmodeled:
             batches.append(
                 ReadyBatch(
                     rows=[
@@ -630,23 +667,26 @@ def _build_batches(
                                 ticket_id=ticket_id,
                                 leg=str(index),
                                 player=str(leg["player_name"]).strip(),
-                                question=thesis_claim(str(leg["team"]).strip()),
+                                question=thesis_claim(
+                                    str(leg["team"]).strip(), str(leg["side"]).strip()
+                                ),
                                 primitive="noul",
-                                evidence_ref="NO_EVIDENCE",
+                                evidence_ref=("environment.csv" if have_env else "NO_EVIDENCE"),
                                 contradicted_action="thesis_unsupported",
                             ),
-                            result="NO_EVIDENCE",
+                            result=("no_environment_row" if have_env else "NO_EVIDENCE"),
                             action="block",
                         )
-                        for ticket_id, index, leg in pass_legs
+                        for ticket_id, index, leg in unmodeled
                     ]
                 )
             )
-        else:
+        if passive:
             assert environment_path is not None
             env_text = _read_text(environment_path)
             claims = [
-                thesis_claim(str(leg["team"]).strip()) for _ticket_id, _index, leg in pass_legs
+                thesis_claim(str(leg["team"]).strip(), str(leg["side"]).strip())
+                for _ticket_id, _index, leg in passive
             ]
             rows = [
                 CallRow(
@@ -662,7 +702,7 @@ def _build_batches(
                         unsupported_action="thesis_unsupported",
                     ),
                 )
-                for claim_index, (ticket_id, index, leg) in enumerate(pass_legs)
+                for claim_index, (ticket_id, index, leg) in enumerate(passive)
             ]
             batches.append(
                 VerifyBatch(
@@ -812,22 +852,27 @@ def verdict_line(rows: list[dict[str, str]]) -> str:
     return "Jev gate: " + ", ".join(parts)
 
 
-def append_card_verdict(path: Path, line: str) -> None:
+def append_card_verdict(path: Path, line: str) -> bool:
     """Keep exactly one gate verdict on the card.
 
     A re-run replaces the old verdict line instead of stacking a second copy.
-    The line is stake-free: counts only.
+    The line is stake-free: counts only. Returns ``False`` and writes nothing
+    when the card does not exist, so an absent card is never created holding
+    only a verdict (A-06).
     """
-    existing = path.read_text(encoding="utf-8") if path.is_file() else ""
+
+    if not path.is_file():
+        return False
     kept = [
         text
-        for text in existing.splitlines()
+        for text in path.read_text(encoding="utf-8").splitlines()
         if not text.startswith("Jev gate:")
     ]
     body = "\n".join(kept)
     if body and not body.endswith("\n"):
         body += "\n"
     path.write_text(body + line + "\n", encoding="utf-8")
+    return True
 
 
 def format_mark(row: dict[str, str]) -> str:
@@ -840,7 +885,19 @@ def format_mark(row: dict[str, str]) -> str:
     return f"JEV {row['action']} {loc}"
 
 
-def gate_exit_code(rows: list[dict[str, str]]) -> int:
-    if any(row.get("action") == "block" for row in rows):
+#: Actions that fail the gate closed. ``review`` is advisory and never fails.
+FAILING_ACTIONS = ("block", "do_not_type", "thesis_unsupported")
+
+
+def gate_exit_code(rows: list[dict[str, str]], *, allow_flagged: bool = False) -> int:
+    """Non-zero when any row is a block, a do-not-type, or an unsupported thesis.
+
+    ``--allow-flagged`` downgrades a contradiction to an advisory pass so the
+    operator can override on purpose (A-06).
+    """
+
+    if allow_flagged:
+        return 2 if any(row.get("action") == "block" for row in rows) else 0
+    if any(row.get("action") in FAILING_ACTIONS for row in rows):
         return 2
     return 0

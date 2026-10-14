@@ -273,7 +273,8 @@ def test_fixture_miss_raises() -> None:
 def test_high_confidence_contradiction_is_do_not_type(tmp_path: Path, capsys) -> None:
     code, rows, card_md = _run(tmp_path, 200.5, 71.5, promo=PROMO_OK)
     capsys.readouterr()
-    assert code == 0
+    # A do_not_type is a fail-closed contradiction (A-06).
+    assert code == 2
     ada = _row(rows, lambda row: row["player"] == "Ada Lovelace" and row["question"].startswith("The lines"))
     grace = _row(rows, lambda row: row["player"] == "Grace Hopper" and row["question"].startswith("The lines"))
     assert ada["action"] == "do_not_type"
@@ -311,7 +312,8 @@ def test_low_confidence_contradiction_is_review(tmp_path: Path, capsys) -> None:
 def test_thesis_contradiction_is_thesis_unsupported(tmp_path: Path, capsys) -> None:
     code, rows, _card_md = _run(tmp_path, 180.5, 60.5, promo=PROMO_NO)
     stdout = capsys.readouterr().out
-    assert code == 0
+    # A thesis_unsupported leg is a fail-closed contradiction (A-06).
+    assert code == 2
     thesis = _row(rows, lambda row: "low passing volume" in row["question"])
     assert thesis["action"] == "thesis_unsupported"
     assert thesis["result"] == "contradicted"
@@ -334,6 +336,8 @@ def test_missing_environment_blocks_and_exits_2(tmp_path: Path, capsys) -> None:
     assert thesis["action"] == "block"
     assert thesis["evidence_ref"] == "NO_EVIDENCE"
     assert "block" in card_md
+    # A card team absent from environment.csv also blocks (A-06).
+    assert "2 block" in card_md or "1 block" in card_md
     ada = _row(rows, lambda row: row["player"] == "Ada Lovelace" and row["question"].startswith("The lines"))
     assert ada["action"] == "do_not_type"
 
@@ -370,7 +374,9 @@ def test_missing_binary_blocks_and_exits_2(tmp_path: Path, monkeypatch, capsys) 
 def test_blank_promo_and_missing_late_active_do_not_call(tmp_path: Path, capsys) -> None:
     code, rows, _card_md = _run(tmp_path, 200.5, 71.5, promo="  ", late=False)
     capsys.readouterr()
-    assert code == 0
+    # The Ada leg is contradicted at high confidence, so the gate still exits 2
+    # even though the promo is skipped.
+    assert code == 2
     promo = _row(rows, lambda row: row["question"].startswith("Player props qualify"))
     assert promo["result"] == "no_source"
     assert promo["action"] == "review"
@@ -481,15 +487,18 @@ def test_week5_winston_thesis_is_marked(tmp_path: Path, capsys) -> None:
         ]
     )
     capsys.readouterr()
-    assert code == 0
+    # A thesis_unsupported leg fails the gate closed (A-06).
+    assert code == 2
     rows = list(
         csv.DictReader((out_dir / "jev_gate_report.csv").open(encoding="utf-8"))
     )
-    assert [row["action"] for row in rows].count("block") == 0
+    # NYG is not in examples/environment.csv, so the Winston pass_yds thesis
+    # cannot be checked against a game total: the leg blocks (A-06).
+    assert [row["action"] for row in rows].count("block") == 1
     thesis = _row(rows, lambda row: "low passing volume" in row["question"])
     assert thesis["player"] == "Jameis Winston"
-    assert thesis["result"] == "unsupported"
-    assert thesis["action"] == "thesis_unsupported"
+    assert thesis["result"] == "no_environment_row"
+    assert thesis["action"] == "block"
     assert thesis["evidence_ref"] == "environment.csv"
     validity = _row(
         rows,
@@ -501,3 +510,47 @@ def test_week5_winston_thesis_is_marked(tmp_path: Path, capsys) -> None:
 
 if __name__ == "__main__":
     FIXTURE.write_text(json.dumps(build_fixture_document(), indent=2) + "\n", encoding="utf-8")
+
+
+def test_append_card_verdict_never_creates_the_card(tmp_path: Path) -> None:
+    from ceminiparlays.jev_gate import append_card_verdict
+
+    missing = tmp_path / "card.md"
+    assert append_card_verdict(missing, "Jev gate: 1 pass") is False
+    assert not missing.exists()
+
+
+def test_jev_gate_without_card_md_writes_the_verdict_beside_the_report(
+    tmp_path: Path, capsys
+) -> None:
+    card = _card(200.5, 71.5)
+    card_path = tmp_path / "card.json"
+    card_path.write_text(json.dumps(card), encoding="utf-8")
+    lines_path = tmp_path / "lines.csv"
+    lines_path.write_text(_lines(200.5, 71.5), encoding="utf-8")
+    env_path = tmp_path / "environment.csv"
+    env_path.write_text(ENV, encoding="utf-8")
+    out_dir = tmp_path / "out"
+    code = main(
+        [
+            "jev-gate",
+            "--card",
+            str(card_path),
+            "--lines",
+            str(lines_path),
+            "--environment",
+            str(env_path),
+            "--promo-terms",
+            PROMO_OK,
+            "--out-dir",
+            str(out_dir),
+            "--fixture",
+            str(FIXTURE),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 2
+    assert not (tmp_path / "card.md").exists()
+    assert "no card.md" in out
+    assert (out_dir / "card_verdict.txt").is_file()
+    assert "do not submit" in (out_dir / "card_verdict.txt").read_text(encoding="utf-8")

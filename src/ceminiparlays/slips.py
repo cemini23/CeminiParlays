@@ -9,7 +9,12 @@ from pathlib import Path
 import numpy as np
 
 from ceminiparlays.copula import exact_joint, nearest_correlation, simulate_slip
-from ceminiparlays.correlation import LegRef, correlation_matrix, load_priors
+from ceminiparlays.correlation import (
+    LegRef,
+    UnmodeledCorrelationError,
+    correlation_matrix,
+    load_priors,
+)
 from ceminiparlays.fair import FairResult, p_over_line, side_probability
 from ceminiparlays.io import DistRow, LineRow, is_flagged, is_scratched
 from ceminiparlays.kelly import slip_kelly
@@ -570,6 +575,7 @@ def rank_slips(
     allow_large_enum: bool = False,
     shade_pp: float = 0.0,
     notes: list[str] | None = None,
+    allow_unmodeled_correlation: bool = False,
 ) -> list[EvaluatedSlip]:
     """Enumerate slip_size combinations and rank by a lower-bound EV.
 
@@ -744,7 +750,13 @@ def rank_slips(
         price = table.all_hit
         unconfirmed = multiplier_source == "table"
 
-        requested = correlation_matrix(refs, priors, repair=False)
+        try:
+            requested = correlation_matrix(
+                refs, priors, repair=False, allow_unmodeled=allow_unmodeled_correlation
+            )
+        except UnmodeledCorrelationError as exc:
+            notes.append(f"skip unmodeled-corr ({exc}): {_combo_names(combo)}")
+            continue
         clean = nearest_correlation(requested)
         max_corr_delta = float(np.max(np.abs(clean - requested)))
         repaired = max_corr_delta > 0.02
@@ -922,6 +934,7 @@ def rank_slip_sizes(
     notes: list[str] | None = None,
     min_odds: int | None = None,
     max_odds: int | None = None,
+    allow_unmodeled_correlation: bool = False,
 ) -> list[EvaluatedSlip]:
     """Rank one or more slip sizes, then apply optional American odds filters."""
 
@@ -945,6 +958,7 @@ def rank_slip_sizes(
                 allow_large_enum=allow_large_enum,
                 shade_pp=shade_pp,
                 notes=notes,
+                allow_unmodeled_correlation=allow_unmodeled_correlation,
             )
         )
     before = len(ranked)

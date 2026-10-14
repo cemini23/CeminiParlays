@@ -1,17 +1,39 @@
 {
-  "notes": "Same-game raw-stat priors. Cross-game default is 0. Confirm with walk-forward before sizing live.",
+  "notes": "Same-game raw-stat priors. Cross-game default is 0. A same-game pair that is not listed here is refused, not guessed (see --allow-unmodeled-correlation). Confirm with walk-forward before sizing live.",
   "default_cross_game": 0.0,
+  "same_player": [
+    { "stat_a": "receptions", "stat_b": "rec_yds", "rho": 0.80 },
+    { "stat_a": "rush_att", "stat_b": "rush_yds", "rho": 0.82 },
+    { "stat_a": "pass_yds", "stat_b": "pass_tds", "rho": 0.52 },
+    { "stat_a": "pass_att", "stat_b": "pass_yds", "rho": 0.90 },
+    { "stat_a": "rush_yds", "stat_b": "anytime_td", "rho": 0.42 },
+    { "stat_a": "rec_yds", "stat_b": "anytime_td", "rho": 0.40 },
+    { "stat_a": "receptions", "stat_b": "anytime_td", "rho": 0.35 },
+    { "stat_a": "rush_att", "stat_b": "anytime_td", "rho": 0.38 }
+  ],
   "pairs": [
     { "stat_a": "pass_yds", "stat_b": "rec_yds", "same_team": true, "rho": 0.45 },
     { "stat_a": "pass_yds", "stat_b": "receptions", "same_team": true, "rho": 0.40 },
     { "stat_a": "pass_tds", "stat_b": "rec_yds", "same_team": true, "rho": 0.37 },
+    { "stat_a": "pass_tds", "stat_b": "receptions", "same_team": true, "rho": 0.32 },
+    { "stat_a": "pass_yds", "stat_b": "pass_tds", "same_team": true, "rho": 0.50 },
+    { "stat_a": "pass_yds", "stat_b": "pass_att", "same_team": true, "rho": 0.85 },
     { "stat_a": "pass_yds", "stat_b": "rush_yds", "same_team": true, "rho": -0.33 },
     { "stat_a": "pass_att", "stat_b": "rush_yds", "same_team": true, "rho": -0.33 },
     { "stat_a": "rec_yds", "stat_b": "rec_yds", "same_team": true, "rho": 0.10 },
-    { "stat_a": "rush_yds", "stat_b": "rush_yds", "same_team": true, "rho": 0.08 },
+    { "stat_a": "receptions", "stat_b": "receptions", "same_team": true, "rho": 0.12 },
+    { "stat_a": "receptions", "stat_b": "rec_yds", "same_team": true, "rho": 0.72 },
+    { "stat_a": "rush_yds", "stat_b": "rush_yds", "same_team": true, "rho": -0.18 },
+    { "stat_a": "rush_att", "stat_b": "rush_att", "same_team": true, "rho": -0.20 },
     { "stat_a": "anytime_td", "stat_b": "anytime_td", "same_team": true, "rho": 0.15 },
     { "stat_a": "rush_yds", "stat_b": "rec_yds", "same_team": true, "rho": -0.12 },
+    { "stat_a": "rec_yds", "stat_b": "anytime_td", "same_team": true, "rho": 0.34 },
+    { "stat_a": "rush_yds", "stat_b": "anytime_td", "same_team": true, "rho": 0.36 },
+    { "stat_a": "pass_yds", "stat_b": "anytime_td", "same_team": true, "rho": 0.24 },
     { "stat_a": "pass_yds", "stat_b": "pass_yds", "opponents": true, "rho": 0.18 },
-    { "stat_a": "rec_yds", "stat_b": "rec_yds", "opponents": true, "rho": 0.16 }
+    { "stat_a": "rec_yds", "stat_b": "rec_yds", "opponents": true, "rho": 0.16 },
+    { "stat_a": "pass_yds", "stat_b": "rec_yds", "opponents": true, "rho": 0.10 },
+    { "stat_a": "pass_tds", "stat_b": "pass_tds", "opponents": true, "rho": 0.12 },
+    { "stat_a": "anytime_td", "stat_b": "anytime_td", "opponents": true, "rho": 0.10 }
   ]
 }

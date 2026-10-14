@@ -402,21 +402,15 @@ def test_flex_suppresses_kelly() -> None:
 def test_corr_repaired_flag_surfaces(tmp_path: Path) -> None:
     priors_path = tmp_path / "priors.json"
     priors_path.write_text(
-        json.dumps(
-            {
-                "default_cross_game": -0.9,
-                "pairs": [
-                    {"stat_a": "pass_yds", "stat_b": "rec_yds", "same_team": True, "rho": 0.9},
-                    {"stat_a": "pass_yds", "stat_b": "pass_yds", "opponents": True, "rho": 0.9},
-                ],
-            }
-        ),
+        # Three cross-game legs, all pairwise -0.9: the raw prior matrix is
+        # indefinite, so rank_slips must repair it and flag corr_repaired.
+        json.dumps({"default_cross_game": -0.9, "pairs": []}),
         encoding="utf-8",
     )
     lines = [
         _line("A One", "KC", "BUF", stat="pass_yds"),
-        _line("B One", "KC", "BUF", stat="rec_yds"),
-        _line("C One", "BUF", "KC", stat="pass_yds"),
+        _line("B One", "MIA", "NE", stat="pass_yds"),
+        _line("C One", "DAL", "PHI", stat="pass_yds"),
     ]
     live, _ = _evaluate(lines)
     slips = rank_slips(live, "underdog", "standard", 3, priors_path=priors_path)
@@ -743,3 +737,36 @@ def test_market_only_marginal_is_no_edge() -> None:
     assert live[0].source == "book_devig"
     assert live[0].prop_edge is None
     assert edge_status(live[0], 0.01) == "no-edge"
+
+
+def test_unmodeled_same_game_combo_is_skipped_with_a_note() -> None:
+    # pass_yds + two_plus_td on the same team has no prior: the combo is skipped,
+    # never priced from a guessed correlation (A-03).
+    a = _line("QB One", "KC", "BUF", stat="pass_yds")
+    b = _line("WR One", "BUF", "KC", stat="two_plus_td", line=1.5)
+    for leg in (a, b):
+        leg.fair_p = 0.4
+    live, _ = _evaluate([a, b])
+    notes: list[str] = []
+    slips = rank_slips(live, "underdog", "standard", 2, notes=notes)
+    assert slips == []
+    assert any("unmodeled-corr" in note for note in notes)
+
+
+def test_allow_unmodeled_correlation_prices_the_combo() -> None:
+    a = _line("QB One", "KC", "BUF", stat="pass_yds")
+    b = _line("WR One", "BUF", "KC", stat="two_plus_td", line=1.5)
+    for leg in (a, b):
+        leg.fair_p = 0.4
+    live, _ = _evaluate([a, b])
+    notes: list[str] = []
+    slips = rank_slips(
+        live,
+        "underdog",
+        "standard",
+        2,
+        notes=notes,
+        allow_unmodeled_correlation=True,
+    )
+    assert slips
+    assert not any("unmodeled-corr" in note for note in notes)

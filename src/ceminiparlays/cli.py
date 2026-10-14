@@ -220,6 +220,14 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--allow-unmodeled-correlation",
+        action="store_true",
+        help=(
+            "Price a same-game pair that has no prior in correlation_priors.json "
+            "with the old guessed fallback. Default skips the combo."
+        ),
+    )
+    parser.add_argument(
         "--games",
         type=Path,
         default=None,
@@ -914,6 +922,9 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         notes=notes,
         min_odds=getattr(args, "min_odds", None),
         max_odds=getattr(args, "max_odds", None),
+        allow_unmodeled_correlation=bool(
+            getattr(args, "allow_unmodeled_correlation", False)
+        ),
     )
     for note in notes:
         print(f"  {note}")
@@ -1453,6 +1464,9 @@ def _cmd_compose(args: argparse.Namespace) -> int:
             max_slips=1,
             shade_pp=0.0,
             notes=[],
+            allow_unmodeled_correlation=bool(
+                getattr(args, "allow_unmodeled_correlation", False)
+            ),
         )
         if not priced:
             print(f"  ticket-{index:03d}: no price available; skipped on the card")

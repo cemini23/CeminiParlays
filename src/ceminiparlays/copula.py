@@ -76,8 +76,15 @@ def exact_joint(
     k = len(marginals)
     if corr.shape != (k, k):
         raise ValueError("correlation matrix shape must match marginals")
-    clean = np.clip((corr + corr.T) / 2.0, -0.999999, 0.999999)
+    # SciPy's multivariate CDF needs a strictly positive-definite covariance. A
+    # raw prior matrix (e.g. from ``sgp_from_score_marginals``) can be
+    # indefinite, so repair it only when needed, rather than raise inside SciPy
+    # (A-03). An already-PD matrix is used as-is so a near-1 correlation is not
+    # clipped.
+    clean = (corr + corr.T) / 2.0
     np.fill_diagonal(clean, 1.0)
+    if float(np.min(np.linalg.eigvalsh(clean))) <= _PD_EPS:
+        clean = nearest_correlation(clean)
     thresholds = norm.ppf(marginals)
     return float(
         multivariate_normal.cdf(thresholds, mean=np.zeros(k), cov=clean)

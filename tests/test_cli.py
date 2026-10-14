@@ -389,7 +389,7 @@ def test_hardrock_displayed_odds_cli(tmp_path: Path, capsys) -> None:
         tmp_path,
         [
             _line_row(player_name="A One", team="KC", opp="BUF"),
-            _line_row(player_name="B One", team="KC", opp="BUF"),
+            _line_row(player_name="B One", team="BUF", opp="KC"),
         ],
     )
     # rewrite platform to hardrock

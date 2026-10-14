@@ -104,7 +104,10 @@ ceminiparlays fetch --date 2026-09-13 --books hardrock --markets first_td,anytim
   --out runs/slate/ftd.csv --force
 # Offline / CI: --fixture skips HTTP and does not need a key
 ceminiparlays fetch --fixture tests/fixtures/odds_api_nfl.json --out /tmp/lines.csv
-# Fetch fills line + book_over/book_under (or TD / h2h leg_odds / fair_p).
+# Fetch fills line + book_over/book_under (or TD / h2h leg_odds / ref_p).
+# Moneyline and spread rows are paired two-way; a TD pool is de-vigged.
+# A raw implied probability is never written as fair_p.
+# --reference-book stamps another book's de-vigged quote as ref_* (auto-picked).
 # The displayed SGP American is still typed once per ticket (--displayed-odds).
 
 # Compose 5 tickets with the auto defaults (2-leg, +150..+400, yards markets)
@@ -119,6 +122,8 @@ ceminiparlays compose --auto --lines runs/slate/lines.csv \
 #
 # Every leg is gated on a modeled edge (model P - market implied P):
 #   --min-edge 0.01   leg below the floor -> edge_gate fail, exit 2
+#   --require-model   drop a leg whose only fair value is a market price
+#   rank also takes --min-edge: when set, a weak-edge leg fails closed
 #   model P is a typed fair_p or a --distributions projection
 #   a leg with no model P is flagged no-edge on the card
 #   --bankroll 100    quarter-Kelly stake per ticket, 5% cap, written to card.json
@@ -162,7 +167,8 @@ ceminiparlays compose --auto --enforce-market-depth \
 # missing moneyline/h2h or spread/spreads → CATALOG_THIN_MANUAL_INPUT_REQUIRED, exit 2
 # --allow-thin-catalog prints the same note and continues
 
-# Late-active alert (TG-03). Exit 0 (alert only). Missing file exits 2.
+# Late-status scratch (TG-03). A player marked out/inactive/ir/doubtful in the
+# status file is scratched before pricing. Missing file exits 2.
 ceminiparlays compose --auto --alert-late-active inactives.csv \
   --lines runs/slate/lines.csv --out-dir runs/slate
 
@@ -198,11 +204,11 @@ The v0.5 flags are **reports**. They do not void, reprice, invent an SGP, or ove
 
 `ticket_id` groups rows: when any row carries one, a combo only combines rows that share that id (or all-blank rows). Type the in-app American in `slip_odds` on those rows. `--ticket-id <id>` filters the CSV to one ticket; then pass `--legs` matching that ticket before `--displayed-odds`.
 
-`--markets` keeps only the named market families (`pass_yds`, `rush_yds`, `rec_yds`, `receptions`, `rush_att`, `pass_tds`, `first_td`, `anytime_td`, plus game markets `h2h`/`spreads`/`totals`). `compose --auto` still uses yards only and skips game rows. `first_td` and `anytime_td` are discrete: fair P comes from a typed `fair_p` or from `leg_odds` implied, never from a fake Gaussian. Two `first_td` legs in the same game never rank (`same-game-first-td`). Cross-game first TD uses ρ = 0; `anytime_td` same-team carries a 0.15 prior. Compose prints a warning (exit 0) when the same player appears on two tickets in the same `stat_type`; yards + ATD on one player does not warn.
+`--markets` keeps only the named market families (`pass_yds`, `rush_yds`, `rec_yds`, `receptions`, `rush_att`, `pass_tds`, `first_td`, `anytime_td`, plus game markets `h2h`/`spreads`/`totals`). `compose --auto` still uses yards only and skips game rows. `first_td` and `anytime_td` are discrete: fair P comes from a typed `fair_p`, a projected distribution, a de-vigged TD pool (`ref_p`), or a `leg_odds` implied — never a fake Gaussian. Two `first_td` legs in the same game never rank (`same-game-first-td`). Cross-game first TD uses ρ = 0; `anytime_td` same-team carries a 0.15 prior. Compose prints a warning (exit 0) when the same player appears on two tickets in the same `stat_type`; yards + ATD on one player does not warn. A same-game pair with no entry in `config/correlation_priors.json` is skipped (`skip unmodeled-corr`); pass `--allow-unmodeled-correlation` to price it with the old guessed fallback.
 
-If you only type per-leg `leg_odds`, the tool multiplies those decimals as an **unconfirmed screen** (`leg_odds_naive`, Kelly = 0) until you pass `--displayed-odds` or type the same `slip_odds` on every combo leg. That product **overstates** same-game SGP payout. Rebuild the ticket in-app and pass the displayed price before you size.
+If you only type per-leg `leg_odds`, the tool multiplies those decimals as an **unconfirmed screen** (`leg_odds_naive`) until you pass `--displayed-odds` or type the same `slip_odds` on every combo leg. A cross-game combo is a genuine product of independent prices, so it is confirmed and Kelly sizes it; a same-game SGP product **overstates** the payout, so it stays unconfirmed with Kelly = 0 until you type the in-app price. Rebuild the ticket in-app and pass the displayed price before you size.
 
-`book_over` / `book_under` must be **two-way market** quotes (the posted over/under), never SGP-builder screen prices. The copula already adds correlation; feeding SGP-screen odds double-counts it.
+`book_over` / `book_under` must be **two-way market** quotes (the posted over/under), never SGP-builder screen prices. `fetch --reference-book <platform>` stamps a sharp book's quotes as `ref_book_over` / `ref_book_under` (and `ref_p` for a TD pool) on every other book's rows, so a fair value survives the platform filter. A same-game pair with no correlation prior is skipped.
 
 ## Prediction markets (paper COMBOS)
 
@@ -250,7 +256,7 @@ are excluded (`alt-needs-m`).
 
 ## What it computes
 
-1. **Fair P** — typed `fair_p`, de-vigged book odds, TD `leg_odds` implied, a projected distribution, or a prediction `contract_price` mid. Sharp `book_over` / `book_under` stay the fair-P input. Ticket book is `--platform`.
+1. **Fair P** — the leg marginal that drives the copula, EV, and Kelly. Precedence: typed `fair_p` (model) → a `--distributions` projection (model) → typed `ref_p` → de-vigged `ref_book_over`/`ref_book_under` (an independent sharp book) → the ticket book's own `book_over`/`book_under` de-vig → TD `leg_odds` implied → a prediction `contract_price` mid. The marginal now comes from the model, **not** the book you bet: when a projection exists it beats the ticket book. A leg whose only fair value is a market price is priced but marked `no-edge` (no independent model). Pass `--require-model` to drop such a leg instead. Ticket book is `--platform`.
 2. **Implied P** — reverse of the displayed American (sportsbook / prediction) or lounge payout table (pick'em).
 3. **Slip EV** — joint hit rate from a Gaussian copula, not the independent product.
 4. **Quarter Kelly** on the **whole ticket**, then a 5% cap.

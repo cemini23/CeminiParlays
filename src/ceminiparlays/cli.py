@@ -468,6 +468,32 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     compose.add_argument("--bankroll", type=float, default=None)
+    compose.add_argument(
+        "--require-model",
+        action="store_true",
+        help=(
+            "Drop a leg whose only fair value is a market price (same-book "
+            "de-vig, TD leg odds, or a contract mid). Default keeps it and marks "
+            "it no-edge."
+        ),
+    )
+    compose.add_argument(
+        "--allow-unmodeled-correlation",
+        action="store_true",
+        help=(
+            "Price a same-game pair that has no prior in correlation_priors.json "
+            "with the old guessed fallback. Default skips the combo."
+        ),
+    )
+    compose.add_argument(
+        "--max-line-age",
+        type=float,
+        default=None,
+        help=(
+            "Drop a line whose captured_at is older than this many minutes. A "
+            "leg whose game has already kicked off is always dropped."
+        ),
+    )
     compose.add_argument("--out-dir", type=Path, default=None)
     compose.add_argument(
         "--card-md",

@@ -202,6 +202,24 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
         help="Keep a rec_yds leg at 50 or higher. Default bars 50+ (49.5 stays).",
     )
     parser.add_argument(
+        "--min-edge",
+        type=float,
+        default=None,
+        help=(
+            "Modeled-edge floor (model P - market implied P). When set, a leg "
+            "below it fails closed with exit 2. Omitted means annotate only."
+        ),
+    )
+    parser.add_argument(
+        "--require-model",
+        action="store_true",
+        help=(
+            "Drop a leg whose only fair value is a market price (same-book "
+            "de-vig, TD leg odds, or a contract mid). Default keeps it and marks "
+            "it no-edge."
+        ),
+    )
+    parser.add_argument(
         "--games",
         type=Path,
         default=None,
@@ -826,6 +844,7 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         platform=platform,
         roster=roster,
         allow_high_receiving=bool(getattr(args, "allow_rec_line", False)),
+        require_model=bool(getattr(args, "require_model", False)),
     )
     environment = read_environment(getattr(args, "environment", None))
     if environment:
@@ -856,6 +875,27 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
 
     if strict and (dropped or off_card):
         print("strict mode: refusing to rank with dropped legs; fix the rows or pass --no-strict")
+        return 2
+
+    # Modeled-edge gate, same contract as compose: ``weak-edge`` fails closed
+    # (exit 2) only when the operator sets --min-edge; ``no-edge`` (no model P at
+    # all) is a loud flag and never a hard fail.
+    min_edge = getattr(args, "min_edge", None)
+    gate_floor = DEFAULT_MIN_EDGE if min_edge is None else min_edge
+    edge_fails = edge_failures(live, gate_floor)
+    for leg, token in edge_fails:
+        shown = "na" if leg.prop_edge is None else f"{leg.prop_edge:+.4f}"
+        print(
+            f"EDGE-GATE {token}: {leg.line.player_name} {leg.line.stat_type} "
+            f"prop_edge={shown} (floor {gate_floor:+.4f})"
+        )
+    if min_edge is not None and any(
+        token == "weak-edge" for _leg, token in edge_fails
+    ):
+        print(
+            f"edge gate: a leg is below --min-edge {min_edge:+.4f}; fix the rows, "
+            "drop the leg, or lower --min-edge"
+        )
         return 2
 
     notes: list[str] = []
@@ -1289,6 +1329,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         platform=platform,
         roster=roster,
         allow_high_receiving=bool(getattr(args, "allow_rec_line", False)),
+        require_model=bool(getattr(args, "require_model", False)),
     )
     dropped = [leg for leg in excluded if leg.warn not in {"scratch"}]
     print(

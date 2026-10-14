@@ -49,6 +49,7 @@ EXCLUDED_WARNS = {
     "bad-odds",
     "wrong-team",
     "rec-line-bar",
+    "no-model-marginal",
 }
 #: Scratch is expected (a listed player is out); every other exclusion is a
 #: data problem and aborts the default strict rank.
@@ -117,18 +118,57 @@ def _excluded_leg(line: LineRow, implied_p: float, warn: str) -> EvaluatedLeg:
     )
 
 
+class ModelRequiredError(Exception):
+    """Raised when ``--require-model`` forbids a market-only marginal."""
+
+
+def _side_probability_of(p_over: float, p_under: float, side: str) -> float:
+    if side in MORE_SIDES:
+        return p_over
+    if side in LESS_SIDES:
+        return p_under
+    raise ValueError(f"unknown side: {side}")
+
+
+def _distribution_prob(line: LineRow, dist: DistRow) -> FairResult:
+    family = dist.family or None
+    # ``two_plus_td`` is a count market: a typed count projection prices it with
+    # Poisson. A normal family (typed or defaulted) is never invented for it.
+    if is_two_plus_td(line.stat_type):
+        family = "poisson"
+    elif family not in {"lognormal", "normal", "poisson"}:
+        family = None
+    return p_over_line(
+        line=line.line,
+        median=dist.median,
+        sigma=dist.sigma,
+        family=family,
+        stat_type=line.stat_type,
+    )
+
+
 def fair_for_line(
     line: LineRow,
     dist: DistRow | None,
     method: DevigMethod = "power",
+    *,
+    require_model: bool = False,
 ) -> tuple[float, str, FairResult | None]:
-    """Prefer operator-typed probabilities; fall back to a projected distribution.
+    """Resolve the leg marginal that drives the copula, EV, and Kelly.
 
-    Precedence: typed ``fair_p`` → de-vigged two-way book → TD ``leg_odds``
-    implied → projected distribution → prediction ``contract_price`` mid. A TD
-    market never falls through to a fake Gaussian: with no distribution it is
-    dropped, not invented. ``two_plus_td`` is the same: it is priced only from a
-    typed ``fair_p`` or a count distribution, never a normal curve.
+    The marginal must be an INDEPENDENT probability, never the target book's own
+    de-vig. Precedence: typed ``fair_p`` (model) → projected ``dist`` (model) →
+    typed ``ref_p`` → de-vigged ``ref_book_*`` (an independent sharp book) →
+    the target book's own ``book_over`` / ``book_under`` de-vig → TD ``leg_odds``
+    implied → prediction ``contract_price`` mid.
+
+    The last three are market-only: they carry no independent model, so the edge
+    gate sees no model P and marks the leg ``no-edge``. With ``require_model``
+    set, a leg that would fall through to a market-only marginal is refused.
+
+    A TD market never falls through to a fake Gaussian: with no distribution it
+    is priced from a typed ``fair_p`` or a de-vigged pool / leg price, not
+    invented. ``two_plus_td`` needs a typed ``fair_p`` or a count distribution.
     """
 
     if line.fair_p is not None:
@@ -140,40 +180,47 @@ def fair_for_line(
             f"two_plus_td needs a typed fair_p or a count distribution "
             f"for {line.player_key}/{line.stat_type}"
         )
+    if dist is not None:
+        fair = _distribution_prob(line, dist)
+        return side_probability(fair, line.side), "distribution", fair
+    if line.ref_p is not None:
+        if not 0.0 < line.ref_p < 1.0:
+            raise ValueError(f"ref_p must be between 0 and 1, got {line.ref_p}")
+        return line.ref_p, "ref_p", None
+    if line.ref_book_over is not None and line.ref_book_under is not None:
+        result = devig_two_way(line.ref_book_over, line.ref_book_under, method=method)
+        return (
+            _side_probability_of(result.p_over, result.p_under, line.side),
+            "ref_devig",
+            None,
+        )
     if line.book_over is not None and line.book_under is not None:
+        if require_model:
+            raise ModelRequiredError(
+                f"same-book marginal refused for {line.player_key}/{line.stat_type}"
+            )
         result = devig_two_way(line.book_over, line.book_under, method=method)
-        if line.side in MORE_SIDES:
-            p = result.p_over
-        elif line.side in LESS_SIDES:
-            p = result.p_under
-        else:
-            raise ValueError(f"unknown side: {line.side}")
-        return p, "book_devig", None
+        return (
+            _side_probability_of(result.p_over, result.p_under, line.side),
+            "book_devig",
+            None,
+        )
     if is_td_market(line.stat_type) and line.leg_odds is not None:
+        if require_model:
+            raise ModelRequiredError(
+                f"market-only marginal refused for {line.player_key}/{line.stat_type}"
+            )
         implied = american_to_implied(int(line.leg_odds))
         if line.side in LESS_SIDES:
             implied = 1.0 - implied
         elif line.side not in MORE_SIDES:
             raise ValueError(f"unknown side: {line.side}")
         return implied, "leg_odds_implied", None
-    if dist is not None:
-        family = dist.family or None
-        # ``two_plus_td`` is a count market: a typed count projection prices it
-        # with Poisson. A normal family (typed or defaulted) is never invented
-        # for it; without a distribution the caller drops the leg.
-        if is_two_plus_td(line.stat_type):
-            family = "poisson"
-        elif family not in {"lognormal", "normal", "poisson"}:
-            family = None
-        fair = p_over_line(
-            line=line.line,
-            median=dist.median,
-            sigma=dist.sigma,
-            family=family,
-            stat_type=line.stat_type,
-        )
-        return side_probability(fair, line.side), "distribution", fair
     if line.contract_price is not None:
+        if require_model:
+            raise ModelRequiredError(
+                f"market-only marginal refused for {line.player_key}/{line.stat_type}"
+            )
         if not 0.0 < line.contract_price < 1.0:
             raise ValueError(
                 f"contract_price must be between 0 and 1, got {line.contract_price}"
@@ -280,6 +327,7 @@ def evaluate_legs(
     platform: str = "",
     roster: Roster | None = None,
     allow_high_receiving: bool = False,
+    require_model: bool = False,
 ) -> tuple[list[EvaluatedLeg], list[EvaluatedLeg]]:
     """Split lines into rankable legs and named exclusions.
 
@@ -336,6 +384,8 @@ def evaluate_legs(
             continue
         if (
             line.book_over is None
+            and line.ref_p is None
+            and line.ref_book_over is None
             and dist is None
             and line.fair_p is None
             and not td_priced
@@ -355,7 +405,12 @@ def evaluate_legs(
             excluded.append(_excluded_leg(line, stored_implied, "bad-odds"))
             continue
         try:
-            fair_p, source, fair = fair_for_line(line, dist, method=method)
+            fair_p, source, fair = fair_for_line(
+                line, dist, method=method, require_model=require_model
+            )
+        except ModelRequiredError:
+            excluded.append(_excluded_leg(line, stored_implied, "no-model-marginal"))
+            continue
         except (KeyError, ValueError):
             excluded.append(_excluded_leg(line, stored_implied, "dropped"))
             continue

@@ -681,3 +681,65 @@ def test_prediction_contract_with_blank_line_ranks() -> None:
     assert excluded == []
     assert len(live) == 2
     assert live[0].line.line == 0.5
+
+
+def _evaluate_with(
+    lines: list[LineRow],
+    dists: dict,
+    *,
+    require_model: bool = False,
+):
+    table = resolve_payout("underdog", "standard", 2)
+    return evaluate_legs(
+        lines,
+        dists,
+        implied_p=breakeven_per_leg(table.all_hit, 2),
+        allow_high_receiving=True,
+        require_model=require_model,
+    )
+
+
+def test_distribution_beats_the_two_way_book() -> None:
+    # A projection must set the EV marginal, not the book's own de-vig (A-01).
+    from ceminiparlays.io import DistRow
+
+    leg = _line("QB One", "DET", "NO", stat="pass_yds", line=300.5)
+    dists = {("qb_one", "pass_yds"): DistRow("qb_one", "QB One", "pass_yds", 250.0, 40.0, "lognormal")}
+    live, excluded = _evaluate_with([leg], dists)
+    assert excluded == []
+    assert live[0].source == "distribution"
+    assert live[0].fair_p < 0.5  # a 250 median misses a 300.5 line
+
+
+def test_ref_p_is_used_before_the_target_book() -> None:
+    leg = _line("QB One", "DET", "NO", stat="pass_yds", line=300.5)
+    leg.ref_p = 0.61
+    live, _ = _evaluate_with([leg], {})
+    assert live[0].source == "ref_p"
+    assert abs(live[0].fair_p - 0.61) < 1e-12
+
+
+def test_ref_two_way_devig_beats_the_target_book() -> None:
+    leg = _line("QB One", "DET", "NO", stat="pass_yds", line=300.5, book_over=-110, book_under=-110)
+    leg.ref_book_over = -160
+    leg.ref_book_under = 130
+    live, _ = _evaluate_with([leg], {})
+    assert live[0].source == "ref_devig"
+    assert live[0].fair_p > 0.5
+
+
+def test_require_model_drops_a_same_book_marginal() -> None:
+    leg = _line("QB One", "DET", "NO", stat="pass_yds", line=300.5)
+    live, excluded = _evaluate_with([leg], {}, require_model=True)
+    assert live == []
+    assert excluded[0].warn == "no-model-marginal"
+
+
+def test_market_only_marginal_is_no_edge() -> None:
+    from ceminiparlays.slips import edge_status
+
+    leg = _line("QB One", "DET", "NO", stat="pass_yds", line=300.5)
+    live, _ = _evaluate_with([leg], {})
+    assert live[0].source == "book_devig"
+    assert live[0].prop_edge is None
+    assert edge_status(live[0], 0.01) == "no-edge"

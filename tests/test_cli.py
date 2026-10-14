@@ -1688,3 +1688,90 @@ def test_compose_ticket_id_flag_is_exact_not_prefix(tmp_path: Path, capsys) -> N
     assert code == 0
     assert "lines=1" in out
     assert "B-50" not in out
+
+
+def test_rank_min_edge_fails_closed_on_a_weak_edge(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [_line_row(player_name="A One", team="AAA", opp="BBB"), _line_row(player_name="B Two", team="CCC", opp="DDD")],
+    )
+    # Both legs project a low Over against a coin-flip book: model P loses the market.
+    dists = _write_distributions(
+        tmp_path,
+        "A One,,pass_yds,150,30,lognormal\nB Two,,pass_yds,150,30,lognormal\n",
+    )
+    out_csv = tmp_path / "edges.csv"
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "underdog",
+            "--min-edge",
+            "0.01",
+            "--out",
+            str(out_csv),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "EDGE-GATE weak-edge" in out
+    assert not out_csv.is_file()
+
+
+def test_rank_without_min_edge_annotates_only(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [_line_row(player_name="A One", team="AAA", opp="BBB"), _line_row(player_name="B Two", team="CCC", opp="DDD")],
+    )
+    dists = _write_distributions(
+        tmp_path,
+        "A One,,pass_yds,150,30,lognormal\nB Two,,pass_yds,150,30,lognormal\n",
+    )
+    out_csv = tmp_path / "edges.csv"
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "underdog",
+            "--out",
+            str(out_csv),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "EDGE-GATE weak-edge" in out
+
+
+def test_rank_require_model_drops_a_book_only_leg(tmp_path: Path, capsys) -> None:
+    lines = _write_lines(
+        tmp_path,
+        [_line_row(player_name="A One", team="AAA", opp="BBB"), _line_row(player_name="B Two", team="CCC", opp="DDD")],
+    )
+    dists = _write_distributions(tmp_path)
+    out_csv = tmp_path / "edges.csv"
+    code = main(
+        [
+            "rank",
+            "--lines",
+            str(lines),
+            "--distributions",
+            str(dists),
+            "--platform",
+            "underdog",
+            "--require-model",
+            "--no-strict",
+            "--out",
+            str(out_csv),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "no-model-marginal" in out

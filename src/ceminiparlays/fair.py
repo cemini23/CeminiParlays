@@ -71,12 +71,14 @@ def p_over_line(
     p_at_median = 0.5
 
     if resolved == "lognormal":
-        # v1 proxy: CV uses the projected median as if it were the mean. A true
-        # mean/sigma parameterization would shift every yard probability, so it
-        # is deferred; see RESEARCH.md (I-29).
+        # Solve the log-space SD so the distribution's true SD equals the typed
+        # sigma for a given median. With t = e**(sigma_ln**2), the SD relation is
+        # (SD / median)**2 = t * (t - 1), so t = (1 + sqrt(1 + 4*CV**2)) / 2
+        # (A-11). Using CV directly inflates the SD by sqrt(1 + CV**2).
         cv = sigma / median if median else 0.0
         cv = max(cv, 1e-6)
-        sigma_ln = sqrt(log(1.0 + cv * cv))
+        t = (1.0 + sqrt(1.0 + 4.0 * cv * cv)) / 2.0
+        sigma_ln = sqrt(log(t))
         # scipy lognorm is parameterized by s=sigma_ln and scale=exp(mu_ln)
         mu_ln = log(median)
         dist = lognorm(s=sigma_ln, scale=exp(mu_ln))

@@ -580,3 +580,36 @@ def test_book_and_official_actuals_stay_on_the_grade(tmp_path: Path) -> None:
     assert differ.hits == 1
     assert same.pnl == differ.pnl
     assert abs(same.pnl - 5.0) < 1e-9
+
+
+def test_bare_integer_multiplier_is_decimal_not_american() -> None:
+    from ceminiparlays.grade import _parse_multiplier
+
+    # An 8-leg Underdog slip pays 120x. "120" must not read as +120 (2.2x).
+    assert _parse_multiplier("120") == 120.0
+    assert _parse_multiplier("+120") == 2.2
+    assert _parse_multiplier("-110") == 1.0 + 100 / 110
+
+
+def test_flex_three_leg_void_on_two_hits_steps_down_to_standard(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "underdog,flex,3,more|more|more,1|2|3,9|9|3,10,\n",
+        encoding="utf-8",
+    )
+    summary = grade_ledger(path)
+    # One void (actual == line) leaves two hits: pay the 2-leg Standard 3.5x,
+    # not a 1.0x refund.
+    assert abs(summary.pnl - 10 * (3.5 - 1)) < 1e-9
+
+
+def test_blank_stake_fails_closed(tmp_path) -> None:
+    path = tmp_path / "ledger.csv"
+    path.write_text(
+        "platform,mode,n_legs,sides,lines,actuals,stake,multiplier\n"
+        "hardrock,standard,1,more,69.5,88,,2.0\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="blank stake"):
+        grade_ledger(path)

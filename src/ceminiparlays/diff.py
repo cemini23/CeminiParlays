@@ -7,6 +7,7 @@ Never writes the card. ``--emit-ledger`` may write booked rows after
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 COMPARE_FIELDS = ("stake", "lines", "multiplier")
@@ -16,10 +17,42 @@ BOOKED_WINS = (
 ACCEPTED = "accepted booked deltas (ledger not written)"
 
 
+def _card_json_rows(path: Path) -> dict[str, dict[str, str]]:
+    """One ledger-shaped row per ticket from a ``compose`` ``card.json``."""
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{path} is not a card.json object")
+    rows: dict[str, dict[str, str]] = {}
+    for index, ticket in enumerate(payload.get("tickets") or [], start=1):
+        if not isinstance(ticket, dict):
+            continue
+        ticket_id = str(ticket.get("ticket_id") or f"compose-{index:03d}").strip()
+        legs = [leg for leg in (ticket.get("legs") or []) if isinstance(leg, dict)]
+        lines = " | ".join(str(leg.get("line", "")) for leg in legs)
+        sides = " | ".join(str(leg.get("side", "")) for leg in legs)
+        stake = ticket.get("stake")
+        rows[ticket_id] = {
+            "ticket_id": ticket_id,
+            "stake": "" if stake is None else str(stake),
+            "lines": lines,
+            "sides": sides,
+            "multiplier": str(ticket.get("multiplier", "")),
+        }
+    return rows
+
+
 def read_ticket_table(path: Path) -> dict[str, dict[str, str]]:
-    """Read a ledger-shaped CSV keyed by ``ticket_id`` (required)."""
+    """Read a ticket table keyed by ``ticket_id``.
+
+    Accepts a ledger-shaped CSV (one row per ticket) or a ``compose``
+    ``card.json`` (one entry per ticket). A CSV with one row per leg would
+    otherwise keep only the last leg of each ticket (A-09).
+    """
 
     resolved = Path(path)
+    if resolved.suffix.lower() == ".json":
+        return _card_json_rows(resolved)
     with resolved.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         fields = set(reader.fieldnames or [])

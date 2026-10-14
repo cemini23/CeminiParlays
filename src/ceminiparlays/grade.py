@@ -123,9 +123,16 @@ def _parse_leg_token(part: str) -> str | float:
 
 
 def _looks_american(text: str) -> bool:
-    """True for +288 / -110 / 288 (integer, abs >= 100, no decimal point)."""
+    """True for an explicit American price: ``+288`` or ``-110``.
+
+    A bare integer is a DECIMAL multiplier. ``120`` is 120.0x, not +120 (2.2x):
+    on an 8-leg Underdog slip ``120`` is the table multiplier, and reading it as
+    American turned a $1,190 win into $12 (A-10).
+    """
 
     if "." in text or "e" in text.lower():
+        return False
+    if not text.startswith(("+", "-")):
         return False
     try:
         value = int(text)
@@ -740,7 +747,13 @@ def grade_ledger(
                 )
                 continue
 
-            stake = float(raw.get("stake", 1.0) or 1.0)
+            stake_text = (raw.get("stake") or "").strip()
+            if not stake_text:
+                raise ValueError(
+                    f"{id_label or 'row ' + str(row_index)}: blank stake; "
+                    "type the stake or remove the row"
+                )
+            stake = float(stake_text)
             ticket_id = id_label
             stake_total += stake
             if stake_kind:
@@ -997,7 +1010,18 @@ def _void_payout(
     try:
         table = resolve_payout(platform, mode, effective_legs, profile_dir=profile_dir)
     except (ValueError, FileNotFoundError):
-        return 1.0
+        if mode.lower() == "flex" and effective_legs == 2:
+            # A 3-leg Flex with one void steps down to a 2-leg ticket. Flex has
+            # no 2-leg row, so settle it as the 2-leg Standard / Power payout
+            # (3.5x / 3.0x) instead of refunding (A-10).
+            try:
+                table = resolve_payout(
+                    platform, "standard", effective_legs, profile_dir=profile_dir
+                )
+            except (ValueError, FileNotFoundError):
+                return 1.0
+        else:
+            return 1.0
     return table.multiplier_for_hits(hit_count)
 
 

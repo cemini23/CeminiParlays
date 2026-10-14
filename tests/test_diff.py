@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -154,3 +155,33 @@ def test_emit_ledger_without_accept_does_not_write(tmp_path: Path, capsys) -> No
 def _write(path: Path, text: str) -> Path:
     path.write_text(text, encoding="utf-8")
     return path
+
+
+def test_read_ticket_table_accepts_card_json(tmp_path) -> None:
+    from ceminiparlays.diff import read_ticket_table
+
+    card = tmp_path / "card.json"
+    card.write_text(
+        json.dumps(
+            {
+                "tickets": [
+                    {
+                        "ticket_id": "compose-001",
+                        "stake": 5.0,
+                        "multiplier": 3.5,
+                        "legs": [
+                            {"player_name": "A", "line": 250.5, "side": "more"},
+                            {"player_name": "B", "line": 62.5, "side": "less"},
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    rows = read_ticket_table(card)
+    assert set(rows) == {"compose-001"}
+    assert rows["compose-001"]["stake"] == "5.0"
+    assert rows["compose-001"]["lines"] == "250.5 | 62.5"
+    assert rows["compose-001"]["sides"] == "more | less"
+    assert rows["compose-001"]["multiplier"] == "3.5"

@@ -56,3 +56,21 @@ def test_poisson_sigma_is_flagged_not_silent() -> None:
 def test_lognormal_at_median_is_half() -> None:
     result = p_over_line(line=50.0, median=50.0, sigma=10.0, family="lognormal")
     assert result.fair_p_at_median == pytest.approx(0.5, abs=1e-6)
+
+
+def test_lognormal_true_sd_matches_the_typed_sigma() -> None:
+    from math import log, sqrt
+
+    from scipy.stats import lognorm
+
+    from ceminiparlays.fair import p_over_line
+
+    # median 45, sd 30: the fitted lognormal's true SD must be 30, not 30*sqrt(1+CV^2).
+    result = p_over_line(59.5, 45.0, 30.0, family="lognormal")
+    assert result.family == "lognormal"
+    # Recover the scipy parameters the function used and check the variance.
+    cv = 30.0 / 45.0
+    t = (1.0 + sqrt(1.0 + 4.0 * cv * cv)) / 2.0
+    s = sqrt(log(t))
+    _mean, var = lognorm(s=s, scale=45.0).stats(moments="mv")
+    assert abs(sqrt(var) - 30.0) < 1e-6

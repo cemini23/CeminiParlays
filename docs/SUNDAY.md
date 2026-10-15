@@ -166,6 +166,23 @@ Run this snapshot every slate. CLV cannot exist when the snapshot is missing.
 `grade --closings` fills a blank `close_*` ledger cell from it by
 `(platform, player_key, stat_type, side)` and computes `clv_pp`.
 
+**Weekly, read the CLV.** Once a week, aggregate the graded ledgers:
+
+```bash
+ceminiparlays clv --ledger runs/2026-w05-sun/ledger.csv
+```
+
+`clv` prints the leg count, the mean / median / stdev CLV in percentage points,
+a one-sided t-statistic and p-value for mean > 0, a positive-CLV rate, a
+breakdown by platform / stat_type / market, and a verdict. `--ledger` is
+repeatable. `--min-legs` changes the leg target (default 100). `--json` prints
+the report as JSON; `--out PATH` also writes it there. The verdict is
+**PROVE** when the mean is at least +1.5 pp and the t-statistic is at least 2.0
+at 100 legs, **KILL** when the mean is at or below 0.0 pp at 100 legs, and
+**KEEP COLLECTING** in between. It labels the basis: `same_book` when the close
+came from the book that was bet, `reference` when it came from another book.
+No sharp-book fetch is built here; the report only labels what the data shows.
+
 **CeminiDFS handoff** (optional, copy the file; this CLI only reads):
 
 ```bash

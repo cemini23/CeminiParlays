@@ -139,6 +139,13 @@ ceminiparlays grade --ledger examples/ledger_week5.csv \
 # --card accepts a card CSV or card.json. A null card puts every ticket off-card.
 # --closings fills a blank close_* ledger cell and computes clv_pp per leg.
 
+# Weekly: aggregate the CLV across graded ledgers, per platform / stat / market.
+ceminiparlays clv --ledger runs/2026-w05-sun/ledger.csv
+# Prints n, mean/median/stdev (percentage points), t-stat, one-sided p, positive
+# rate, and a VERDICT: PROVE (mean >= +1.5pp and t >= 2.0 at n >= 100),
+# KILL (mean <= 0.0 at n >= 100), or KEEP COLLECTING. --ledger is repeatable;
+# --min-legs changes the target; --json is machine-readable; --out writes JSON.
+
 # Run the Jev gate after compose and before you type. Mandatory every slate.
 ceminiparlays jev-gate \
   --card runs/2026-w05-sun/compose/card.json \

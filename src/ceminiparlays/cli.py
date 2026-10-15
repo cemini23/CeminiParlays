@@ -12,6 +12,7 @@ from ceminiparlays import STANDARD_DISCLAIMER, __version__
 from ceminiparlays.bankroll import flat_stake, kelly_cap_stake
 from ceminiparlays.catalog import thin_catalog_games
 from ceminiparlays.closings import write_prop_closes
+from ceminiparlays.clv import clv_report, format_clv_report, write_clv_json
 from ceminiparlays.ceminidfs import exposure_notes, load_ceminidfs_handoff, merge_implied_totals
 from ceminiparlays.compose import (
     TICKET_FIELDS,
@@ -553,6 +554,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
     closings.add_argument(
         "--force", action="store_true", help="Overwrite --out if it exists"
+    )
+
+    clv = sub.add_parser(
+        "clv",
+        help="Season CLV summary over graded ledgers: prove, kill, or keep collecting",
+        description=(
+            "Read one or more graded ledger CSVs and report leg-level closing "
+            "line value: n, mean/median/stdev in percentage points, a one-sided "
+            "t-stat and p-value for mean > 0, a positive-CLV rate, breakdowns by "
+            "platform / stat_type / market, and a verdict. It reads; it does not "
+            "submit or place a bet."
+        ),
+    )
+    clv.add_argument(
+        "--ledger",
+        type=Path,
+        action="append",
+        required=True,
+        dest="ledger",
+        help="A graded ledger CSV. Repeatable; every ledger is combined.",
+    )
+    clv.add_argument(
+        "--min-legs",
+        type=int,
+        default=100,
+        help="Independent-leg target for the verdict (default 100).",
+    )
+    clv.add_argument(
+        "--json", action="store_true", help="Print the summary as JSON."
+    )
+    clv.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Also write the summary JSON to this path.",
     )
 
     jev = sub.add_parser(
@@ -1844,6 +1880,18 @@ def _cmd_closings(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_clv(args: argparse.Namespace) -> int:
+    report = clv_report(args.ledger, min_legs=args.min_legs)
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(format_clv_report(report))
+    if args.out is not None:
+        write_clv_json(report, args.out)
+        print(f"wrote {args.out}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1859,6 +1907,7 @@ def main(argv: list[str] | None = None) -> int:
         "diff": _cmd_diff,
         "bankroll": _cmd_bankroll,
         "closings": _cmd_closings,
+        "clv": _cmd_clv,
         "jev-gate": _cmd_jev_gate,
         "fetch": _cmd_fetch,
     }

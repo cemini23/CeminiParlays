@@ -11,7 +11,35 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from ceminiparlays.environment import EnvRow, Environment, _optional_float
+from ceminiparlays.names import fold_name
 from ceminiparlays.roster import normalize_team
+
+
+#: Stat prefixes carrying a disaggregated distribution in the handoff CSV.
+#: Each expands to ``<prefix>_median``, ``<prefix>_sigma``, ``<prefix>_p15``,
+#: and ``<prefix>_p85``.
+DISTRIBUTION_PREFIXES = ("pass_yds", "rush_yds", "rec_yds", "receptions")
+
+
+@dataclass(frozen=True)
+class StatDistribution:
+    """One stat's projected distribution from the disaggregated handoff columns.
+
+    ``p15`` and ``p85`` carry the asymmetry the median and sigma alone cannot:
+    an injury-limited or committee backfield is skewed, and a symmetric normal
+    would price the tail wrong. Either quantile may be absent; the split-normal
+    then falls back on sigma.
+    """
+
+    stat_type: str
+    median: float | None = None
+    sigma: float | None = None
+    p15: float | None = None
+    p85: float | None = None
+
+    @property
+    def has_quantiles(self) -> bool:
+        return self.p15 is not None and self.p85 is not None
 
 
 @dataclass(frozen=True)
@@ -22,6 +50,29 @@ class HandoffRow:
     lineup_exposure_pct: float | None = None
     game: str = ""
     implied_total: float | None = None
+    distributions: tuple[StatDistribution, ...] = ()
+
+    def distribution_for(self, stat_type: str) -> StatDistribution | None:
+        wanted = (stat_type or "").strip().lower()
+        for dist in self.distributions:
+            if dist.stat_type == wanted:
+                return dist
+        return None
+
+
+def _distributions_from(raw: dict) -> tuple[StatDistribution, ...]:
+    out: list[StatDistribution] = []
+    for prefix in DISTRIBUTION_PREFIXES:
+        median = _optional_float(raw.get(f"{prefix}_median"))
+        sigma = _optional_float(raw.get(f"{prefix}_sigma"))
+        p15 = _optional_float(raw.get(f"{prefix}_p15"))
+        p85 = _optional_float(raw.get(f"{prefix}_p85"))
+        if median is None and sigma is None and p15 is None and p85 is None:
+            continue
+        out.append(
+            StatDistribution(stat_type=prefix, median=median, sigma=sigma, p15=p15, p85=p85)
+        )
+    return tuple(out)
 
 
 @dataclass(frozen=True)
@@ -57,9 +108,30 @@ def load_ceminidfs_handoff(path: Path | str) -> Handoff:
                     lineup_exposure_pct=_optional_float(raw.get("lineup_exposure_pct")),
                     game=(raw.get("game") or "").strip(),
                     implied_total=_optional_float(raw.get("implied_total")),
+                    distributions=_distributions_from(raw),
                 )
             )
     return Handoff(missing=False, note="", rows=rows)
+
+
+def distribution_index(handoff: "Handoff | None") -> dict[tuple[str, str], StatDistribution]:
+    """Map ``(folded player name, stat_type)`` to one distribution.
+
+    A ledger and a lines file name a player by ``player_key``; the handoff names
+    them in display form. Both sides fold through ``fold_name`` to join.
+    ``None`` and a missing file both give an empty index.
+    """
+
+    if handoff is None or handoff.missing:
+        return {}
+    index: dict[tuple[str, str], StatDistribution] = {}
+    for row in handoff.rows:
+        key = fold_name(row.player)
+        if not key:
+            continue
+        for dist in row.distributions:
+            index.setdefault((key, dist.stat_type), dist)
+    return index
 
 
 def _game_teams(game: str) -> tuple[str, str] | None:

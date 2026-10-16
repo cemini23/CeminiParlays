@@ -17,7 +17,7 @@ The Never list is the product, not a buried limit.
 
 Numbered rules: [`docs/canon.md`](docs/canon.md). Machine index: [`llms.txt`](llms.txt).
 
-**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/canon.md`](docs/canon.md) is the citable rules. [`llms.txt`](llms.txt) lists the public docs. [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3; grade + ET fetch + game markets = v0.4; Week 1 report flags + ITT snapshot = v0.5; CeminiDFS handoff reader = v0.6; pick'em gap report + SGP weather discount = v0.7; model-first fair value + fail-closed inputs = v0.8). The typed ticket price stays the in-app price.
+**Start here:** [`docs/SUNDAY.md`](docs/SUNDAY.md) is the 20-minute path (fetch → compose → type the ticket price → size → grade). [`docs/canon.md`](docs/canon.md) is the citable rules. [`llms.txt`](llms.txt) lists the public docs. [`docs/ROADMAP.md`](docs/ROADMAP.md) is the phase plan (composer = v0.2; Odds API fetch = v0.3; grade + ET fetch + game markets = v0.4; Week 1 report flags + ITT snapshot = v0.5; CeminiDFS handoff reader = v0.6; pick'em gap report + SGP weather discount = v0.7; model-first fair value + fail-closed inputs = v0.8; Jev routing + dynamic correlation + non-circular prop pricing + season CLV ledger = v0.9). The typed ticket price stays the in-app price.
 
 ## Install
 
@@ -159,6 +159,56 @@ ceminiparlays jev-gate \
 # a missing server blocks every row and exits 2.
 # Offline / CI: --fixture tests/fixtures/jev_gate_fixture.json needs no key.
 
+# Optional: also SIZE the card. Off by default — the gate only marks without it.
+ceminiparlays jev-gate \
+  --card runs/2026-w05-sun/compose/card.json \
+  --lines runs/2026-w05-sun/lines.csv \
+  --environment examples/environment.csv \
+  --edges runs/2026-w05-sun/edges.csv \
+  --out-dir runs/2026-w05-sun/jev \
+  --size --max-ticket-pct 0.015 --max-slate-pct 0.06
+# Writes jev_gate_sizing.csv beside the gate report.
+# Stage 1 blocks when environment data is missing, a player is
+#   pre_game_inactive, no Jev provider answers, or p_jev * c_jev < 0.50.
+# Stage 2 shrinks quarter-Kelly by the epistemic confidence.
+# Stage 3 caps total slate exposure and scales every ticket down together.
+
+# Optional: perturb the leg-pair correlations from the game state before the copula.
+ceminiparlays rank --platform hardrock \
+  --lines runs/2026-w05-sun/lines.csv \
+  --distributions examples/distributions.csv \
+  --environment examples/environment.csv \
+  --jev-correlation --jev-provider auto \
+  --out runs/2026-w05-sun/edges.csv
+# Jev answers four regime questions per game in one bundled call. edges.csv
+# gains rho_base / delta_rho / rho_adj per leg pair. Needs --environment.
+# Off by default: the static prior table is used alone.
+
+# Optional: price each leg from the CeminiDFS split-normal against a sharp
+# reference book. Needs ref_book_over / ref_book_under (fetch --reference-book).
+ceminiparlays rank --platform hardrock \
+  --lines runs/2026-w05-sun/lines.csv \
+  --distributions examples/distributions.csv \
+  --from-ceminidfs examples/ceminidfs_handoff.csv \
+  --dfs-pricing --jev-regime-conf 0.8 \
+  --out runs/2026-w05-sun/edges.csv
+# edges.csv gains p_dfs_over / p_market_fair / p_fair_posterior /
+# disagreement_edge_bps. The market side never de-vigs the book you bet.
+
+# Freeze the per-prop closing lines inside the last minutes before kickoff.
+ceminiparlays fetch --date 2026-10-11 --closing-snapshot --week 2026-w05-sun
+# -> runs/2026-w05-sun/closing_lines.csv (same PROP_CLOSE format as `closings`)
+
+# Grade, then append one row to the persistent season ledger.
+ceminiparlays grade --ledger runs/2026-w05-sun/ledger.csv \
+  --card runs/2026-w05-sun/compose/card.json \
+  --closings runs/2026-w05-sun/closing_lines.csv \
+  --from-ceminidfs examples/ceminidfs_handoff.csv \
+  --season-ledger reports/season_clv_ledger.csv --week 5
+# grade.json gains leg_clv_bps and dfs_vs_close_brier_delta per leg.
+# The ledger row carries n_legs, mean_clv_bps, t_stat, realized_roi_pct, and
+# dfs_handoff_brier_lift. Omit --season-ledger and nothing is appended.
+
 # Optional: copy a CeminiDFS handoff, then compose. FPPG is not a prop fair.
 # Missing file prints CEMINIDFS_HANDOFF_MISSING and continues.
 ceminiparlays compose --auto --lines runs/slate/lines.csv \
@@ -280,6 +330,20 @@ are excluded (`alt-needs-m`).
 Pick'em stays a second profile: `--platform underdog` or `prizepicks`. If neither a displayed multiplier nor a row M is set, the CLI prints `UNCONFIRMED TABLE MULTIPLIER — confirm in-app` and marks those slips `table unconfirmed`; it still ranks so you can paper-trade.
 
 Always confirm the American price or multiplier on the submit screen.
+
+## Jev: correlation, pricing, and sizing
+
+Jev is a **discrete epistemic router**, not a calculator. It reads a structured game state and returns calibrated probabilities, a score, and a confidence. Every de-vig, every correlation-matrix projection, every copula draw, and every Kelly stake stays in Python (`numpy` / `scipy`). This CLI never asks Jev to do arithmetic.
+
+**Transport.** `--jev-provider auto` (the default) tries TypeSafe System One, then the Jev MCP server, then OpenRouter as a backup, and records which one answered. A named provider is pinned and never fails over. `auto` moves on only when a provider is **unconfigured** or fails **transiently** (timeout, HTTP 429, HTTP 5xx) — an HTTP 401 stops the chain, so a bad key can never silently bill the backup. Every answer is cached on disk under `data/cache/jev/`, so a repeated question costs no network call and a rerun is deterministic. When nothing answers, the caller treats it as a block.
+
+**Correlation (`rank --jev-correlation`).** Static correlation priors cannot know that a tackle is out or that the wind is 22 mph. For each game, Jev answers four regime questions (pressure/checkdown funnel, early run-script abandonment, red-zone vulture shift, weather ground compression). Each answer maps to a bounded perturbation `delta_rho = clip(0.075 * score * confidence, -0.15, +0.15)`, and the perturbed matrix is projected onto the nearest valid correlation matrix before any Cholesky or copula draw, so a tail probability is never silently distorted. `edges.csv` records `rho_base`, `delta_rho`, and `rho_adj` for every leg pair.
+
+**Pricing (`rank --dfs-pricing`).** The v0.6 handoff carries a disaggregated distribution per stat (`pass_yds_median`, `_sigma`, `_p15`, `_p85`, and the same for `rush_yds` / `rec_yds` / `receptions`). A symmetric normal throws that asymmetry away, so a line is priced from a **split-normal** built on `(median, p15, p85)`. The market side is a power de-vig of the **reference book**, which is a different book from the one you bet — so the comparison is never circular. The two are blended as `(1 - w) * p_market + w * p_dfs` with `w = 0.35 * jev_regime_conf`, capped at 0.35 until 100 legs of closing-line calibration are proven. `disagreement_edge_bps` is flagged in `edges.csv` so you can measure directly whether the handoff beats the close.
+
+**Sizing (`jev-gate --size`).** The gate stays a marker by default. With `--size` it becomes a three-stage controller: Stage 1 is the fail-closed hard gate; Stage 2 shrinks quarter-Kelly by `clip((p * c - 0.50) / 0.35, 0, 1)` and caps one ticket at `--max-ticket-pct`; Stage 3 scales the whole slate down to `--max-slate-pct`. An operator still types every ticket.
+
+**Closing line value.** `fetch --closing-snapshot` freezes the two-way close into `runs/<week>/closing_lines.csv`. `grade` computes `leg_clv_bps` per leg, and `--season-ledger` appends one durable row per week — `n_legs`, `mean_clv_bps`, `t_stat`, `realized_roi_pct`, and `dfs_handoff_brier_lift` — so the season is one file instead of many one-off reports. Ticket P&L cannot prove an edge at a practical sample size; leg-level CLV can.
 
 ## What it will not do
 

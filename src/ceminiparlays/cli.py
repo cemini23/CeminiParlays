@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 from datetime import datetime, timezone
@@ -12,8 +13,30 @@ from ceminiparlays import STANDARD_DISCLAIMER, __version__
 from ceminiparlays.bankroll import flat_stake, kelly_cap_stake
 from ceminiparlays.catalog import thin_catalog_games
 from ceminiparlays.closings import write_prop_closes
-from ceminiparlays.clv import clv_report, format_clv_report, write_clv_json
-from ceminiparlays.ceminidfs import exposure_notes, load_ceminidfs_handoff, merge_implied_totals
+from ceminiparlays.clv import clv_report, collect_legs, format_clv_report, write_clv_json
+from ceminiparlays.delta_rho import game_key_for, game_state, score_game
+from ceminiparlays.jev_client import DEFAULT_CACHE_DIR, PROVIDERS, JevClient
+from ceminiparlays.jev_sizing import (
+    DEFAULT_SLATE_PCT,
+    DEFAULT_TICKET_CAP_PCT,
+    TicketInput,
+    size_tickets,
+    write_sizing_report,
+)
+from ceminiparlays.season_ledger import BrierPair, append_ledger, ledger_row
+from ceminiparlays.ceminidfs import (
+    distribution_index,
+    exposure_notes,
+    load_ceminidfs_handoff,
+    merge_implied_totals,
+)
+from ceminiparlays.proppricing import (
+    BookQuote,
+    consensus_fair_p_over,
+    disagreement_edge_bps,
+    p_dfs_over,
+    posterior_fair,
+)
 from ceminiparlays.compose import (
     TICKET_FIELDS,
     compose_tickets,
@@ -94,6 +117,11 @@ from ceminiparlays.slips import (
 )
 
 UNCONFIRMED_BANNER = "UNCONFIRMED TABLE MULTIPLIER — confirm in-app"
+
+#: Synthetic book name for the sharp reference quotes on a line row. It must
+#: never collide with a bet platform, or the non-circular de-vig would exclude
+#: the only quote it has.
+REFERENCE_BOOK_SLOT = "__reference__"
 #: Fill-in slate columns the reader accepts (blank until the operator types).
 SLATE_FIELDS = [
     "slate_id",
@@ -251,6 +279,57 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
             "means no filtering."
         ),
     )
+    parser.add_argument(
+        "--jev-correlation",
+        action="store_true",
+        help=(
+            "Ask Jev four regime questions per game and perturb the leg-pair "
+            "correlations before the copula runs. Needs --environment. Off by "
+            "default: the static prior table is used alone."
+        ),
+    )
+    parser.add_argument(
+        "--jev-provider",
+        default="auto",
+        choices=list(PROVIDERS),
+        help=(
+            "Jev transport for --jev-correlation and jev-gate --size: auto tries "
+            "typesafe, then mcp, then openrouter. A named provider never fails over."
+        ),
+    )
+    parser.add_argument(
+        "--jev-cache-dir",
+        type=Path,
+        default=None,
+        help=f"Jev answer cache. Default {DEFAULT_CACHE_DIR}.",
+    )
+    parser.add_argument(
+        "--dfs-pricing",
+        action="store_true",
+        help=(
+            "Price every leg from the CeminiDFS split-normal against the "
+            "non-circular reference book, and write p_dfs_over / p_market_fair / "
+            "p_fair_posterior / disagreement_edge_bps to edges.csv. Needs "
+            "--from-ceminidfs and ref_book_over/ref_book_under on the rows "
+            "(fetch --reference-book stamps them). Off by default."
+        ),
+    )
+    parser.add_argument(
+        "--from-ceminidfs",
+        type=Path,
+        default=None,
+        help="CeminiDFS handoff CSV that supplies the leg distributions for --dfs-pricing.",
+    )
+    parser.add_argument(
+        "--jev-regime-conf",
+        type=float,
+        default=0.0,
+        help=(
+            "Jev regime confidence in [0, 1] used to weight the DFS distribution "
+            "in --dfs-pricing. 0 keeps the posterior on the market fair while "
+            "still measuring disagreement_edge_bps."
+        ),
+    )
     parser.add_argument("--shade-pp", type=float, default=0.0)
     parser.add_argument(
         "--environment",
@@ -302,6 +381,30 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(grade)
     grade.add_argument("--ledger", type=Path, required=True)
     grade.add_argument("--out", type=Path, default=Path("runs/grade.json"))
+    grade.add_argument(
+        "--season-ledger",
+        type=Path,
+        default=None,
+        help=(
+            "Append one row to this persistent season CLV ledger after grading. "
+            "Omitted writes nothing. Keeps week-over-week CLV in one file."
+        ),
+    )
+    grade.add_argument(
+        "--week",
+        default="",
+        help="Week label stamped into the --season-ledger row.",
+    )
+    grade.add_argument(
+        "--from-ceminidfs",
+        type=Path,
+        default=None,
+        help=(
+            "CeminiDFS handoff CSV. Adds a per-leg dfs_vs_close_brier_delta to "
+            "grade.json and a dfs_handoff_brier_lift to the season ledger. "
+            "Omitted grades exactly as before."
+        ),
+    )
     grade.add_argument(
         "--games",
         type=Path,
@@ -635,6 +738,43 @@ def build_parser() -> argparse.ArgumentParser:
         help="Append each live exchange to this JSON file.",
     )
     jev.add_argument(
+        "--size",
+        action="store_true",
+        help=(
+            "Also size the slate: run the two-stage epistemic Kelly controller and "
+            "write jev_gate_sizing.csv. Needs --environment. Off by default; the "
+            "gate stays a marker and never sizes."
+        ),
+    )
+    jev.add_argument(
+        "--edges",
+        type=Path,
+        default=None,
+        help=(
+            "edges.csv from rank. Supplies kelly_quarter per ticket_id for --size. "
+            "A ticket with no row sizes to zero."
+        ),
+    )
+    jev.add_argument(
+        "--max-ticket-pct",
+        type=float,
+        default=DEFAULT_TICKET_CAP_PCT,
+        help=f"Bankroll share for one ticket (default {DEFAULT_TICKET_CAP_PCT}).",
+    )
+    jev.add_argument(
+        "--max-slate-pct",
+        type=float,
+        default=DEFAULT_SLATE_PCT,
+        help=f"Bankroll share for the whole slate (default {DEFAULT_SLATE_PCT}).",
+    )
+    jev.add_argument(
+        "--jev-provider",
+        default="auto",
+        choices=list(PROVIDERS),
+        help="Jev transport for --size: auto, typesafe, mcp, or openrouter.",
+    )
+    jev.add_argument("--jev-cache-dir", type=Path, default=None)
+    jev.add_argument(
         "--allow-flagged",
         action="store_true",
         help=(
@@ -686,6 +826,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Local Odds API JSON. Skips HTTP. No API key required.",
     )
     fetch.add_argument("--force", action="store_true", help="Overwrite --out if it exists")
+    fetch.add_argument(
+        "--closing-snapshot",
+        action="store_true",
+        help=(
+            "Also freeze the two-way prop lines into runs/<week>/closing_lines.csv "
+            "for CLV. Run this inside the last minutes before kickoff. Needs --week."
+        ),
+    )
+    fetch.add_argument(
+        "--week",
+        default=None,
+        help=(
+            "Run folder under runs/ for --closing-snapshot, e.g. 2026-w05-sun. "
+            "The snapshot is written to runs/<week>/closing_lines.csv."
+        ),
+    )
     fetch.add_argument("--roster", type=Path, default=None)
     fetch.add_argument("--no-roster", action="store_true")
     fetch.add_argument(
@@ -858,6 +1014,86 @@ def _require_environment_fields(tickets: list, environment: dict) -> None:
                 )
 
 
+def _score_games_for_correlation(args: argparse.Namespace, environment: dict) -> dict:
+    """Score each game's four regimes, one bundled Jev call per game.
+
+    Fails closed: with no environment row there is no game state to score, so
+    the operator gets an error rather than a silently unperturbed slate.
+    """
+
+    if not environment:
+        raise ValueError(
+            "--jev-correlation needs --environment with one row per game; "
+            "there is no game state to score without it"
+        )
+    client = JevClient(
+        provider=getattr(args, "jev_provider", "auto"),
+        cache_dir=getattr(args, "jev_cache_dir", None) or DEFAULT_CACHE_DIR,
+    )
+    scores: dict = {}
+    seen: set[str] = set()
+    for row in environment.values():
+        team = str(getattr(row, "team", "") or "")
+        opponent = str(getattr(row, "opponent", "") or "")
+        if not team or not opponent:
+            continue
+        key = game_key_for(team, opponent)
+        if key in seen:
+            continue
+        seen.add(key)
+        scores[key] = score_game(client, game_state(row))
+    print(f"jev-correlation: scored {len(scores)} game(s) via {client.provider}")
+    return scores
+
+
+def _apply_dfs_pricing(
+    live: list,
+    handoff: object,
+    platform: str,
+    jev_regime_conf: float,
+) -> int:
+    """Price each leg's split-normal against the non-circular reference book.
+
+    The reference book is a different book from the bet platform, so the de-vig
+    is never circular. A leg with no handoff distribution, no reference price,
+    or no typed line is left blank rather than guessed.
+    """
+
+    index = distribution_index(handoff)
+    if not index:
+        print("dfs-pricing: no handoff distributions; nothing priced")
+        return 0
+    priced = 0
+    for leg in live:
+        row = leg.line
+        dist = index.get((row.player_key, row.stat_type))
+        if dist is None:
+            continue
+        if _blank_cell(row.ref_book_over) or _blank_cell(row.ref_book_under):
+            continue
+        if row.line is None or isnan(row.line):
+            continue
+        consensus = consensus_fair_p_over(
+            [BookQuote(REFERENCE_BOOK_SLOT, int(row.ref_book_over), int(row.ref_book_under))],
+            target_book=platform,
+        )
+        if consensus is None:
+            continue
+        try:
+            p_dfs, _family = p_dfs_over(dist, row.line, stat_type=row.stat_type)
+        except (ValueError, TypeError):
+            continue
+        leg.p_dfs_over = p_dfs
+        leg.p_market_fair = consensus.fair_p_over
+        leg.p_fair_posterior = posterior_fair(
+            consensus.fair_p_over, p_dfs, jev_regime_conf
+        )
+        leg.disagreement_edge_bps = disagreement_edge_bps(p_dfs, consensus.fair_p_over)
+        priced += 1
+    print(f"dfs-pricing: priced {priced} of {len(live)} live legs")
+    return priced
+
+
 def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path | None) -> int:
     strict = getattr(args, "strict", True)
     platform = normalize_platform(args.platform)
@@ -991,6 +1227,24 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         )
         return 2
 
+    if getattr(args, "dfs_pricing", False):
+        handoff_path = getattr(args, "from_ceminidfs", None)
+        if handoff_path is None:
+            raise ValueError("--dfs-pricing needs --from-ceminidfs <handoff.csv>")
+        handoff = load_ceminidfs_handoff(handoff_path)
+        if handoff.missing:
+            print(handoff.note)
+        _apply_dfs_pricing(
+            live,
+            handoff,
+            platform,
+            float(getattr(args, "jev_regime_conf", 0.0) or 0.0),
+        )
+
+    scores_by_game: dict = {}
+    if getattr(args, "jev_correlation", False):
+        scores_by_game = _score_games_for_correlation(args, environment)
+
     notes: list[str] = []
     slips = rank_slip_sizes(
         live,
@@ -1010,6 +1264,7 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         allow_unmodeled_correlation=bool(
             getattr(args, "allow_unmodeled_correlation", False)
         ),
+        scores_by_game=scores_by_game,
     )
     for note in notes:
         print(f"  {note}")
@@ -1040,6 +1295,10 @@ def _cmd_rank(args: argparse.Namespace) -> int:
 
 
 def _cmd_grade(args: argparse.Namespace) -> int:
+    dfs_path = getattr(args, "from_ceminidfs", None)
+    handoff = load_ceminidfs_handoff(dfs_path) if dfs_path else None
+    if handoff is not None and handoff.missing:
+        print(handoff.note)
     summary = grade_ledger(
         args.ledger,
         profile_dir=args.profile_dir,
@@ -1047,9 +1306,29 @@ def _cmd_grade(args: argparse.Namespace) -> int:
         games_path=getattr(args, "games", None),
         card_path=getattr(args, "card", None),
         closings_path=getattr(args, "closings", None),
+        handoff=handoff,
     )
     write_grade(summary, args.out)
     print(json.dumps(summary.__dict__, indent=2))
+    season_ledger = getattr(args, "season_ledger", None)
+    if season_ledger:
+        legs = collect_legs([args.ledger])
+        row = ledger_row(
+            week=str(getattr(args, "week", "") or ""),
+            legs=legs,
+            run_date=datetime.now(timezone.utc).date().isoformat(),
+            stake=float(getattr(summary, "stake", 0.0) or 0.0),
+            pnl=float(getattr(summary, "net_pnl", 0.0) or 0.0),
+            brier_pairs=[
+                BrierPair(**pair) for pair in getattr(summary, "brier_pairs", [])
+            ],
+            ledgers=[args.ledger],
+        )
+        append_ledger(season_ledger, row)
+        print(
+            f"appended {season_ledger} n_legs={row['n_legs']} "
+            f"mean_clv_bps={row['mean_clv_bps']} t_stat={row['t_stat']}"
+        )
     if summary.partial_tickets:
         for item in summary.partial_tickets:
             print(
@@ -1731,6 +2010,54 @@ def _resolve_reference_book(requested: str | None, platforms: list[str]) -> str 
     return available[0] if available else None
 
 
+def _blank_cell(value: object) -> bool:
+    """A missing cell. Fetch writes an empty string, not None, for a void field."""
+
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _closing_snapshot_rows(rows: list[dict], captured_at: str) -> list[dict]:
+    """One closing row per (platform, player, stat, side) from fetched events.
+
+    A two-way price is stamped on both sides so ``side_implied`` can pick either.
+    Alternate lines for the same key would collide on read, so the first wins.
+    A row with no line or no two-way price is skipped: a TD market carries no
+    line, and a blank cell would break the CLV join at read time.
+    """
+
+    out: list[dict] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for row in rows:
+        platform = str(row.get("platform") or "")
+        player_key = str(row.get("player_key") or "")
+        stat_type = str(row.get("stat_type") or "")
+        line = row.get("line")
+        over = row.get("book_over")
+        under = row.get("book_under")
+        if not platform or not player_key or not stat_type:
+            continue
+        if _blank_cell(line) or _blank_cell(over) or _blank_cell(under):
+            continue
+        for side in ("more", "less"):
+            key = (platform, player_key, stat_type, side)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(
+                {
+                    "platform": platform,
+                    "player_key": player_key,
+                    "stat_type": stat_type,
+                    "side": side,
+                    "line": line,
+                    "over": over,
+                    "under": under,
+                    "captured_at": captured_at,
+                }
+            )
+    return out
+
+
 def _cmd_fetch(args: argparse.Namespace) -> int:
     notes: list[str] = []
     captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1791,6 +2118,16 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
         print(f"  {note}")
     print(f"rows={len(rows)} events={len(events)} remaining={remaining}")
     print(f"wrote {args.out}")
+    if getattr(args, "closing_snapshot", False):
+        week = (getattr(args, "week", None) or "").strip()
+        if not week:
+            raise ValueError("--closing-snapshot needs --week, e.g. --week 2026-w05-sun")
+        close_path = Path("runs") / week / "closing_lines.csv"
+        if close_path.exists() and not args.force:
+            raise ValueError(f"{close_path} exists; pass --force to overwrite")
+        closes = _closing_snapshot_rows(rows, captured_at)
+        write_prop_closes(close_path, closes)
+        print(f"wrote {close_path} rows={len(closes)} captured_at={captured_at}")
     print("do not submit — type the ticket in-app")
     return 0
 
@@ -1806,6 +2143,79 @@ def _cmd_bankroll(args: argparse.Namespace) -> int:
     print("pick one size per ticket; never add Kelly fractions across legs")
     print(STANDARD_DISCLAIMER)
     return 0
+
+
+def _kelly_by_ticket(path: Path | None) -> dict[str, float]:
+    """Full-Kelly fraction per ticket, from ``rank``'s edges.csv.
+
+    edges.csv stores quarter Kelly, and the sizing controller applies 0.25 of a
+    full Kelly, so the stored value is scaled back up by four.
+    """
+
+    if path is None:
+        return {}
+    out: dict[str, float] = {}
+    with Path(path).open(newline="", encoding="utf-8") as handle:
+        for raw in csv.DictReader(handle):
+            ticket_id = (raw.get("ticket_id") or "").strip()
+            if not ticket_id or ticket_id in out:
+                continue
+            try:
+                quarter = float(raw.get("kelly_quarter") or "")
+            except ValueError:
+                continue
+            out[ticket_id] = quarter * 4.0
+    return out
+
+
+def _env_metrics_for_legs(legs: list, environment: dict) -> dict | None:
+    """Game metrics for a ticket, from the first leg whose team has an env row."""
+
+    for leg in legs:
+        team = str(leg.get("team") or "").strip()
+        if not team:
+            continue
+        for row in environment.values():
+            if str(getattr(row, "team", "")).strip() != team:
+                continue
+            return {
+                "implied_total": row.implied_total,
+                "spread": row.spread,
+                "roof": row.roof,
+                "weather_exposed": row.weather_exposed,
+                "wind_mph": row.wind_mph,
+                "precip_pop": row.precip_pop,
+            }
+    return None
+
+
+def _size_slate(args: argparse.Namespace, card: dict, environment: dict) -> list:
+    """Build one TicketInput per card ticket and run the sizing controller."""
+
+    if not environment:
+        raise ValueError("--size needs --environment with one row per game")
+    client = JevClient(
+        provider=getattr(args, "jev_provider", "auto"),
+        cache_dir=getattr(args, "jev_cache_dir", None) or DEFAULT_CACHE_DIR,
+    )
+    kelly_by_ticket = _kelly_by_ticket(getattr(args, "edges", None))
+    platform = str(card.get("platform") or "")
+    tickets = [
+        TicketInput(
+            ticket_id=str(ticket.get("ticket_id") or ""),
+            legs=list(ticket.get("legs") or []),
+            platform=platform,
+            environment=_env_metrics_for_legs(list(ticket.get("legs") or []), environment),
+            kelly_f_star=kelly_by_ticket.get(str(ticket.get("ticket_id") or ""), 0.0),
+        )
+        for ticket in (card.get("tickets") or [])
+    ]
+    return size_tickets(
+        client,
+        tickets,
+        ticket_cap_pct=float(getattr(args, "max_ticket_pct", DEFAULT_TICKET_CAP_PCT)),
+        max_slate_pct=float(getattr(args, "max_slate_pct", DEFAULT_SLATE_PCT)),
+    )
 
 
 def _cmd_jev_gate(args: argparse.Namespace) -> int:
@@ -1839,6 +2249,17 @@ def _cmd_jev_gate(args: argparse.Namespace) -> int:
         print(format_mark(row))
     print(line)
     print(f"wrote {report_path}")
+    if getattr(args, "size", False):
+        environment = read_environment(getattr(args, "environment", None))
+        sizes = _size_slate(args, card, environment)
+        sizing_path = args.out_dir / "jev_gate_sizing.csv"
+        write_sizing_report(sizing_path, sizes)
+        for size in sizes:
+            detail = size.reason or f"stake={size.final_stake_pct:.4f}"
+            print(f"  SIZE {size.ticket_id} {size.gate_status} {detail}")
+        total = sum(size.final_stake_pct for size in sizes)
+        print(f"slate exposure {total:.4f} of bankroll (cap {args.max_slate_pct})")
+        print(f"wrote {sizing_path}")
     print("The gate marks. It does not reprice or submit.")
     print("do not submit — type every ticket in-app")
     return gate_exit_code(rows, allow_flagged=bool(getattr(args, "allow_flagged", False)))

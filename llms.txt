@@ -7,11 +7,14 @@ Public docs only. No Odds API keys. No wallet addresses.
 ## Docs
 
 - [README](README.md): install, commands, and the Never list (the product)
-- [Canon](docs/canon.md): numbered citable rules (displayed American, SGP, no scrape, no submit)
+- [Canon](docs/canon.md): numbered citable rules (displayed American, SGP, no scrape, no submit, Jev routes but does not compute)
 - [Sunday path](docs/SUNDAY.md): 20-minute operator path and Sunday cash rules
 - [Roadmap](docs/ROADMAP.md): phases. `--from-ceminidfs` is built (copy the file; this CLI only reads)
 - [Grok Bots](docs/GROK-BOTS.md): live Slate and Recap desks in Grok Bot.app. No scrape. No submit
 - [Week 1 reproduce](docs/week1/REPRODUCE.md): committed `grade` artifact (2/5, +$26.07)
 - `compare` prints the pick'em gap; a fair marginal comes from the model, not the book you bet; weather adjusts a model marginal per side.
+- Jev is a discrete epistemic router, never a calculator: it answers typed questions, and Python does every de-vig, matrix projection, copula draw, and Kelly stake.
+- Fair value is never circular: the market side de-vigs a book you did not bet (`ref_book_over` / `ref_book_under`).
+- The season CLV ledger is the proof: `grade --season-ledger` appends one row per week, and `mean_clv_bps` resolves long before ticket P&L does.
 
 Tips: see [SUPPORT.md](SUPPORT.md). Do not paste wallets here.

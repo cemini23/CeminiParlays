@@ -14,6 +14,10 @@ BANNED = {
     "websocket",
 }
 
+#: The only modules allowed to open an HTTP connection. The Odds API client and
+#: the tiered Jev client are both licensed paths; every other module stays offline.
+LICENSED_HTTP = {"odds_api.py", "jev_client.py"}
+
 
 def test_source_has_no_network_clients() -> None:
     offenders: list[str] = []
@@ -28,7 +32,7 @@ def test_source_has_no_network_clients() -> None:
             for name in names:
                 root = name.split(".")[0]
                 if name == "urllib.request":
-                    if path.name != "odds_api.py":
+                    if path.name not in LICENSED_HTTP:
                         offenders.append(f"{path.name}:{name}")
                     continue
                 if name.startswith("urllib"):

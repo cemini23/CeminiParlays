@@ -6,10 +6,15 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from ceminiparlays.closings import line_clv, read_prop_closes, side_implied
+from ceminiparlays.ceminidfs import distribution_index
 from ceminiparlays.io import read_games
 from ceminiparlays.markets import is_two_plus_td
 from ceminiparlays.odds import american_to_decimal
 from ceminiparlays.payouts import SPORTSBOOK_PLATFORMS, normalize_platform, resolve_payout
+from ceminiparlays.proppricing import p_dfs_over
+
+#: A probability difference to basis points. CLV is stored as a difference.
+BPS = 10_000.0
 
 MORE_SIDES = {"more", "over", "higher", "o"}
 LESS_SIDES = {"less", "under", "lower", "u"}
@@ -96,6 +101,9 @@ class GradeSummary:
     stat_deltas: list[str] = field(default_factory=list)
     clv_by_ticket: list[dict[str, object]] = field(default_factory=list)
     clv_mean_pp: float = 0.0
+    #: One dict per leg that carries both the CeminiDFS forecast and the closing
+    #: consensus: p_dfs_over, close_fair_prob, actual_hit. Empty without a handoff.
+    brier_pairs: list[dict[str, float]] = field(default_factory=list)
     promo_terms: list[str] = field(default_factory=list)
     promo_value: float = 0.0
     promo_confirmed: bool = True
@@ -581,11 +589,30 @@ def _cell_float(parts: list[str], index: int) -> float | None:
         return None
 
 
+def _actual_hit(side: str, actual_raw: str, line: object, stat_type: str) -> float | None:
+    """1.0 for a hit, 0.0 for a miss, ``None`` for a void or an unreadable leg."""
+
+    if not str(actual_raw or "").strip() or not str(line or "").strip():
+        return None
+    try:
+        actual = _parse_leg_token(str(actual_raw))
+        parsed_line = _parse_leg_token(str(line))
+        result = _grade_leg(side, actual, parsed_line, stat_type)
+    except (ValueError, TypeError):
+        return None
+    if result == "hit":
+        return 1.0
+    if result == "void":
+        return None
+    return 0.0
+
+
 def _row_clv(
     raw: dict[str, str],
     closes: dict | None,
     platform: str,
     method: str = "power",
+    handoff_index: dict[tuple[str, str], object] | None = None,
 ) -> dict[str, object]:
     """Per-leg CLV for one ledger row. Blank when the prices are not typed.
 
@@ -593,12 +620,17 @@ def _row_clv(
     ``bet_under`` / ``close_over`` / ``close_under``. A blank close cell is
     filled from the closing snapshot by (platform, player_key, stat_type, side).
     CLV is the closing implied minus the bet implied. Positive beats the close.
+
+    ``leg_clv_bps`` is that same difference in basis points. When a CeminiDFS
+    handoff supplies a distribution, ``dfs_vs_close_brier_delta`` compares the
+    handoff's forecast against the closing consensus on the realized result.
     """
 
     sides = _cells(raw, "sides")
     lines = _cells(raw, "lines")
     keys = _cells(raw, "player_key")
     stats = [canonical_ledger_market(part) for part in _cells(raw, "market")]
+    actuals = _cells(raw, "actuals")
     bet_over = _cells(raw, "bet_over")
     bet_under = _cells(raw, "bet_under")
     close_over = _cells(raw, "close_over")
@@ -641,19 +673,41 @@ def _row_clv(
         )
         if clv_pp is not None:
             values.append(clv_pp)
-        legs.append(
-            {
-                "player_key": player_key,
-                "stat_type": stat,
-                "side": side,
-                "bet_line": bet_line,
-                "close_line": close_line,
-                "bet_implied_p": bet_implied,
-                "close_implied_p": close_implied,
-                "clv_pp": clv_pp,
-                "clv_line": clv_move,
-            }
-        )
+        leg: dict[str, object] = {
+            "player_key": player_key,
+            "stat_type": stat,
+            "side": side,
+            "bet_line": bet_line,
+            "close_line": close_line,
+            "bet_implied_p": bet_implied,
+            "close_implied_p": close_implied,
+            "clv_pp": clv_pp,
+            "clv_line": clv_move,
+            "leg_clv_bps": None if clv_pp is None else clv_pp * BPS,
+            "p_dfs_over": None,
+            "actual_hit": None,
+            "dfs_vs_close_brier_delta": None,
+        }
+        if handoff_index and close_implied is not None and bet_line is not None:
+            dist = handoff_index.get((player_key, stat))
+            hit = _actual_hit(
+                side,
+                actuals[index] if index < len(actuals) else "",
+                lines[index] if index < len(lines) else "",
+                stat,
+            )
+            if dist is not None and hit is not None:
+                try:
+                    p_dfs, _family = p_dfs_over(dist, bet_line, stat_type=stat)
+                except (ValueError, TypeError):
+                    p_dfs = None
+                if p_dfs is not None:
+                    leg["p_dfs_over"] = p_dfs
+                    leg["actual_hit"] = hit
+                    leg["dfs_vs_close_brier_delta"] = (p_dfs - hit) ** 2 - (
+                        close_implied - hit
+                    ) ** 2
+        legs.append(leg)
     mean = sum(values) / len(values) if values else 0.0
     return {"legs": legs, "mean_pp": mean, "n": len(values)}
 
@@ -665,6 +719,7 @@ def grade_ledger(
     games_path: Path | None = None,
     card_path: Path | None = None,
     closings_path: Path | None = None,
+    handoff: object | None = None,
 ) -> GradeSummary:
     slips = 0
     hits = 0
@@ -697,12 +752,14 @@ def grade_ledger(
     clv_by_ticket: list[dict[str, object]] = []
     clv_total = 0.0
     clv_count = 0
+    brier_pairs: list[dict[str, float]] = []
     promo_terms: list[str] = []
     promo_value = 0.0
     promo_confirmed = True
     window = _window_index(games_path) if games_path is not None else None
     card_ids = _card_ticket_ids(card_path) if card_path is not None else None
     closes = read_prop_closes(closings_path) if closings_path is not None else None
+    handoff_index = distribution_index(handoff)
     with path.open(newline="", encoding="utf-8") as handle:
         for row_index, raw in enumerate(csv.DictReader(handle), start=2):
             stake_kind = (raw.get("stake_kind") or "").strip().lower()
@@ -776,13 +833,24 @@ def grade_ledger(
                 raw_platform or default_platform or "underdog"
             )
 
-            clv = _row_clv(raw, closes, platform)
+            clv = _row_clv(raw, closes, platform, handoff_index=handoff_index)
             if clv["n"]:
                 clv_by_ticket.append(
                     {"ticket_id": ticket_id or f"row {row_index}", **clv}
                 )
                 clv_total += float(clv["mean_pp"]) * int(clv["n"])
                 clv_count += int(clv["n"])
+            for leg in clv["legs"]:
+                delta = leg.get("dfs_vs_close_brier_delta")
+                if delta is None:
+                    continue
+                brier_pairs.append(
+                    {
+                        "p_dfs_over": float(leg["p_dfs_over"]),
+                        "close_fair_prob": float(leg["close_implied_p"]),
+                        "actual_hit": float(leg["actual_hit"]),
+                    }
+                )
             promo_terms_raw = (raw.get("promo_terms") or "").strip()
             if promo_terms_raw and promo_terms_raw not in promo_terms:
                 promo_terms.append(promo_terms_raw)
@@ -966,6 +1034,7 @@ def grade_ledger(
         stat_deltas=stat_deltas,
         clv_by_ticket=clv_by_ticket,
         clv_mean_pp=(clv_total / clv_count if clv_count else 0.0),
+        brier_pairs=brier_pairs,
         promo_terms=promo_terms,
         promo_value=promo_value,
         promo_confirmed=promo_confirmed,

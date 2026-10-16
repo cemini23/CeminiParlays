@@ -16,6 +16,7 @@ from ceminiparlays.correlation import (
     correlation_matrix,
     load_priors,
 )
+from ceminiparlays.delta_rho import perturb_matrix
 from ceminiparlays.environment import Environment, env_for
 from ceminiparlays.fair import FairResult, p_over_line, side_probability
 from ceminiparlays.io import DistRow, LineRow, is_flagged, is_scratched
@@ -91,6 +92,13 @@ class EvaluatedLeg:
     #: ``model_p - market_implied_p`` when both exist, else ``None``.
     prop_edge: float | None = None
     edge_source: str = ""
+    #: CeminiDFS split-normal P(over), the non-circular reference fair, the two
+    #: blended, and the gap between the handoff and the market in basis points.
+    #: All ``None`` unless ``--dfs-pricing`` ran with a handoff.
+    p_dfs_over: float | None = None
+    p_market_fair: float | None = None
+    p_fair_posterior: float | None = None
+    disagreement_edge_bps: float | None = None
 
 
 @dataclass
@@ -112,6 +120,9 @@ class EvaluatedSlip:
     corr_repaired: bool = False
     corr_requested: np.ndarray | None = None
     corr_clean: np.ndarray | None = None
+    #: One per leg pair, in the order the matrix was built. Empty unless a Jev
+    #: regime perturbation ran. Carries rho_base / delta_rho / rho_adj.
+    rho_records: list = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
 
@@ -633,6 +644,7 @@ def rank_slips(
     shade_pp: float = 0.0,
     notes: list[str] | None = None,
     allow_unmodeled_correlation: bool = False,
+    scores_by_game: dict | None = None,
 ) -> list[EvaluatedSlip]:
     """Enumerate slip_size combinations and rank by a lower-bound EV.
 
@@ -814,6 +826,9 @@ def rank_slips(
         except UnmodeledCorrelationError as exc:
             notes.append(f"skip unmodeled-corr ({exc}): {_combo_names(combo)}")
             continue
+        rho_records: list = []
+        if scores_by_game:
+            requested, rho_records = perturb_matrix(requested, refs, scores_by_game)
         clean = nearest_correlation(requested)
         max_corr_delta = float(np.max(np.abs(clean - requested)))
         repaired = max_corr_delta > 0.02
@@ -915,6 +930,7 @@ def rank_slips(
                 corr_repaired=repaired,
                 corr_requested=requested,
                 corr_clean=clean,
+                rho_records=rho_records,
                 notes=slip_notes,
             )
         )
@@ -992,6 +1008,7 @@ def rank_slip_sizes(
     min_odds: int | None = None,
     max_odds: int | None = None,
     allow_unmodeled_correlation: bool = False,
+    scores_by_game: dict | None = None,
 ) -> list[EvaluatedSlip]:
     """Rank one or more slip sizes, then apply optional American odds filters."""
 
@@ -1016,6 +1033,7 @@ def rank_slip_sizes(
                 shade_pp=shade_pp,
                 notes=notes,
                 allow_unmodeled_correlation=allow_unmodeled_correlation,
+                scores_by_game=scores_by_game,
             )
         )
     before = len(ranked)
@@ -1032,10 +1050,30 @@ def rank_slip_sizes(
     return ranked[:max_slips]
 
 
+def _leg_cell(slip: EvaluatedSlip, name: str, *, signed: bool = False) -> str:
+    """Pipe-joined per-leg value for an optional column.
+
+    A leg with no value keeps an empty slot, so the cell stays aligned with
+    ``player_keys`` and its siblings.
+    """
+
+    parts: list[str] = []
+    for leg in slip.legs:
+        value = getattr(leg, name, None)
+        if value is None:
+            parts.append("")
+        elif signed:
+            parts.append(f"{float(value):+.1f}")
+        else:
+            parts.append(f"{float(value):.4f}")
+    return "|".join(parts)
+
+
 def slip_as_row(slip: EvaluatedSlip, index: int) -> dict[str, object]:
     first = slip.legs[0].line
     is_flex = slip.mode.lower() in {"flex"}
     ticket_ids = {leg.line.ticket_id for leg in slip.legs if leg.line.ticket_id}
+    records = slip.rho_records or []
     return {
         "slate_id": first.slate_id,
         "platform": slip.platform,
@@ -1072,6 +1110,13 @@ def slip_as_row(slip: EvaluatedSlip, index: int) -> dict[str, object]:
         "slip_ev": f"{slip.ev:.4f}",
         "ev_lo": f"{slip.ev_lo:.4f}",
         "kelly_quarter": f"{slip.kelly:.4f}" if not is_flex else "",
+        "rho_base": "|".join(f"{record.rho_base:.4f}" for record in records),
+        "delta_rho": "|".join(f"{record.delta_rho:+.4f}" for record in records),
+        "rho_adj": "|".join(f"{record.rho_adj:.4f}" for record in records),
+        "p_dfs_over": _leg_cell(slip, "p_dfs_over"),
+        "p_market_fair": _leg_cell(slip, "p_market_fair"),
+        "p_fair_posterior": _leg_cell(slip, "p_fair_posterior"),
+        "disagreement_edge_bps": _leg_cell(slip, "disagreement_edge_bps", signed=True),
         "shade_pp": slip.shade_pp,
         "notes": "; ".join(slip.notes),
         "do_not_submit": "yes",
@@ -1105,6 +1150,13 @@ EDGE_FIELDS = [
     "slip_ev",
     "ev_lo",
     "kelly_quarter",
+    "rho_base",
+    "delta_rho",
+    "rho_adj",
+    "p_dfs_over",
+    "p_market_fair",
+    "p_fair_posterior",
+    "disagreement_edge_bps",
     "shade_pp",
     "notes",
     "do_not_submit",

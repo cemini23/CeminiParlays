@@ -166,6 +166,18 @@ Run this snapshot every slate. CLV cannot exist when the snapshot is missing.
 `grade --closings` fills a blank `close_*` ledger cell from it by
 `(platform, player_key, stat_type, side)` and computes `clv_pp`.
 
+**One command instead.** `fetch` can freeze the close straight from The Odds API:
+
+```bash
+ceminiparlays fetch --date 2026-10-11 --closing-snapshot --week 2026-w05-sun
+# -> runs/2026-w05-sun/closing_lines.csv
+```
+
+`--week` is the run folder under `runs/` (for example `2026-w05-sun`). The file
+uses the same columns as `closings`, so `grade --closings` reads either one.
+`--force` overwrites an existing snapshot. This path needs no manual lines file,
+but it does need `THE_ODDS_API_KEY`.
+
 **Weekly, read the CLV.** Once a week, aggregate the graded ledgers:
 
 ```bash
@@ -311,6 +323,28 @@ ceminiparlays bankroll --bankroll 25 --n-tickets 5
 
 Pick flat **or** the cap for the whole ticket — never split Kelly across legs.
 
+**Optional: let Jev size the slate.** `--size` turns the gate into an epistemic
+Kelly controller. It is off by default.
+
+```bash
+ceminiparlays jev-gate \
+  --card runs/2026-w05-sun/compose/card.json \
+  --lines runs/2026-w05-sun/lines.csv \
+  --environment examples/environment.csv \
+  --edges runs/2026-w05-sun/edges.csv \
+  --out-dir runs/2026-w05-sun/jev \
+  --size --max-ticket-pct 0.015 --max-slate-pct 0.06
+# -> runs/2026-w05-sun/jev/jev_gate_sizing.csv
+```
+
+`--edges` supplies `kelly_quarter` per `ticket_id`; a ticket with no row sizes to
+zero. Stage 1 blocks a ticket when environment data is missing, a player is
+`pre_game_inactive`, no Jev provider answers, or `p_jev * c_jev < 0.50`. Stage 2
+shrinks quarter-Kelly by the confidence. Stage 3 scales the whole slate down to
+`--max-slate-pct`, so five tickets never exceed it together. The gate still only
+marks: `--size` reads the card and writes a stake fraction. You still type every
+ticket.
+
 ## 7. Type the tickets in-app (3 min)
 
 Open Hard Rock / FanDuel / DraftKings / BetMGM and enter the legs. Confirm every
@@ -332,6 +366,25 @@ ceminiparlays diff --card examples/card_ticket_c.csv \
 ```bash
 ceminiparlays grade --ledger my_ledger.csv --out runs/grade.json
 ```
+
+**Add the handoff and the season ledger.** Both are optional.
+
+```bash
+ceminiparlays grade --ledger runs/2026-w05-sun/ledger.csv \
+  --card runs/2026-w05-sun/compose/card.json \
+  --closings runs/2026-w05-sun/closing_lines.csv \
+  --from-ceminidfs runs/slate/ceminidfs_handoff.csv \
+  --season-ledger reports/season_clv_ledger.csv --week 5
+```
+
+`--from-ceminidfs` adds `leg_clv_bps` and `dfs_vs_close_brier_delta` to every leg
+in `grade.json`. `--season-ledger` appends one row per run to a persistent file,
+so week 9 never starts from a fresh report. The row carries `n_legs`,
+`mean_clv_bps`, `t_stat`, `realized_roi_pct`, and `dfs_handoff_brier_lift`. A
+positive `dfs_handoff_brier_lift` means the CeminiDFS distribution predicted the
+hit better than the closing consensus. Omit `--season-ledger` and nothing is
+appended. A leg with a push or a void is excluded from the Brier score: there is
+no hit to score against.
 
 Optional ledger columns `ticket_id`, `market`, `stake_kind` (`cash` / `bonus`),
 and `paid` (Won-tab cash → that row is `paid - stake`) are accepted; unknown

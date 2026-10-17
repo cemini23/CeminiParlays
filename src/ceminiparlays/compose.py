@@ -8,6 +8,8 @@ the American odds window. It never submits.
 
 from __future__ import annotations
 
+import math
+import re
 from itertools import combinations
 
 from ceminiparlays.environment import Environment, env_for
@@ -19,6 +21,12 @@ from ceminiparlays.slips import LESS_SIDES, MORE_SIDES, EvaluatedLeg
 COMPOSE_POOL = 14
 #: Env ``first_td`` values that mean the game has no first-touchdown prop.
 NO_FIRST_TD = {"none", "no", "false"}
+#: A same-player reception count and receiving-yards prop in one quarter.
+_QUARTER_STAT = re.compile(r"^(?P<family>.+)_q(?P<quarter>[1-4])$")
+_COLLINEAR_FAMILIES = frozenset({"receptions", "rec_yds"})
+#: Book SGP tax for a naive leg product. Locked before the ranked table.
+SGP_TAX_RHO = 0.15
+SGP_TAX_WEIGHT = 0.55
 
 
 def first_td_available(environment: Environment | None, leg: EvaluatedLeg) -> bool:
@@ -366,6 +374,193 @@ def concentration_warnings(tickets: list[list[EvaluatedLeg]]) -> list[str]:
             else:
                 seen.setdefault(key, str(index))
     return warnings
+
+
+def redundant_quarter_pair(left: dict, right: dict) -> bool:
+    """True when one player has receptions and receiving yards in one quarter.
+
+    Catching a pass and gaining at least one yard are nearly the same event
+    at a 0.5 line. Distinct players stay eligible. A different quarter stays
+    eligible. A rush or pass stat in that quarter stays eligible.
+    """
+
+    player = str(left.get("player_key") or "")
+    if not player or player != str(right.get("player_key") or ""):
+        return False
+    parsed = []
+    for leg in (left, right):
+        match = _QUARTER_STAT.match(str(leg.get("market") or ""))
+        if match is None:
+            return False
+        parsed.append(match)
+    if parsed[0].group("quarter") != parsed[1].group("quarter"):
+        return False
+    return {parsed[0].group("family"), parsed[1].group("family")} == _COLLINEAR_FAMILIES
+
+
+def _max_pair_rho(corr) -> float:
+    import numpy as np
+
+    matrix = np.asarray(corr, dtype=float)
+    if matrix.ndim != 2 or matrix.shape[0] < 2 or matrix.shape[0] != matrix.shape[1]:
+        return 0.0
+    best = -1.0
+    width = matrix.shape[0]
+    for i in range(width):
+        for j in range(i + 1, width):
+            value = float(matrix[i, j])
+            if math.isfinite(value) and value > best:
+                best = value
+    return best
+
+
+def _taxed_decimal(prices: list[int], corr, naive_decimal: float) -> tuple[float, bool]:
+    """Book SGP decimal for a naive product when correlation is positive.
+
+    ``P_book = P_indep_vigged + 0.55 * (P_copula_vigged - P_indep_vigged)``.
+    The vigged marginal is ``1 / decimal`` of each American price. The tax
+    applies only when the largest pair rho is above 0.15 and the vigged
+    copula is above the vigged independent product.
+    """
+
+    from ceminiparlays.copula import exact_joint
+
+    if _max_pair_rho(corr) <= SGP_TAX_RHO:
+        return naive_decimal, False
+    vigged: list[float] = []
+    p_indep_vig = 1.0
+    for price in prices:
+        implied = 1.0 / american_to_decimal(int(price))
+        vigged.append(implied)
+        p_indep_vig *= implied
+    p_copula_vig = float(exact_joint(vigged, corr, "gaussian"))
+    if not math.isfinite(p_copula_vig) or p_copula_vig <= p_indep_vig:
+        return naive_decimal, False
+    p_book = p_indep_vig + SGP_TAX_WEIGHT * (p_copula_vig - p_indep_vig)
+    if not math.isfinite(p_book) or p_book <= 0.0:
+        return naive_decimal, False
+    return 1.0 / p_book, True
+
+
+def joint_ticket(marginals: list[float], prices: list[int], corr) -> dict[str, object]:
+    """Exact Gaussian joint versus the product of the leg prices.
+
+    ``joint_ev`` and ``naive_joint_ev`` use the product of the single-leg
+    decimals. ``tax_adjusted_sgp_ev`` uses the book SGP haircut when the
+    price source is ``leg_odds_naive`` and pair rho is above 0.15. A
+    same-game book does not pay the naive product. ``unconfirmed`` stays
+    true. This is not a bet and it does not add a stake weight.
+    """
+
+    from ceminiparlays.copula import exact_joint
+
+    if len(marginals) != len(prices):
+        raise ValueError("marginals and prices must have the same length")
+    if len(marginals) < 2:
+        raise ValueError("a joint needs at least two legs")
+    p_joint = float(exact_joint(list(marginals), corr, "gaussian"))
+    p_indep = 1.0
+    decimal = 1.0
+    clean_prices = [int(price) for price in prices]
+    for prob, price in zip(marginals, clean_prices, strict=True):
+        p_indep *= float(prob)
+        decimal *= american_to_decimal(price)
+    naive_ev = p_joint * decimal - 1.0
+    taxed_decimal, taxed = _taxed_decimal(clean_prices, corr, decimal)
+    return {
+        "joint_p": p_joint,
+        "indep_p": p_indep,
+        "decimal": decimal,
+        "decimal_sgp": taxed_decimal,
+        "joint_ev": naive_ev,
+        "naive_joint_ev": naive_ev,
+        "tax_adjusted_sgp_ev": p_joint * taxed_decimal - 1.0,
+        "sgp_tax_applied": taxed,
+        "correlation_alpha": p_joint - p_indep,
+        "price_source": "leg_odds_naive",
+        "unconfirmed": True,
+    }
+
+
+def rank_same_game(legs: list[dict], *, regime: str = "neutral") -> list[dict]:
+    """Price same-game pairs and same-player triples.
+
+    Cross-game combos stay on ``compose_tickets``. A pair with no regime
+    prior is skipped. Three-leg tickets are same-player only, because
+    cross-player rho was not estimated. A same-player receptions prop and
+    receiving-yards prop in one quarter are skipped. Sort is the
+    tax-adjusted SGP EV.
+    """
+
+    from ceminiparlays.correlation import LegRef, UnmodeledCorrelationError, correlation_matrix
+
+    grouped: dict[frozenset[str], list[dict]] = {}
+    for leg in legs:
+        team = str(leg.get("team") or "")
+        opp = str(leg.get("opp") or "")
+        if not team or not opp:
+            continue
+        try:
+            price = int(float(leg.get("price") or ""))
+            prob = float(leg.get("model_p") or "")
+        except (TypeError, ValueError):
+            continue
+        if price == 0 or not math.isfinite(prob):
+            continue
+        grouped.setdefault(frozenset({team, opp}), []).append(leg)
+    priced: list[dict] = []
+    for game_legs in grouped.values():
+        ordered = sorted(
+            game_legs,
+            key=lambda item: (str(item.get("player_key")), str(item.get("market")), str(item.get("side"))),
+        )
+        combos: list[tuple[dict, ...]] = list(combinations(ordered, 2))
+        by_player: dict[str, list[dict]] = {}
+        for leg in ordered:
+            by_player.setdefault(str(leg.get("player_key") or ""), []).append(leg)
+        for player, rows in by_player.items():
+            if not player or len(rows) < 3:
+                continue
+            combos.extend(combinations(rows, 3))
+        for combo in combos:
+            identity = {(str(leg.get("player_key")), str(leg.get("market"))) for leg in combo}
+            if len(identity) < len(combo):
+                continue
+            if any(redundant_quarter_pair(left, right) for left, right in combinations(combo, 2)):
+                continue
+            refs = [
+                LegRef(
+                    player_key=str(leg.get("player_key") or ""),
+                    team=str(leg.get("team") or ""),
+                    opponent=str(leg.get("opp") or ""),
+                    stat_type=str(leg.get("market") or ""),
+                    side=str(leg.get("side") or ""),
+                )
+                for leg in combo
+            ]
+            try:
+                corr = correlation_matrix(refs, regime=regime)
+            except UnmodeledCorrelationError:
+                continue
+            try:
+                ticket = joint_ticket(
+                    [float(leg["model_p"]) for leg in combo],
+                    [int(float(leg["price"])) for leg in combo],
+                    corr,
+                )
+            except (TypeError, ValueError):
+                continue
+            ticket["legs"] = list(combo)
+            ticket["n_legs"] = len(combo)
+            priced.append(ticket)
+    priced.sort(
+        key=lambda item: (
+            -float(item["tax_adjusted_sgp_ev"]),
+            str(item["legs"][0].get("player_key")),
+            str(item["legs"][0].get("market")),
+        )
+    )
+    return priced
 
 
 #: Fill-in ticket CSV columns (a legal lines file for ``rank``).

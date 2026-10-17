@@ -17,13 +17,18 @@ _PD_EPS = 1e-9
 def nearest_psd(matrix: np.ndarray, eigenvalue_floor: float = 1e-8) -> np.ndarray:
     """Symmetric PSD approximation via eigenvalue flooring."""
 
-    array = np.asarray(matrix, dtype=float)
+    array = np.nan_to_num(np.asarray(matrix, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
     if array.ndim != 2 or array.shape[0] != array.shape[1]:
         raise ValueError("matrix must be square")
     symmetric = (array + array.T) / 2.0
     eigenvalues, eigenvectors = np.linalg.eigh(symmetric)
-    floored = np.maximum(eigenvalues, eigenvalue_floor)
-    psd = (eigenvectors * floored) @ eigenvectors.T
+    eigenvalues = np.nan_to_num(eigenvalues, nan=eigenvalue_floor, posinf=1.0, neginf=eigenvalue_floor)
+    eigenvectors = np.nan_to_num(eigenvectors, nan=0.0, posinf=0.0, neginf=0.0)
+    floored = np.maximum(eigenvalues, float(eigenvalue_floor))
+    # ``@`` warns inside Apple BLAS on this product even when every value
+    # is finite and the product matches ``np.dot``.
+    psd = np.dot(eigenvectors * floored, eigenvectors.T)
+    psd = np.nan_to_num(psd, nan=0.0, posinf=0.0, neginf=0.0)
     return (psd + psd.T) / 2.0
 
 
@@ -38,22 +43,23 @@ def _as_correlation(psd: np.ndarray) -> np.ndarray:
     return corr
 
 
-def nearest_correlation(matrix: np.ndarray) -> np.ndarray:
-    corr = _as_correlation(nearest_psd(matrix))
+def nearest_correlation(matrix: np.ndarray, eigenvalue_floor: float = _PD_EPS) -> np.ndarray:
+    floor = float(eigenvalue_floor)
+    corr = _as_correlation(nearest_psd(matrix, eigenvalue_floor=max(floor, 1e-8)))
     # Clipping individual off-diagonals, and the unit-diagonal normalization,
     # can leave the matrix slightly indefinite. Re-project until the smallest
     # eigenvalue is STRICTLY positive: ``simulate_slip``'s Cholesky and scipy's
     # multivariate normal CDF both reject a matrix that is only PSD.
     for _ in range(10):
-        if float(np.min(np.linalg.eigvalsh(corr))) > _PD_EPS:
+        if float(np.min(np.linalg.eigvalsh(corr))) > floor:
             return corr
-        corr = _as_correlation(nearest_psd(corr, eigenvalue_floor=_PD_EPS))
+        corr = _as_correlation(nearest_psd(corr, eigenvalue_floor=floor))
     # Final guarantee: shift the spectrum up so the matrix stays strictly
     # positive definite while keeping a unit diagonal.
     corr = (corr + corr.T) / 2.0
     smallest = float(np.min(np.linalg.eigvalsh(corr)))
-    if smallest <= _PD_EPS:
-        corr = _as_correlation(corr + (_PD_EPS - smallest) * np.eye(corr.shape[0]))
+    if smallest <= floor:
+        corr = _as_correlation(corr + (floor - smallest) * np.eye(corr.shape[0]))
     return corr
 
 
@@ -112,9 +118,17 @@ def simulate_slip(
     rng = np.random.default_rng(seed)
     marginals = np.clip(np.asarray(marginal_probs, dtype=float), 1e-9, 1.0 - 1e-9)
     clean = nearest_correlation(corr_matrix)
+    clean = np.nan_to_num(clean, nan=0.0, posinf=0.0, neginf=0.0)
+    np.fill_diagonal(clean, 1.0)
     chol = np.linalg.cholesky(clean)
+    if not np.isfinite(chol).all():
+        chol = np.eye(k)
     independent = rng.standard_normal(size=(k, n_sims))
-    latent = chol @ independent
+    # ``@`` on a wide draw warns inside Apple BLAS even when the product is
+    # finite. ``np.dot`` is the same product and stays quiet.
+    latent = np.dot(chol, independent)
+    if not np.isfinite(latent).all():
+        latent = np.nan_to_num(latent, nan=0.0, posinf=0.0, neginf=0.0)
 
     if copula_type == "gaussian":
         gamma = norm.ppf(marginals)

@@ -10,9 +10,11 @@ The in-app American parlay / SGP price is the ticket. Type that price (`--displa
 
 A same-game parlay is not independent. The product of per-leg odds overstates payout and EV. Confirm the displayed price in-app before you size.
 
-## C3. No scrape
+## C3. No HTML scrape. One public book read.
 
-This CLI does not scrape book, lounge, Polymarket, or Kalshi boards. Licensed Odds API ingest is the only HTTP path. Offline `fetch --fixture` needs no key.
+This CLI does not scrape book HTML. It does not scrape lounge, Polymarket, or Kalshi boards. It does not fill a slip and it does not submit a bet.
+
+Two read paths are allowed. `odds_api.py` reads the licensed Odds API. `hardrock_book.py` reads Hard Rock's public odds API: `GET /java-graphql/operation/GetEvents` and `GET /sportsbook/v1/api/getRootLadder`. The operator approved that read on 2026-10-17. The Odds API feed does not carry half, quarter, or alternate lines, and the posted price has to be the book's own price. The read does not log in and does not call `placeBets`. Offline `fetch --fixture` needs no key.
 
 ## C4. No auto-submit
 
@@ -101,3 +103,19 @@ A prop priced from the CeminiDFS handoff uses a split-normal built on `(median, 
 ## C23. The season ledger is the proof
 
 Ticket P&L cannot prove an edge at a practical sample size; leg-level closing line value can. `fetch --closing-snapshot` freezes the close into `runs/<week>/closing_lines.csv`. `grade` computes `leg_clv_bps` per leg and `dfs_vs_close_brier_delta` when a handoff is supplied. `grade --season-ledger` appends one durable row per run. A run without `--season-ledger` appends nothing and writes no other file.
+
+## C24. A period market enters only through two keys
+
+A token enters `LEGAL_MARKETS` only when both keys pass. Do not promote on one key.
+
+The history key uses settled play-by-play from 2023 through 2026 week 5. 2022 play-by-play is absent. Score each player-game at a point in time. The synthetic lines are the prior median and, for a zero-inflated prop, a 0.5 line. The benchmark price is -114/-114. Require at least 250 player-games (games for `total_q3`). Require a Brier skill gain above 0. Require a bootstrap 95% CI lower bound above 0. Require a Benjamini-Hochberg q-value at or below 0.10.
+
+The live key uses one unplayed slate. A multi-player skill market needs at least 35 legs. A single-starter market needs at least 16 legs. A game-level market needs at least 10 legs. Require a mean EV above 0, a bootstrap 95% CI lower bound above 0, and a Benjamini-Hochberg q-value at or below 0.10.
+
+On 2026-10-17 the v3 tokens that pass both keys are `rec_yds_q3`, `rec_yds_q4`, `receptions_q4`, `rush_yds_q4`, `pass_yds_q4`, `interceptions`, and `total_q3`. `rush_yds_q4` entered when quarter lambda stopped shrinking the level. The v1 tokens `rec_longest` and `rush_longest` stay withdrawn. Their history key failed. `receptions_q1` stays out. `spreads_q3` and `spreads_q4` stay unscored. The spread sign is not locked.
+
+Quarter receiving yards and quarter rushing yards use a compound Poisson-gamma hurdle. A normal distribution is not used for those props or for a reception prop. `receptions_q4` is a Poisson count. V3 quarter lambda is full-game volume times a shrunk quarter share times a defense multiplier. Full-game volume is not shrunk toward a starter mean. The quarter share uses 15 plays and a 0.25 prior.
+
+Regime correlations are stored in `config/matchup_regime_rho.json`. `correlation.py` reads that file only after the full-game prior is missing, and only when a stat is a matchup token. Compose can price a same-game research joint with the Gaussian copula. Compose does not pair one player's receptions and receiving yards in the same quarter. The naive decimal is the product of the single-leg prices. When the largest pair rho is above 0.15 and the price source is `leg_odds_naive`, the research decimal uses the book haircut: vigged independent probability plus 0.55 times the gap to the vigged copula. That decimal is not the displayed SGP price. The print stays unconfirmed. Do not add a stake weight.
+
+The 2026 week-6 slate is unplayed. Model EV is not realized EV. The live Brier columns stay blank. The history Brier is the calibration key.

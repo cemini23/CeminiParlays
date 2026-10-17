@@ -2,14 +2,14 @@
 
 Local CLI for NFL **sportsbook parlays**. Pick'em (Underdog / PrizePicks) is a second profile.
 
-`fetch` pulls two-way player-prop lines from [The Odds API](https://the-odds-api.com). You still type the ticket in Hard Rock / FanDuel / DraftKings / BetMGM and pass the **displayed American parlay / SGP price**. The tool ranks EV with a copula. It does not submit slips and it does not scrape book sites.
+`fetch` pulls two-way player-prop lines from [The Odds API](https://the-odds-api.com). You still type the ticket in Hard Rock / FanDuel / DraftKings / BetMGM and pass the **displayed American parlay / SGP price**. The tool ranks EV with a copula. It does not submit slips and it does not scrape book HTML. A public Hard Rock odds read is a separate path. See canon C3.
 
 ## Why this is safe to run
 
 The Never list is the product, not a buried limit.
 
 - Displayed American is ticket identity. You type the in-app price. The CLI does not invent an SGP from the product of legs.
-- No book-site scrape. Licensed Odds API ingest is the only HTTP path.
+- No book HTML scrape. Licensed Odds API ingest and the public Hard Rock odds read are the HTTP paths.
 - No auto-submit. Output files say **do not submit**. You type the ticket in-app.
 - No invented reduced-SGP table. HIT with an empty multiplier fails closed.
 - Tests and CI do not hit the network.
@@ -347,7 +347,7 @@ Jev is a **discrete epistemic router**, not a calculator. It reads a structured 
 
 ## What it will not do
 
-- Scrape lounge, book, Polymarket, or Kalshi boards (licensed Odds API ingest is the only HTTP path)
+- Scrape lounge, book HTML, Polymarket, or Kalshi boards (licensed Odds API ingest and the public Hard Rock odds read are the HTTP paths)
 - Auto-fill or auto-submit slips or prediction COMBOS
 - Hit the network in tests or CI
 - Treat FanDuel fantasy points as a prop fair value

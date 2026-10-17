@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ceminiparlays"
 version = "0.7.0"
-description = "Local NFL sportsbook parlay research CLI — fair value, slip EV, no book-site scrapers; Odds API ingest is optional"
+description = "Local NFL sportsbook parlay research CLI — fair value, slip EV, no HTML scrapers and no auto-submit; Odds API ingest is optional; a public Hard Rock odds read is allowed"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"

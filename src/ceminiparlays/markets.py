@@ -18,7 +18,23 @@ COUNT_STATS = frozenset({"receptions", "rush_att", "pass_tds", "two_plus_td"})
 #: Game markets (Odds API h2h / spreads / totals). Compose ``--auto`` skips these.
 GAME_STATS = frozenset({"moneyline", "spread", "total"})
 
-LEGAL_MARKETS = frozenset(YARDS_STATS | TD_STATS | COUNT_STATS | GAME_STATS)
+#: Promoted by the 2026-10-17 v3 two-key gate. See canon C24.
+#: History and the live slate both passed. rush_yds_q4 entered on the v3
+#: lambda. The v1 tokens rec_longest and rush_longest stay withdrawn.
+#: receptions_q1 stays out.
+PROMOTED_MARKETS = frozenset(
+    {
+        "rec_yds_q3",
+        "rec_yds_q4",
+        "receptions_q4",
+        "rush_yds_q4",
+        "pass_yds_q4",
+        "interceptions",
+        "total_q3",
+    }
+)
+
+LEGAL_MARKETS = frozenset(YARDS_STATS | TD_STATS | COUNT_STATS | GAME_STATS | PROMOTED_MARKETS)
 
 #: Odds API keys and short names map onto canonical tokens.
 MARKET_ALIASES = {

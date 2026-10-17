@@ -1,0 +1,60 @@
+{
+  "captured_at": "2026-10-17T18:00:00Z",
+  "slate_id": "2026-w06-nfl",
+  "ladder": {
+    "48": {"decimal": "1.43478261", "moneyline": "-230"},
+    "69": {"decimal": "1.86956522", "moneyline": "-115"},
+    "84": {"decimal": "2.6", "moneyline": "160"}
+  },
+  "events": [
+    {
+      "id": "5579461342030594463",
+      "name": "Jaguars vs Texans",
+      "eventTime": 1792330200000,
+      "markets": [
+        {
+          "type": "AMERICAN_FOOTBALL:FTOT:A:OU",
+          "name": "Jaguars Total Points",
+          "subtype": "M#20.5",
+          "period": "M",
+          "selection": [
+            {"type": "Over", "name": "Over 20.5", "rootIdx": 69},
+            {"type": "Under", "name": "Under 20.5", "rootIdx": 69}
+          ]
+        },
+        {
+          "type": "AMERICAN_FOOTBALL:P:PROPPSYDSH1",
+          "name": "C.J. Stroud - 1st Half Pass Yards",
+          "subtype": "H1:B:4485#119.5",
+          "period": "H1:B:4485",
+          "selection": [
+            {"type": "Over", "name": "Over 119.5", "rootIdx": 69},
+            {"type": "Under", "name": "Under 119.5", "rootIdx": 69}
+          ]
+        },
+        {
+          "type": "AMERICAN_FOOTBALL:FT:PROPPSYDSMULTILINE",
+          "name": "C.J. Stroud - Passing Yards",
+          "subtype": "M:B:4485",
+          "period": "M:B:4485",
+          "selection": [
+            {"type": "Over 250.5", "name": "Over 250.5", "rootIdx": 69},
+            {"type": "Under 250.5", "name": "Under 250.5", "rootIdx": 69},
+            {"type": "Over 300.5", "name": "Over 300.5", "rootIdx": 84},
+            {"type": "Under 300.5", "name": "Under 300.5", "rootIdx": 48}
+          ]
+        },
+        {
+          "type": "AMERICAN_FOOTBALL:P:PROPRCYDSH1",
+          "name": "Nobody - 1st Half Receiving Yards",
+          "subtype": "H1:A:1#10.5",
+          "period": "H1:A:1",
+          "selection": [
+            {"type": "Over", "name": "Over 10.5", "rootIdx": -1},
+            {"type": "Under", "name": "Under 10.5", "rootIdx": -1}
+          ]
+        }
+      ]
+    }
+  ]
+}

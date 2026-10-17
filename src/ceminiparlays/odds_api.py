@@ -1,7 +1,7 @@
 """Licensed The Odds API client (stdlib urllib only).
 
-Book-site scrapers are out of scope. This module is the only place
-``urllib.request`` is allowed.
+Book HTML scrapers are out of scope. ``urllib.request`` is also allowed in
+``hardrock_book.py``, which reads the public Hard Rock odds API. See canon C3.
 """
 
 from __future__ import annotations

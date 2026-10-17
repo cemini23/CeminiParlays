@@ -1,0 +1,4925 @@
+{
+  "absent_2022": true,
+  "eigenvalue_floor": 1e-06,
+  "explosive_rule": "15yd_and_box_le_6_else_20yd",
+  "min_pairs": 40,
+  "regimes": {
+    "explosive_light_box": {
+      "pairs": [
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "interceptions"
+        },
+        {
+          "n": 45,
+          "rho": 0.727977,
+          "source": "empirical",
+          "stat_a": "field_goals",
+          "stat_b": "kicking_points"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "kicking_points"
+        },
+        {
+          "n": 437,
+          "rho": 0.114774,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 430,
+          "rho": 0.12028,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 430,
+          "rho": 0.071799,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 427,
+          "rho": 0.106799,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 437,
+          "rho": 0.081481,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 437,
+          "rho": 0.039539,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 383,
+          "rho": -0.038869,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 235,
+          "rho": 0.009249,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 368,
+          "rho": -0.000131,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 383,
+          "rho": 0.073648,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 430,
+          "rho": 0.978111,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 430,
+          "rho": 0.656493,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 427,
+          "rho": 0.131726,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 437,
+          "rho": 0.359285,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 235,
+          "rho": 0.112023,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 383,
+          "rho": 0.075544,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 430,
+          "rho": 0.671401,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 427,
+          "rho": 0.135454,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 430,
+          "rho": 0.464495,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 430,
+          "rho": 0.369146,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 378,
+          "rho": -0.034118,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 231,
+          "rho": 0.111792,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 364,
+          "rho": -0.005052,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 378,
+          "rho": 0.086213,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 427,
+          "rho": 0.133452,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 430,
+          "rho": 0.545221,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 430,
+          "rho": 0.305438,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 378,
+          "rho": -0.014762,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 231,
+          "rho": 0.010262,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 364,
+          "rho": -0.055963,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 378,
+          "rho": 0.052997,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 427,
+          "rho": 0.355415,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 427,
+          "rho": 0.232783,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 377,
+          "rho": 0.01895,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 231,
+          "rho": -0.056055,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 363,
+          "rho": -0.01332,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 377,
+          "rho": 0.011191,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 437,
+          "rho": 0.358749,
+          "source": "empirical",
+          "stat_a": "pass_yds",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 235,
+          "rho": 0.025835,
+          "source": "empirical",
+          "stat_a": "pass_yds",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 383,
+          "rho": 0.016345,
+          "source": "empirical",
+          "stat_a": "pass_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 383,
+          "rho": 0.042833,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 235,
+          "rho": 0.11159,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 368,
+          "rho": 0.142537,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 383,
+          "rho": 0.094314,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 1720,
+          "rho": 0.641416,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 1719,
+          "rho": 0.117541,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 1720,
+          "rho": 0.242387,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 1720,
+          "rho": 0.31915,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 1720,
+          "rho": 0.180055,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 422,
+          "rho": -0.001854,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 337,
+          "rho": 0.034189,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 421,
+          "rho": 0.02574,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 414,
+          "rho": 0.055219,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 2861,
+          "rho": 0.184705,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 2881,
+          "rho": 0.336746,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 2952,
+          "rho": 0.297565,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 613,
+          "rho": 0.017264,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 778,
+          "rho": 0.03042,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 2814,
+          "rho": 0.011583,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 2880,
+          "rho": 0.256291,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 2880,
+          "rho": 0.022011,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 784,
+          "rho": 0.060683,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 612,
+          "rho": 0.039118,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 781,
+          "rho": 0.0524,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 765,
+          "rho": 0.035361,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 2904,
+          "rho": 0.340499,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 2904,
+          "rho": 0.812365,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 789,
+          "rho": 0.053088,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 606,
+          "rho": 0.015089,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 786,
+          "rho": 0.021097,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 769,
+          "rho": 0.047333,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 2981,
+          "rho": 0.373296,
+          "source": "empirical",
+          "stat_a": "receptions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 620,
+          "rho": 0.041448,
+          "source": "empirical",
+          "stat_a": "receptions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 789,
+          "rho": 0.103527,
+          "source": "empirical",
+          "stat_a": "receptions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 809,
+          "rho": 0.063652,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 620,
+          "rho": 0.001127,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 806,
+          "rho": 0.025943,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 789,
+          "rho": 0.035217,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 999,
+          "rho": 0.306591,
+          "source": "empirical",
+          "stat_a": "rush_att",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 1413,
+          "rho": 0.292784,
+          "source": "empirical",
+          "stat_a": "rush_att",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_att",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 999,
+          "rho": 0.606084,
+          "source": "empirical",
+          "stat_a": "rush_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 999,
+          "rho": 0.232205,
+          "source": "empirical",
+          "stat_a": "rush_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 1394,
+          "rho": 0.345134,
+          "source": "empirical",
+          "stat_a": "rush_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_yds_q4",
+          "stat_b": "total_q3"
+        }
+      ]
+    },
+    "neutral": {
+      "pairs": [
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "interceptions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "kicking_points"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "kicking_points"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 49,
+          "rho": 0.503499,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 50,
+          "rho": 0.371216,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 52,
+          "rho": 0.345329,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 47,
+          "rho": -0.175782,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 49,
+          "rho": 0.373585,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 49,
+          "rho": -0.183037,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 51,
+          "rho": 0.267582,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 51,
+          "rho": 0.861498,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 53,
+          "rho": 0.381449,
+          "source": "empirical",
+          "stat_a": "receptions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_att",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_att",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_att",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_yds_q4",
+          "stat_b": "total_q3"
+        }
+      ]
+    },
+    "q3_opening_surge": {
+      "pairs": [
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "interceptions"
+        },
+        {
+          "n": 74,
+          "rho": 0.702772,
+          "source": "empirical",
+          "stat_a": "field_goals",
+          "stat_b": "kicking_points"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "kicking_points"
+        },
+        {
+          "n": 717,
+          "rho": 0.177432,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 706,
+          "rho": 0.165805,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 706,
+          "rho": 0.119981,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 698,
+          "rho": 0.006865,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 716,
+          "rho": 0.108348,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 717,
+          "rho": 0.09957,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 640,
+          "rho": 0.01547,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 420,
+          "rho": 0.036467,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 622,
+          "rho": 0.048085,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 640,
+          "rho": 0.163376,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 706,
+          "rho": 0.973032,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 706,
+          "rho": 0.632656,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 698,
+          "rho": 0.068995,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 717,
+          "rho": 0.314585,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 420,
+          "rho": -0.063623,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 640,
+          "rho": 0.035227,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 706,
+          "rho": 0.653782,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 698,
+          "rho": 0.062808,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 705,
+          "rho": 0.399355,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 706,
+          "rho": 0.333155,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 632,
+          "rho": 0.006612,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 414,
+          "rho": -0.062582,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 616,
+          "rho": 0.052673,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 632,
+          "rho": 0.034305,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 698,
+          "rho": 0.117185,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 705,
+          "rho": 0.522958,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 706,
+          "rho": 0.307883,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 632,
+          "rho": 0.018409,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 414,
+          "rho": -0.013898,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 616,
+          "rho": 0.037834,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 632,
+          "rho": 0.023923,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 698,
+          "rho": 0.381236,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 698,
+          "rho": 0.142704,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 627,
+          "rho": -0.01148,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 414,
+          "rho": 0.015703,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 613,
+          "rho": 0.015545,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 627,
+          "rho": -0.003698,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 716,
+          "rho": 0.27208,
+          "source": "empirical",
+          "stat_a": "pass_yds",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 420,
+          "rho": -0.052338,
+          "source": "empirical",
+          "stat_a": "pass_yds",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 640,
+          "rho": -0.010879,
+          "source": "empirical",
+          "stat_a": "pass_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 640,
+          "rho": 0.043295,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 420,
+          "rho": -0.008998,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 622,
+          "rho": 0.075103,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 640,
+          "rho": 0.126512,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 3113,
+          "rho": 0.651519,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 3112,
+          "rho": 0.270396,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 3113,
+          "rho": 0.177118,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 3113,
+          "rho": 0.332284,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 3113,
+          "rho": 0.151142,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 823,
+          "rho": 0.023007,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 632,
+          "rho": 0.099512,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 820,
+          "rho": 0.044611,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 802,
+          "rho": 0.039783,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 4770,
+          "rho": 0.333453,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 4771,
+          "rho": 0.279895,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 4863,
+          "rho": 0.260519,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 1011,
+          "rho": 0.069154,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 1297,
+          "rho": 0.025752,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 4698,
+          "rho": 0.018435,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 4790,
+          "rho": 0.324767,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 4790,
+          "rho": 0.016597,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 1311,
+          "rho": 0.031177,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 1004,
+          "rho": 0.014323,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 1308,
+          "rho": 0.023277,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 1283,
+          "rho": 0.06157,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 4794,
+          "rho": 0.319407,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 4794,
+          "rho": 0.825023,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 1285,
+          "rho": -0.040693,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 986,
+          "rho": -0.010139,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 1282,
+          "rho": -0.038885,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 1259,
+          "rho": 0.00683,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 4896,
+          "rho": 0.337536,
+          "source": "empirical",
+          "stat_a": "receptions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 1013,
+          "rho": 0.035934,
+          "source": "empirical",
+          "stat_a": "receptions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 1299,
+          "rho": 0.041091,
+          "source": "empirical",
+          "stat_a": "receptions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 1327,
+          "rho": -0.018639,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 1013,
+          "rho": -0.014535,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 1324,
+          "rho": -0.02373,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 1299,
+          "rho": 0.011125,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 1743,
+          "rho": 0.339207,
+          "source": "empirical",
+          "stat_a": "rush_att",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 2425,
+          "rho": 0.305776,
+          "source": "empirical",
+          "stat_a": "rush_att",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_att",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 1743,
+          "rho": 0.640507,
+          "source": "empirical",
+          "stat_a": "rush_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 1743,
+          "rho": 0.310237,
+          "source": "empirical",
+          "stat_a": "rush_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 2394,
+          "rho": 0.360099,
+          "source": "empirical",
+          "stat_a": "rush_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_yds_q4",
+          "stat_b": "total_q3"
+        }
+      ]
+    },
+    "q4_trailing_comeback": {
+      "pairs": [
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "interceptions"
+        },
+        {
+          "n": 46,
+          "rho": 0.85973,
+          "source": "empirical",
+          "stat_a": "field_goals",
+          "stat_b": "kicking_points"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "field_goals",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "kicking_points"
+        },
+        {
+          "n": 528,
+          "rho": 0.159541,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 521,
+          "rho": 0.138186,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 521,
+          "rho": 0.146852,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 511,
+          "rho": 0.073876,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 528,
+          "rho": 0.113484,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 528,
+          "rho": 0.111493,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 438,
+          "rho": -0.028027,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 254,
+          "rho": -0.025843,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 424,
+          "rho": 0.008107,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 438,
+          "rho": 0.004364,
+          "source": "empirical",
+          "stat_a": "interceptions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "interceptions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_att"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "kicking_points",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 521,
+          "rho": 0.979699,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_attempts"
+        },
+        {
+          "n": 521,
+          "rho": 0.703305,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 511,
+          "rho": 0.238482,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 528,
+          "rho": 0.452131,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 254,
+          "rho": 0.098505,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 438,
+          "rho": 0.169786,
+          "source": "empirical",
+          "stat_a": "pass_att",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_att",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 521,
+          "rho": 0.722832,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_completions"
+        },
+        {
+          "n": 511,
+          "rho": 0.249867,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 521,
+          "rho": 0.554475,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 521,
+          "rho": 0.430318,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 433,
+          "rho": 0.103227,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 251,
+          "rho": 0.104671,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 421,
+          "rho": 0.081485,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 433,
+          "rho": 0.171432,
+          "source": "empirical",
+          "stat_a": "pass_attempts",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_attempts",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 511,
+          "rho": 0.25483,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_longest"
+        },
+        {
+          "n": 521,
+          "rho": 0.643655,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 521,
+          "rho": 0.435886,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 433,
+          "rho": 0.108401,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 251,
+          "rho": 0.081713,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 421,
+          "rho": 0.083971,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 433,
+          "rho": 0.151778,
+          "source": "empirical",
+          "stat_a": "pass_completions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_completions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 511,
+          "rho": 0.368903,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "pass_yds"
+        },
+        {
+          "n": 511,
+          "rho": 0.228785,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 427,
+          "rho": 0.108306,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 251,
+          "rho": -0.023372,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 418,
+          "rho": 0.015579,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 427,
+          "rho": 0.117653,
+          "source": "empirical",
+          "stat_a": "pass_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 528,
+          "rho": 0.450653,
+          "source": "empirical",
+          "stat_a": "pass_yds",
+          "stat_b": "pass_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 254,
+          "rho": 0.080765,
+          "source": "empirical",
+          "stat_a": "pass_yds",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 438,
+          "rho": 0.171306,
+          "source": "empirical",
+          "stat_a": "pass_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_longest"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 438,
+          "rho": 0.192048,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 254,
+          "rho": 0.180577,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 424,
+          "rho": 0.129039,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 438,
+          "rho": 0.245132,
+          "source": "empirical",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "pass_yds_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 2128,
+          "rho": 0.651123,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds"
+        },
+        {
+          "n": 2128,
+          "rho": 0.203855,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 2128,
+          "rho": 0.242765,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 2128,
+          "rho": 0.304655,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 2128,
+          "rho": 0.193468,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 567,
+          "rho": 0.002223,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 460,
+          "rho": -0.010606,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 566,
+          "rho": -0.007543,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 552,
+          "rho": 0.038193,
+          "source": "empirical",
+          "stat_a": "rec_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 3456,
+          "rho": 0.301807,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rec_yds_q3"
+        },
+        {
+          "n": 3512,
+          "rho": 0.362036,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 3571,
+          "rho": 0.332582,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 760,
+          "rho": -0.094864,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 933,
+          "rho": 0.013876,
+          "source": "empirical",
+          "stat_a": "rec_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 3423,
+          "rho": 0.053265,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rec_yds_q4"
+        },
+        {
+          "n": 3480,
+          "rho": 0.31506,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 3480,
+          "rho": 0.039455,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 942,
+          "rho": -0.039207,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 754,
+          "rho": -0.058627,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 940,
+          "rho": -0.039114,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 917,
+          "rho": -0.025951,
+          "source": "empirical",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q3",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 3542,
+          "rho": 0.342856,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "receptions"
+        },
+        {
+          "n": 3542,
+          "rho": 0.813087,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 947,
+          "rho": -0.024715,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 749,
+          "rho": -0.031452,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 945,
+          "rho": 0.004345,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 920,
+          "rho": 0.056859,
+          "source": "empirical",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rec_yds_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 3608,
+          "rho": 0.389104,
+          "source": "empirical",
+          "stat_a": "receptions",
+          "stat_b": "receptions_q4"
+        },
+        {
+          "n": 764,
+          "rho": -0.04689,
+          "source": "empirical",
+          "stat_a": "receptions",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 937,
+          "rho": 0.007618,
+          "source": "empirical",
+          "stat_a": "receptions",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 965,
+          "rho": -0.01555,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_att"
+        },
+        {
+          "n": 764,
+          "rho": -0.006913,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 963,
+          "rho": 0.003477,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 937,
+          "rho": 0.096855,
+          "source": "empirical",
+          "stat_a": "receptions_q4",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "receptions_q4",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 1181,
+          "rho": 0.319365,
+          "source": "empirical",
+          "stat_a": "rush_att",
+          "stat_b": "rush_longest"
+        },
+        {
+          "n": 1632,
+          "rho": 0.217002,
+          "source": "empirical",
+          "stat_a": "rush_att",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_att",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 1181,
+          "rho": 0.643173,
+          "source": "empirical",
+          "stat_a": "rush_longest",
+          "stat_b": "rush_yds"
+        },
+        {
+          "n": 1181,
+          "rho": 0.250613,
+          "source": "empirical",
+          "stat_a": "rush_longest",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_longest",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 1613,
+          "rho": 0.293701,
+          "source": "empirical",
+          "stat_a": "rush_yds",
+          "stat_b": "rush_yds_q4"
+        },
+        {
+          "n": 0,
+          "rho": 0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_yds",
+          "stat_b": "total_q3"
+        },
+        {
+          "n": 0,
+          "rho": -0.0,
+          "source": "psd_fill",
+          "stat_a": "rush_yds_q4",
+          "stat_b": "total_q3"
+        }
+      ]
+    }
+  },
+  "same_player_only": true
+}

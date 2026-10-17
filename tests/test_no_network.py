@@ -14,9 +14,10 @@ BANNED = {
     "websocket",
 }
 
-#: The only modules allowed to open an HTTP connection. The Odds API client and
-#: the tiered Jev client are both licensed paths; every other module stays offline.
-LICENSED_HTTP = {"odds_api.py", "jev_client.py"}
+#: The only modules allowed to open an HTTP connection. The Odds API client,
+#: the public Hard Rock odds read, and the tiered Jev client are licensed
+#: paths. Every other module stays offline.
+LICENSED_HTTP = {"odds_api.py", "jev_client.py", "hardrock_book.py"}
 
 
 def test_source_has_no_network_clients() -> None:

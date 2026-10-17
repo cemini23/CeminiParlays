@@ -194,6 +194,11 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
         "h2h,spreads,totals",
     )
     parser.add_argument(
+        "--with-jev",
+        action="store_true",
+        help="Route the card through the Jev gate. Offline runs fail closed and do not start Jev.",
+    )
+    parser.add_argument(
         "--ticket-id",
         default=None,
         help="Only rank rows carrying this ticket_id.",
@@ -353,7 +358,8 @@ def build_parser() -> argparse.ArgumentParser:
         prog="ceminiparlays",
         description=(
             "Local sportsbook parlay / pick'em research CLI. "
-            "Licensed Odds API fetch is allowed; book-site scrapers and auto-submit are not."
+            "Licensed Odds API fetch and the public Hard Rock odds read are allowed. "
+            "Book HTML scrapers and auto-submit are not."
         ),
     )
     parser.add_argument("--version", action="version", version=f"ceminiparlays {__version__}")
@@ -597,6 +603,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Drop a line whose captured_at is older than this many minutes. A "
             "leg whose game has already kicked off is always dropped."
         ),
+    )
+    compose.add_argument(
+        "--with-jev",
+        action="store_true",
+        help="Route the card through the Jev gate. Offline runs fail closed and do not start Jev.",
     )
     compose.add_argument("--out-dir", type=Path, default=None)
     compose.add_argument(
@@ -1281,7 +1292,16 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
     return 0
 
 
+def _print_jev_route(args: argparse.Namespace) -> None:
+    """Print the offline Jev status. This does not start the Jev process."""
+
+    if not getattr(args, "with_jev", False):
+        return
+    print("jev=fail_closed")
+
+
 def _cmd_rank(args: argparse.Namespace) -> int:
+    _print_jev_route(args)
     _print_command_flags(
         legs=getattr(args, "legs", None),
         markets=getattr(args, "markets", None),
@@ -1386,6 +1406,7 @@ def _cmd_compare(args: argparse.Namespace) -> int:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
+    _print_jev_route(args)
     _print_command_flags(
         legs=getattr(args, "legs", None),
         markets=getattr(args, "markets", None),
@@ -1576,6 +1597,7 @@ def _write_card_json(out_dir: Path, payload: dict[str, object]) -> Path:
 
 
 def _cmd_compose(args: argparse.Namespace) -> int:
+    _print_jev_route(args)
     _print_command_flags(
         legs=getattr(args, "legs", None),
         markets=getattr(args, "markets", None),

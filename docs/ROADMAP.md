@@ -1,7 +1,7 @@
 # CeminiParlays product plan
 
 **Status:** Phase 1 composer shipped (v0.2). Odds API ingest shipped (v0.3). Grade + ET fetch + game markets shipped (v0.4). Week 1 report flags + ITT snapshot shipped (v0.5). CeminiDFS handoff reader shipped (v0.6). Pick'em gap report + SGP weather discount shipped (v0.7). Model-first fair value + fail-closed inputs shipped (v0.8). Tiered Jev routing, dynamic correlation, non-circular prop pricing, and the season CLV ledger shipped (v0.9). Phases 2–3 stay specified here so we do not invent scope mid-route.  
-**Contract:** no book-site scrapers, no auto-submit, no book/PM API keys in this repo (Odds API key is env-only: `THE_ODDS_API_KEY`), no network in CI. The operator types the ticket. `fetch` writes a CSV; `compose --auto` **picks** tickets; neither places them. Reports never overwrite the card, auto-void, or invent an SGP.
+**Contract:** no book HTML scrapers, no auto-submit, no book/PM API keys in this repo (Odds API key is env-only: `THE_ODDS_API_KEY`), no network in CI. A public Hard Rock odds read is allowed (canon C3, 2026-10-17). The operator types the ticket. `fetch` writes a CSV; `compose --auto` **picks** tickets; neither places them. Reports never overwrite the card, auto-void, or invent an SGP.
 
 Sources: CeminiDFS GPP/env stack (`docs/GPP-WORKFLOW.md`, weather/vegas/stadiums), Gambling wiki `@concepts/parlay-and-correlated-bets.md` (SGP tax, DKeX COMBOS = product of binaries), `@briefs/2026-09-12_ceminidfs-lessons-pickem-parlay-cli.md`, world-cup-bot (shadow-first, DRY_RUN, paper ledger — steal the **gates**, not the CLOB).
 
@@ -159,7 +159,7 @@ Docs only. No math change.
 
 ## Never
 
-- Scrape Hard Rock, FanDuel, DraftKings, Kalshi, or Polymarket (Odds API ingest is not a book-site scrape).
+- Scrape Hard Rock, FanDuel, DraftKings, Kalshi, or Polymarket HTML. Odds API ingest is not a book-site scrape. The public Hard Rock `GetEvents` read is not a scrape and it does not place a bet (canon C3).
 - Auto-submit, Chrome fill, or WC-bot live POST.
 - Treat FanDuel FPPG as a prop fair.
 - Two first-TD legs from one game.

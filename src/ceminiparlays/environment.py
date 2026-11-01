@@ -99,6 +99,88 @@ def read_environment(path: Path | None) -> Environment:
     return out
 
 
+def _field(raw: object, *names: str) -> object:
+    if isinstance(raw, dict):
+        for name in names:
+            value = raw.get(name)
+            if value not in (None, ""):
+                return value
+        return ""
+    for name in names:
+        value = getattr(raw, name, None)
+        if value not in (None, ""):
+            return value
+    return ""
+
+
+def fill_environment_from_book_lines(
+    environment: Environment,
+    rows: Sequence[object],
+) -> Environment:
+    """Fill blank ``spread`` and ``implied_total`` from captured book rows.
+
+    A typed cell stays as the operator left it. Implied team total is
+    ``(game_total - team_spread) / 2``. A missing total or spread stays blank.
+    This function does not invent a number the book did not post.
+    """
+
+    if not environment or not rows:
+        return environment
+    spreads: dict[tuple[str, str], float] = {}
+    totals: dict[tuple[str, str], float] = {}
+    for raw in rows:
+        stat = str(_field(raw, "stat_type", "market") or "").strip().lower()
+        team = normalize_team(str(_field(raw, "team") or ""))
+        opponent = normalize_team(str(_field(raw, "opponent", "opp") or ""))
+        try:
+            line = _optional_float(str(_field(raw, "line") if _field(raw, "line") != "" else ""))
+        except ValueError:
+            continue
+        if not team or not opponent or line is None:
+            continue
+        pair = (team, opponent)
+        if stat == "spread":
+            spreads.setdefault(pair, line)
+        elif stat in {"total", "totals", "game_total"}:
+            totals.setdefault(pair, line)
+            totals.setdefault((opponent, team), line)
+    if not spreads and not totals:
+        return environment
+    updated = dict(environment)
+
+    def _filled(row: EnvRow) -> EnvRow:
+        pair = (normalize_team(row.team), normalize_team(row.opponent))
+        spread = row.spread if row.spread is not None else spreads.get(pair)
+        implied = row.implied_total
+        total = totals.get(pair)
+        if implied is None and spread is not None and total is not None:
+            implied = (float(total) - float(spread)) / 2.0
+        if spread == row.spread and implied == row.implied_total:
+            return row
+        return EnvRow(
+            game_id=row.game_id,
+            team=row.team,
+            opponent=row.opponent,
+            implied_total=implied,
+            spread=spread,
+            roof=row.roof,
+            weather_exposed=row.weather_exposed,
+            wind_mph=row.wind_mph,
+            precip_pop=row.precip_pop,
+            first_td=row.first_td,
+        )
+
+    for key, row in list(environment.items()):
+        if isinstance(key, tuple) and len(key) == 2 and key[0] and key[1]:
+            updated[key] = _filled(row)
+    for key, row in list(environment.items()):
+        if isinstance(key, tuple) and len(key) == 2 and key[1] == "":
+            updated[key] = updated.get((row.team, row.opponent), _filled(row))
+        elif isinstance(key, str):
+            updated[key] = updated.get((row.team, row.opponent), _filled(row))
+    return updated
+
+
 def env_for(
     environment: Environment | None,
     team: str,

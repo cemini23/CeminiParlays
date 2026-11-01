@@ -37,6 +37,8 @@ MARKET_TO_STAT = {
     "player_rush_yds": "rush_yds",
     "player_reception_yds": "rec_yds",
     "player_receptions": "receptions",
+    "player_receptions_q4": "receptions_q4",
+    "player_pass_interceptions": "interceptions",
     "player_rush_attempts": "rush_att",
     "player_pass_tds": "pass_tds",
     "player_1st_td": "first_td",
@@ -44,6 +46,7 @@ MARKET_TO_STAT = {
     "h2h": "moneyline",
     "spreads": "spread",
     "totals": "total",
+    "totals_q3": "total_q3",
 }
 STAT_TO_MARKET = {stat: market for market, stat in MARKET_TO_STAT.items()}
 FETCH_BOOKS = ("hardrock", "fanduel", "draftkings", "betmgm")

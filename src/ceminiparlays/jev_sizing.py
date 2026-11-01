@@ -274,3 +274,247 @@ def write_sizing_report(path: Path, sizes: list[TicketSize]) -> None:
         writer.writeheader()
         for size in sizes:
             writer.writerow(size.as_row())
+
+
+# Week-7 Hard Rock dollar card. Stakes are integer cents. The sum is $25.00.
+HARDROCK_BANKROLL_CENTS = 2500
+HARDROCK_TICKET_CAP_CENTS = 400
+HARDROCK_GAME_CAP_CENTS = 625
+HARDROCK_MIN_EV = 0.08
+HARDROCK_MODE_B_LO = 200
+HARDROCK_MODE_B_HI = 400
+_MODE_A_PLAN = (
+    ("checkdown", 6, 175),
+    ("core", 5, 170),
+    ("sgp", 6, 100),
+)
+
+
+@dataclass(frozen=True)
+class DollarPlay:
+    """One qualifying single or same-game slip. ``ev`` is already after vig."""
+
+    play_id: str
+    pool: str
+    game_ids: tuple[str, ...]
+    player_keys: tuple[str, ...]
+    ev: float
+    model_p: float
+    decimal_odds: float
+    priority: int = 1
+
+
+@dataclass(frozen=True)
+class DollarStake:
+    play_id: str
+    pool: str
+    stake_cents: int
+
+
+def _play_sort(play: DollarPlay) -> tuple[float, int, str]:
+    return (-float(play.ev), int(play.priority), play.play_id)
+
+
+def _exposure_ok(plays: list[DollarPlay], stakes: list[int], cap: int) -> bool:
+    exposure: dict[str, int] = {}
+    for play, stake in zip(plays, stakes, strict=True):
+        for game in play.game_ids:
+            exposure[game] = exposure.get(game, 0) + stake
+    return all(cents <= cap for cents in exposure.values())
+
+
+def _kelly_weights(plays: list[DollarPlay]) -> list[float]:
+    """``0.25 * f*`` with ``f* = (p * M - 1) / (M - 1)``."""
+
+    weights: list[float] = []
+    for play in plays:
+        decimal = float(play.decimal_odds)
+        if decimal <= 1.0:
+            weights.append(0.0)
+            continue
+        full = (float(play.model_p) * decimal - 1.0) / (decimal - 1.0)
+        weights.append(max(0.0, KELLY_FRACTION * full))
+    return weights
+
+
+def _allocate_cents(
+    plays: list[DollarPlay],
+    *,
+    bankroll: int,
+    lo: int,
+    hi: int,
+) -> list[int]:
+    """Scale fractional Kelly to ``bankroll`` cents inside ``[lo, hi]``."""
+
+    count = len(plays)
+    if count == 0:
+        raise ValueError("no plays")
+    if count * lo > bankroll or count * hi < bankroll:
+        raise ValueError("stake bounds cannot sum to the bankroll")
+    weights = _kelly_weights(plays)
+    if sum(weights) <= 0.0:
+        weights = [1.0] * count
+    active = set(range(count))
+    assigned = [0] * count
+    remaining = bankroll
+    for _step in range(count + 2):
+        if not active:
+            if remaining != 0:
+                raise ValueError("could not land on the bankroll")
+            return assigned
+        weight_sum = sum(weights[index] for index in active)
+        if weight_sum <= 0.0:
+            raw = {index: remaining / len(active) for index in active}
+        else:
+            raw = {index: remaining * weights[index] / weight_sum for index in active}
+        frozen: list[int] = []
+        for index, value in raw.items():
+            if value < lo:
+                assigned[index] = lo
+                remaining -= lo
+                frozen.append(index)
+            elif value > hi:
+                assigned[index] = hi
+                remaining -= hi
+                frozen.append(index)
+        if frozen:
+            for index in frozen:
+                active.discard(index)
+            continue
+        floors = {index: int(raw[index]) for index in active}
+        for index in active:
+            assigned[index] = min(hi, max(lo, floors[index]))
+        drift = bankroll - sum(assigned)
+        order = sorted(
+            active,
+            key=lambda index: (-(raw[index] - floors[index]), plays[index].play_id),
+        )
+        step = 1 if drift > 0 else -1
+        guard = 0
+        while drift != 0 and guard < bankroll + count:
+            guard += 1
+            moved = False
+            for index in order:
+                nxt = assigned[index] + step
+                if lo <= nxt <= hi:
+                    assigned[index] = nxt
+                    drift -= step
+                    moved = True
+                    if drift == 0:
+                        break
+            if not moved:
+                break
+        if drift != 0 or sum(assigned) != bankroll:
+            raise ValueError("could not land on the bankroll")
+        return assigned
+    raise ValueError("could not land on the bankroll")
+
+
+def _fill_pool(
+    plays: list[DollarPlay],
+    *,
+    count: int,
+    cents: int,
+    used: set[str],
+    exposure: dict[str, int],
+    cap: int,
+) -> list[DollarPlay]:
+    picked: list[DollarPlay] = []
+    for play in sorted(plays, key=_play_sort):
+        if float(play.ev) < HARDROCK_MIN_EV:
+            continue
+        if any(player in used for player in play.player_keys):
+            continue
+        if any(exposure.get(game, 0) + cents > cap for game in play.game_ids):
+            continue
+        picked.append(play)
+        used.update(play.player_keys)
+        for game in play.game_ids:
+            exposure[game] = exposure.get(game, 0) + cents
+        if len(picked) == count:
+            break
+    return picked
+
+
+def _mode_a(plays: list[DollarPlay]) -> list[DollarStake] | None:
+    qualified = [play for play in plays if float(play.ev) >= HARDROCK_MIN_EV]
+    games = {game for play in qualified for game in play.game_ids}
+    if len(qualified) < 12 or len(games) < 5:
+        return None
+    used: set[str] = set()
+    exposure: dict[str, int] = {}
+    stakes: list[DollarStake] = []
+    for pool, count, cents in _MODE_A_PLAN:
+        group = [play for play in qualified if play.pool == pool]
+        picked = _fill_pool(
+            group,
+            count=count,
+            cents=cents,
+            used=used,
+            exposure=exposure,
+            cap=HARDROCK_GAME_CAP_CENTS,
+        )
+        if len(picked) < count:
+            return None
+        stakes.extend(
+            DollarStake(play_id=play.play_id, pool=pool, stake_cents=cents) for play in picked
+        )
+    if sum(row.stake_cents for row in stakes) != HARDROCK_BANKROLL_CENTS:
+        return None
+    return stakes
+
+
+def _greedy(plays: list[DollarPlay], per_game: int) -> list[DollarPlay]:
+    chosen: list[DollarPlay] = []
+    counts: dict[str, int] = {}
+    used: set[str] = set()
+    for play in sorted(plays, key=_play_sort):
+        if len(chosen) >= 9:
+            break
+        if any(player in used for player in play.player_keys):
+            continue
+        if any(counts.get(game, 0) >= per_game for game in play.game_ids):
+            continue
+        chosen.append(play)
+        used.update(player for player in play.player_keys if player)
+        for game in play.game_ids:
+            counts[game] = counts.get(game, 0) + 1
+    return chosen
+
+
+def _mode_b(plays: list[DollarPlay]) -> list[DollarStake]:
+    qualified = [play for play in plays if float(play.ev) >= HARDROCK_MIN_EV]
+    for per_game in (2, 1):
+        chosen = _greedy(qualified, per_game)
+        for width in range(min(9, len(chosen)), 6, -1):
+            trial = chosen[:width]
+            try:
+                stakes = _allocate_cents(
+                    trial,
+                    bankroll=HARDROCK_BANKROLL_CENTS,
+                    lo=HARDROCK_MODE_B_LO,
+                    hi=HARDROCK_MODE_B_HI,
+                )
+            except ValueError:
+                continue
+            if not _exposure_ok(trial, stakes, HARDROCK_GAME_CAP_CENTS):
+                continue
+            return [
+                DollarStake(play_id=play.play_id, pool=play.pool, stake_cents=stake)
+                for play, stake in zip(trial, stakes, strict=True)
+            ]
+    raise ValueError("the slate cannot place $25.00 inside the ticket cap and the game cap")
+
+
+def allocate_hardrock_dollars(plays: list[DollarPlay]) -> tuple[str, list[DollarStake]]:
+    """Mode A when the broad template fits. Otherwise Mode B.
+
+    Mode A is 6 checkdown singles at $1.75, 5 core singles at $1.70, and
+    6 same-game slips at $1.00. Mode B spreads $25.00 across 7 to 9 plays
+    with quarter-Kelly weights, each ticket from $2.00 to $4.00.
+    """
+
+    mode_a = _mode_a(plays)
+    if mode_a is not None:
+        return "A", mode_a
+    return "B", _mode_b(plays)

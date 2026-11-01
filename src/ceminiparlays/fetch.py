@@ -10,6 +10,7 @@ from ceminiparlays.io import LineRow, write_csv
 from ceminiparlays.markets import is_td_market
 from ceminiparlays.names import fold_name
 from ceminiparlays.odds import devig_multiway
+from ceminiparlays.book_team import canonical_team
 from ceminiparlays.odds_api import (
     BOOKMAKER_TO_PLATFORM,
     MARKET_TO_STAT,
@@ -59,13 +60,18 @@ def _lookup(name: str, roster: Roster | None):
 
 
 def _team_opp(
-    name: str, home: str, away: str, roster: Roster | None
+    name: str,
+    home: str,
+    away: str,
+    roster: Roster | None,
+    team_by_key: dict[str, str] | None = None,
 ) -> tuple[str, str, str] | None:
     """Resolve ``(player_key, team, opp)`` for a prop row.
 
     ``None`` means the roster knows the player but places them on neither team in
     this game (a stale or corrupt roster entry). The caller drops the row instead
-    of writing a half-populated ``opp`` (A-04).
+    of writing a half-populated ``opp`` (A-04). A player the roster does not know
+    can take a team from ``team_by_key`` when that team is in the event.
     """
 
     found = _lookup(name, roster)
@@ -76,7 +82,13 @@ def _team_opp(
         if team == away:
             return found.player_key, team, home
         return None
-    return fold_name(name), "", ""
+    key = fold_name(name)
+    cached = canonical_team((team_by_key or {}).get(key, ""))
+    if cached == home:
+        return key, cached, away
+    if cached == away:
+        return key, cached, home
+    return key, "", ""
 
 
 def _blank_row(
@@ -298,6 +310,7 @@ def _total_rows(
     platform: str,
     captured_at: str,
     commence_time: str = "",
+    stat_type: str = "total",
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     player_name = f"{away}@{home} total"
@@ -309,7 +322,7 @@ def _total_rows(
             player_key=fold_name(player_name),
             team=home,
             opp=away,
-            stat_type="total",
+            stat_type=stat_type,
             captured_at=captured_at,
             commence_time=commence_time,
         )
@@ -432,6 +445,7 @@ def rows_from_events(
     captured_at: str,
     notes: list[str],
     reference_book: str | None = None,
+    team_by_key: dict[str, str] | None = None,
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     unknown_markets: set[str] = set()
@@ -482,7 +496,7 @@ def rows_from_events(
                         )
                     )
                     continue
-                if stat == "total":
+                if stat in {"total", "total_q3"}:
                     rows.extend(
                         _total_rows(
                             outcomes,
@@ -492,6 +506,7 @@ def rows_from_events(
                             platform=platform,
                             captured_at=captured_at,
                             commence_time=commence_time,
+                            stat_type=stat,
                         )
                     )
                     continue
@@ -512,7 +527,7 @@ def rows_from_events(
                     )
                     continue
                 for player_name, point, over_price, under_price in _pair_two_way(outcomes):
-                    resolved = _team_opp(player_name, home, away, roster)
+                    resolved = _team_opp(player_name, home, away, roster, team_by_key)
                     if resolved is None:
                         notes.append(f"roster-event-mismatch:{player_name}")
                         continue
@@ -531,6 +546,8 @@ def rows_from_events(
                     row["line"] = point
                     row["book_over"] = over_price
                     row["book_under"] = under_price
+                    if stat.endswith(("_q1", "_q2", "_q3", "_q4")):
+                        row["line_type"] = "quarter"
                     rows.append(row)
     _stamp_reference(rows, reference_book)
     return rows

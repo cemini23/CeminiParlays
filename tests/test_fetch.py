@@ -98,6 +98,68 @@ def test_rows_from_fixture_maps_two_way_and_td() -> None:
     assert total["slip_odds"] == ""
 
 
+def test_rows_map_q4_receptions_q3_total_and_cache_team() -> None:
+    event = {
+        "home_team": "Carolina Panthers",
+        "away_team": "Chicago Bears",
+        "commence_time": "2026-10-25T17:00:00Z",
+        "bookmakers": [
+            {
+                "key": "hardrockbet_fl",
+                "markets": [
+                    {
+                        "key": "player_receptions_q4",
+                        "outcomes": [
+                            {"name": "Over", "description": "Kyren Williams", "point": 0.5, "price": -115},
+                            {"name": "Under", "description": "Kyren Williams", "point": 0.5, "price": -105},
+                        ],
+                    },
+                    {
+                        "key": "player_pass_interceptions",
+                        "outcomes": [
+                            {"name": "Over", "description": "Caleb Williams", "point": 0.5, "price": -120},
+                            {"name": "Under", "description": "Caleb Williams", "point": 0.5, "price": 100},
+                        ],
+                    },
+                    {
+                        "key": "totals_q3",
+                        "outcomes": [
+                            {"name": "Over", "point": 7.5, "price": -110},
+                            {"name": "Under", "point": 7.5, "price": -110},
+                        ],
+                    },
+                ],
+            }
+        ],
+    }
+    notes: list[str] = []
+    rows = rows_from_events(
+        [event],
+        platform_filter={"hardrock"},
+        roster=None,
+        slate_id="2026-10-25",
+        captured_at="2026-10-24T12:00:00Z",
+        notes=notes,
+        team_by_key={"kyren_williams": "CHI", "caleb_williams": "CHI"},
+    )
+    catch = next(row for row in rows if row["stat_type"] == "receptions_q4")
+    assert catch["player_key"] == "kyren_williams"
+    assert catch["team"] == "CHI"
+    assert catch["opp"] == "CAR"
+    assert catch["line"] == 0.5
+    assert catch["line_type"] == "quarter"
+    assert catch["book_over"] == -115
+    assert catch["book_under"] == -105
+    picks = next(row for row in rows if row["stat_type"] == "interceptions")
+    assert picks["player_key"] == "caleb_williams"
+    assert picks["line_type"] == "standard"
+    total = next(row for row in rows if row["stat_type"] == "total_q3")
+    assert total["line"] == 7.5
+    assert total["team"] == "CAR"
+    assert total["opp"] == "CHI"
+    assert notes == []
+
+
 def test_write_fetch_csv_refuses_existing(tmp_path: Path) -> None:
     path = tmp_path / "lines.csv"
     path.write_text("already\n", encoding="utf-8")

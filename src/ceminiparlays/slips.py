@@ -629,6 +629,23 @@ def _prediction_combo_multiplier(
     return 1.0 / product, "contract_product"
 
 
+def combo_over_market_cap(combo: tuple, max_legs_per_market: int | None) -> bool:
+    """True when one ``stat_type`` appears more than ``max_legs_per_market`` times.
+
+    ``None`` or any int below 1 is no cap. This is the same rule as compose.
+    """
+
+    if max_legs_per_market is None or max_legs_per_market < 1:
+        return False
+    counts: dict[str, int] = {}
+    for leg in combo:
+        stat = leg.line.stat_type
+        counts[stat] = counts.get(stat, 0) + 1
+        if counts[stat] > max_legs_per_market:
+            return True
+    return False
+
+
 def rank_slips(
     legs: list[EvaluatedLeg],
     platform: str,
@@ -645,6 +662,7 @@ def rank_slips(
     notes: list[str] | None = None,
     allow_unmodeled_correlation: bool = False,
     scores_by_game: dict | None = None,
+    max_legs_per_market: int | None = None,
 ) -> list[EvaluatedSlip]:
     """Enumerate slip_size combinations and rank by a lower-bound EV.
 
@@ -689,6 +707,9 @@ def rank_slips(
     pickem_hurdle: float | None = None
     ranked: list[EvaluatedSlip] = []
     for combo in combinations(live, slip_size):
+        if combo_over_market_cap(combo, max_legs_per_market):
+            notes.append(f"skip market-cap: {_combo_names(combo)}")
+            continue
         refs = [
             LegRef(
                 player_key=leg.line.player_key,
@@ -1009,6 +1030,7 @@ def rank_slip_sizes(
     max_odds: int | None = None,
     allow_unmodeled_correlation: bool = False,
     scores_by_game: dict | None = None,
+    max_legs_per_market: int | None = None,
 ) -> list[EvaluatedSlip]:
     """Rank one or more slip sizes, then apply optional American odds filters."""
 
@@ -1034,6 +1056,7 @@ def rank_slip_sizes(
                 notes=notes,
                 allow_unmodeled_correlation=allow_unmodeled_correlation,
                 scores_by_game=scores_by_game,
+                max_legs_per_market=max_legs_per_market,
             )
         )
     before = len(ranked)

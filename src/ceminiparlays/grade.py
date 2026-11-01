@@ -108,6 +108,7 @@ class GradeSummary:
     promo_value: float = 0.0
     promo_confirmed: bool = True
     net_pnl: float = 0.0
+    hold_tickets: list[str] = field(default_factory=list)
 
 
 def _canonical_discrete(token: str) -> str | None:
@@ -273,6 +274,15 @@ def _leg_outcomes(raw: dict[str, str]) -> tuple[int, int, int]:
     for index, (side, actual_raw, line_raw) in enumerate(
         zip(sides, actual_parts, line_parts, strict=True)
     ):
+        explicit = _EXPLICIT_LEG_STATUS.get(actual_raw.strip().lower())
+        if explicit is not None and not _looks_numeric(actual_raw):
+            if explicit == "HIT":
+                hits += 1
+            elif explicit == "VOID":
+                voids += 1
+            elif explicit == "MISS":
+                misses += 1
+            continue
         actual = _parse_leg_token(actual_raw)
         line = _parse_leg_token(line_raw)
         stat_type = market_parts[index] if index < len(market_parts) else ""
@@ -284,6 +294,80 @@ def _leg_outcomes(raw: dict[str, str]) -> tuple[int, int, int]:
         else:
             misses += 1
     return hits, misses, voids
+
+
+_EXPLICIT_LEG_STATUS = {
+    "miss": "MISS",
+    "loss": "MISS",
+    "lost": "MISS",
+    "void": "VOID",
+    "push": "VOID",
+    "pending": "PENDING",
+    "ungraded": "UNGRADED",
+    "hit": "HIT",
+    "win": "HIT",
+    "won": "HIT",
+}
+
+
+def leg_status_labels(raw: dict[str, str]) -> list[str]:
+    """One status per captured leg: ``HIT``, ``MISS``, ``VOID``, ``PENDING``, ``UNGRADED``.
+
+    An explicit token is read before a numeric grade. A blank actual is
+    ``UNGRADED``. A numeric push is ``VOID``.
+    """
+
+    sides = [part.strip().lower() for part in raw.get("sides", "").split("|") if part.strip()]
+    actual_parts = [part.strip() for part in raw.get("actuals", "").split("|")]
+    line_parts = [part.strip() for part in raw.get("lines", "").split("|")]
+    market_parts = [part.strip() for part in raw.get("market", "").split("|") if part.strip()]
+    if not sides and raw.get("leg_statuses"):
+        return [part.strip().upper() for part in raw["leg_statuses"].split("|") if part.strip()]
+    labels: list[str] = []
+    width = max(len(sides), len(actual_parts), len(line_parts))
+    for index in range(width):
+        actual_raw = actual_parts[index].strip() if index < len(actual_parts) else ""
+        explicit = _EXPLICIT_LEG_STATUS.get(actual_raw.lower())
+        if explicit is not None and not _looks_numeric(actual_raw):
+            labels.append(explicit)
+            continue
+        if not actual_raw:
+            labels.append("UNGRADED")
+            continue
+        side = sides[index] if index < len(sides) else ""
+        line_raw = line_parts[index] if index < len(line_parts) else ""
+        try:
+            actual = _parse_leg_token(actual_raw)
+            line = _parse_leg_token(line_raw)
+        except (TypeError, ValueError):
+            labels.append("UNGRADED")
+            continue
+        stat_type = market_parts[index] if index < len(market_parts) else ""
+        result = _grade_leg(side, actual, line, canonical_ledger_market(stat_type))
+        labels.append({"hit": "HIT", "miss": "MISS", "void": "VOID"}[result])
+    return labels
+
+
+def _looks_numeric(text: str) -> bool:
+    try:
+        float(text)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def ticket_is_lost(labels: list[str]) -> bool:
+    """A single ``MISS`` loses the parlay before a void or a pending leg matters."""
+
+    return any(label == "MISS" for label in labels)
+
+
+def ticket_is_held(labels: list[str]) -> bool:
+    """Hold only when the ticket is not already lost and a leg is still open."""
+
+    if ticket_is_lost(labels):
+        return False
+    return any(label in {"PENDING", "UNGRADED"} for label in labels)
 
 
 def _parse_n_bet_count(raw_n_legs: str, raw_legs: str) -> int | None:
@@ -737,6 +821,7 @@ def grade_ledger(
     book_actuals: list[str] = []
     official_actuals: list[str] = []
     partial_tickets: list[dict[str, object]] = []
+    hold_tickets: list[str] = []
     on_card_pnl = 0.0
     off_card_pnl = 0.0
     on_card_cash_pnl = 0.0
@@ -811,6 +896,17 @@ def grade_ledger(
                     "type the stake or remove the row"
                 )
             stake = float(stake_text)
+            # Width check lives in ``_leg_outcomes``. A short actuals cell
+            # still raises. It is not an open leg.
+            hit_count, miss_count, void_count = _leg_outcomes(raw)
+            labels = leg_status_labels(raw)
+            if ticket_is_held(labels):
+                # A ticket with no miss and an open leg is not a loss and not
+                # a win. Keep it off the settled stake.
+                hold_label = id_label or f"row {row_index}"
+                if hold_label not in hold_tickets:
+                    hold_tickets.append(hold_label)
+                continue
             ticket_id = id_label
             stake_total += stake
             if stake_kind:
@@ -882,7 +978,6 @@ def grade_ledger(
                     f"official_actual={official_actual_raw}"
                 )
             
-            hit_count, miss_count, void_count = _leg_outcomes(raw)
             effective_n_legs = n_bet_count if n_bet_count is not None else captured_legs
             if hit_count == effective_n_legs:
                 hits += 1
@@ -899,6 +994,8 @@ def grade_ledger(
                 players_per_leg = [p.strip() for p in raw.get("legs", "").split("|") if p.strip()]
             
             for i, (side, actual_raw, line_raw) in enumerate(zip(sides, actual_parts, line_parts, strict=True)):
+                if _EXPLICIT_LEG_STATUS.get(actual_raw.strip().lower()) and not _looks_numeric(actual_raw):
+                    continue
                 actual = _parse_leg_token(actual_raw)
                 line = _parse_leg_token(line_raw)
                 player = players_per_leg[i] if i < len(players_per_leg) else f"leg {i+1}"
@@ -945,7 +1042,12 @@ def grade_ledger(
             else:
                 sportsbook = platform in SPORTSBOOK_PLATFORMS
                 row_label = raw.get("legs") or raw.get("slip_id") or f"row {row_index}"
-                if void_count:
+                open_leg = any(label in {"PENDING", "UNGRADED"} for label in labels)
+                # A miss settles before a void or a still-open leg can hold
+                # the ticket. A numeric pick'em push stays on ``_void_payout``.
+                if ticket_is_lost(labels) and (sportsbook or open_leg):
+                    payout = 0.0
+                elif void_count:
                     payout = _void_payout(
                         platform,
                         mode,
@@ -969,6 +1071,16 @@ def grade_ledger(
                     )
                     payout = table.multiplier_for_hits(hit_count)
                 net = stake * (payout - 1.0)
+                boosted = _parse_paid(raw.get("displayed_boosted_payout"))
+                full_win = (
+                    miss_count == 0
+                    and void_count == 0
+                    and hit_count == effective_n_legs
+                    and effective_n_legs > 0
+                )
+                if boosted is not None and boosted > 0.0 and full_win:
+                    net = boosted - stake
+                    payout = (boosted / stake) if stake else 0.0
                 row_pnl += net
                 if stake_kind == "bonus":
                     row_bonus_in += stake
@@ -1039,7 +1151,41 @@ def grade_ledger(
         promo_value=promo_value,
         promo_confirmed=promo_confirmed,
         net_pnl=cash_pnl + promo_value,
+        hold_tickets=hold_tickets,
     )
+
+
+def export_settled_and_hold(
+    source: Path,
+    hold_ids: list[str],
+    ledger_out: Path,
+    hold_out: Path,
+) -> None:
+    """Write settled rows to ``ledger_out`` and open rows to ``hold_out``.
+
+    A lost ticket stays on the settled ledger when another leg is void or
+    pending. Only a ticket id in ``hold_ids`` goes to the hold file.
+    """
+
+    hold = {item.strip() for item in hold_ids if item.strip()}
+    with source.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = list(reader.fieldnames or [])
+        rows = list(reader)
+    settled: list[dict[str, str]] = []
+    held: list[dict[str, str]] = []
+    for index, row in enumerate(rows, start=2):
+        ticket = (row.get("ticket_id") or "").strip() or f"row {index}"
+        if ticket in hold:
+            held.append(row)
+        else:
+            settled.append(row)
+    for path, body in ((ledger_out, settled), (hold_out, held)):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
+            writer.writeheader()
+            writer.writerows(body)
 
 
 def _void_payout(

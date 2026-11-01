@@ -47,6 +47,7 @@ from ceminiparlays.matchup_math import (
     cell_specs,
     defense_multiplier,
     fair_over_prob,
+    full_game_yard_sigma,
     gamma_shape_rate,
     hist_verdict,
     hurdle_over_prob,
@@ -1198,7 +1199,12 @@ def _price_marginal_yards(context, row, market, hist_values, actual, n, field) -
     sd = max(sigma_floor("yards", max(mean, 1.0)), _sd(hist_values) or 0.0)
 
     def prob_at(line: float) -> float | None:
-        return normal_over_prob(line, mean, sd)
+        # Full-game yards use the player RMSE floor. Do not clip the
+        # probability here. The card printer applies the book band.
+        width = sd
+        if market in {"pass_yds", "rush_yds", "rec_yds"}:
+            width = max(sd, full_game_yard_sigma(market, line))
+        return normal_over_prob(line, mean, width)
 
     _record(context, row, market, prob_at, actual, hist_values)
 

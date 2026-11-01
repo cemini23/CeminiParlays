@@ -56,6 +56,7 @@ from ceminiparlays.diff import (
 from ceminiparlays.environment import (
     env_for,
     env_rows_for_games,
+    fill_environment_from_book_lines,
     missing_env_games,
     read_environment,
     write_compose_itt,
@@ -66,7 +67,8 @@ from ceminiparlays.late_active import (
 )
 from ceminiparlays.fair import p_over_line, side_probability
 from ceminiparlays.fetch import load_fixture, rows_from_events, write_fetch_csv
-from ceminiparlays.grade import grade_ledger, write_grade
+from ceminiparlays.grade import export_settled_and_hold, grade_ledger, write_grade
+from ceminiparlays.inactive_gate import check_card_inactives
 from ceminiparlays.jev_gate import (
     append_card_verdict,
     evaluate_gate,
@@ -382,6 +384,23 @@ def build_parser() -> argparse.ArgumentParser:
     rank.add_argument("--distributions", type=Path, required=True)
     rank.add_argument("--out", type=Path, default=Path("runs/edges.csv"))
     rank.add_argument("--report", type=Path, default=None)
+    rank.add_argument(
+        "--n-tickets",
+        type=int,
+        default=None,
+        help="Requested slip count. A shortfall exits 2 unless --allow-fewer is set.",
+    )
+    rank.add_argument(
+        "--max-legs-per-market",
+        type=int,
+        default=None,
+        help="Skip a combo when one stat_type appears more than N times. Omit for no cap.",
+    )
+    rank.add_argument(
+        "--allow-fewer",
+        action="store_true",
+        help="Print COMPOSED_SHORTFALL and exit 0 when the ranked count is below --n-tickets.",
+    )
 
     grade = sub.add_parser("grade", help="Grade a personal ledger")
     _add_common(grade)
@@ -435,6 +454,18 @@ def build_parser() -> argparse.ArgumentParser:
             "(platform, player_key, stat_type, side) and computes CLV."
         ),
     )
+    grade.add_argument(
+        "--ledger-out",
+        type=Path,
+        default=None,
+        help="Write settled rows, including a loss that still has a void or pending leg.",
+    )
+    grade.add_argument(
+        "--hold-out",
+        type=Path,
+        default=None,
+        help="Write tickets that have no miss and still have a pending or ungraded leg.",
+    )
 
     devig = sub.add_parser("devig", help="De-vig a two-way American market")
     devig.add_argument("--over", type=int, required=True)
@@ -461,6 +492,23 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--distributions", type=Path, required=True)
     run.add_argument("--slate-id", default="demo")
     run.add_argument("--out-dir", type=Path, default=None)
+    run.add_argument(
+        "--n-tickets",
+        type=int,
+        default=None,
+        help="Requested slip count. A shortfall exits 2 unless --allow-fewer is set.",
+    )
+    run.add_argument(
+        "--max-legs-per-market",
+        type=int,
+        default=None,
+        help="Skip a combo when one stat_type appears more than N times. Omit for no cap.",
+    )
+    run.add_argument(
+        "--allow-fewer",
+        action="store_true",
+        help="Print COMPOSED_SHORTFALL and exit 0 when the ranked count is below --n-tickets.",
+    )
 
     slate = sub.add_parser(
         "slate", help="Write a fill-in lines CSV from a games file + packaged roster"
@@ -483,6 +531,15 @@ def build_parser() -> argparse.ArgumentParser:
     slate.add_argument("--platform", default="hardrock", choices=PLATFORM_CHOICES)
     slate.add_argument("--slate-id", default=None)
     slate.add_argument("--out", type=Path, default=Path("runs/slate/lines_fill_in.csv"))
+
+    inactive = sub.add_parser(
+        "check-inactives",
+        help="Flag Out, Inactive, or Doubtful legs on a card and entered tickets",
+    )
+    inactive.add_argument("--card", type=Path, required=True)
+    inactive.add_argument("--inactives", type=Path, required=True)
+    inactive.add_argument("--entered", type=Path, default=None)
+    inactive.add_argument("--scratches", type=Path, default=None)
 
     compose = sub.add_parser(
         "compose",
@@ -532,6 +589,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Skip a combo when one stat_type appears more than N times. "
             "--auto uses 2 when this flag is omitted. Pass 0 to turn the cap off."
         ),
+    )
+    compose.add_argument(
+        "--allow-fewer",
+        action="store_true",
+        help="Print COMPOSED_SHORTFALL and exit 0 when composed tickets are below --n-tickets.",
     )
     compose.add_argument(
         "--from-ceminidfs",
@@ -953,6 +1015,9 @@ def _print_command_flags(
     n_tickets: object,
     environment: object,
     handoff: object,
+    max_slips: object = None,
+    max_legs_per_market: object = None,
+    allow_fewer: object = None,
 ) -> None:
     """One stdout line of applied flags before CSV reads."""
 
@@ -963,6 +1028,9 @@ def _print_command_flags(
         f"min_odds={_flag_value(min_odds)} "
         f"max_odds={_flag_value(max_odds)} "
         f"n_tickets={_flag_value(n_tickets)} "
+        f"max_slips={_flag_value(max_slips)} "
+        f"max_legs_per_market={_flag_value(max_legs_per_market)} "
+        f"allow_fewer={_flag_value(allow_fewer)} "
         f"environment={_flag_path(environment)} "
         f"handoff={_flag_path(handoff)}"
     )
@@ -1022,6 +1090,12 @@ def _require_environment_fields(tickets: list, environment: dict) -> None:
                 raise ValueError(
                     f"environment blank implied_total for {label} "
                     f"({leg.line.team}); fill the field or omit --environment"
+                )
+            stat = str(getattr(leg.line, "stat_type", "") or "")
+            if stat in {"receptions_q4", "rec_yds_q4"} and row.spread is None:
+                raise ValueError(
+                    f"environment blank spread for {label} "
+                    f"({leg.line.team} {stat}); script tickets fail closed"
                 )
 
 
@@ -1173,7 +1247,10 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         implied = implied_slip_win(table.all_hit)
         per_leg = breakeven_per_leg(table.all_hit, banner_size)
     roster = None if getattr(args, "no_roster", False) else load_roster(args.roster)
-    environment = read_environment(getattr(args, "environment", None))
+    environment = fill_environment_from_book_lines(
+        read_environment(getattr(args, "environment", None)),
+        lines,
+    )
     live, excluded = evaluate_legs(
         lines,
         dists,
@@ -1266,7 +1343,7 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         seed=args.seed,
         displayed_multiplier=displayed_m,
         profile_dir=args.profile_dir,
-        max_slips=args.max_slips,
+        max_slips=_slip_cap(args),
         allow_large_enum=args.allow_large_enum,
         shade_pp=args.shade_pp,
         notes=notes,
@@ -1276,6 +1353,7 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
             getattr(args, "allow_unmodeled_correlation", False)
         ),
         scores_by_game=scores_by_game,
+        max_legs_per_market=getattr(args, "max_legs_per_market", None),
     )
     for note in notes:
         print(f"  {note}")
@@ -1289,6 +1367,11 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
     print(f"wrote {out_csv}")
     if implied > 0:
         print(f"implied slip win {implied:.4f}; per-leg breakeven {per_leg:.4f}")
+    requested = getattr(args, "n_tickets", None)
+    if requested is not None:
+        code = shortfall_exit(len(slips), int(requested), bool(getattr(args, "allow_fewer", False)))
+        if code is not None:
+            return code
     return 0
 
 
@@ -1300,6 +1383,36 @@ def _print_jev_route(args: argparse.Namespace) -> None:
     print("jev=fail_closed")
 
 
+def shortfall_exit(composed: int, requested: int, allow_fewer: bool) -> int | None:
+    """Exit status when ``composed`` is below ``requested``.
+
+    ``None`` means the count met the request. ``--allow-fewer`` prints the
+    shortfall line and returns 0. Otherwise the exit code is 2.
+    """
+
+    if composed >= requested:
+        return None
+    print(f"COMPOSED_SHORTFALL composed={composed} requested={requested}")
+    return 0 if allow_fewer else 2
+
+
+def _slip_cap(args: argparse.Namespace) -> int:
+    """Slip cap for rank and run.
+
+    The parent default ``--max-slips 25`` must not shrink an explicit
+    ``--n-tickets``. A tighter explicit ``--max-slips`` still caps the list.
+    """
+
+    requested = getattr(args, "n_tickets", None)
+    cap = int(args.max_slips)
+    if requested is None:
+        return cap
+    target = int(requested)
+    if cap == 25:
+        return target
+    return min(cap, target)
+
+
 def _cmd_rank(args: argparse.Namespace) -> int:
     _print_jev_route(args)
     _print_command_flags(
@@ -1307,9 +1420,12 @@ def _cmd_rank(args: argparse.Namespace) -> int:
         markets=getattr(args, "markets", None),
         min_odds=getattr(args, "min_odds", None),
         max_odds=getattr(args, "max_odds", None),
-        n_tickets=getattr(args, "max_slips", None),
+        n_tickets=getattr(args, "n_tickets", None) or getattr(args, "max_slips", None),
         environment=getattr(args, "environment", None),
         handoff="*",
+        max_slips=getattr(args, "max_slips", None),
+        max_legs_per_market=getattr(args, "max_legs_per_market", None),
+        allow_fewer=getattr(args, "allow_fewer", False),
     )
     return _rank_and_write(args, args.out, args.report)
 
@@ -1330,6 +1446,17 @@ def _cmd_grade(args: argparse.Namespace) -> int:
     )
     write_grade(summary, args.out)
     print(json.dumps(summary.__dict__, indent=2))
+    hold_ids = list(getattr(summary, "hold_tickets", []) or [])
+    ledger_out = getattr(args, "ledger_out", None)
+    hold_out = getattr(args, "hold_out", None)
+    if hold_ids or ledger_out is not None or hold_out is not None:
+        if ledger_out is None:
+            ledger_out = Path(args.out).with_name("ledger_settled.csv")
+        if hold_out is None:
+            hold_out = Path(args.out).with_name("ledger_hold.csv")
+        export_settled_and_hold(args.ledger, hold_ids, Path(ledger_out), Path(hold_out))
+        print(f"wrote {ledger_out}")
+        print(f"wrote {hold_out} held={len(hold_ids)}")
     season_ledger = getattr(args, "season_ledger", None)
     if season_ledger:
         legs = collect_legs([args.ledger])
@@ -1412,9 +1539,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
         markets=getattr(args, "markets", None),
         min_odds=getattr(args, "min_odds", None),
         max_odds=getattr(args, "max_odds", None),
-        n_tickets=getattr(args, "max_slips", None),
+        n_tickets=getattr(args, "n_tickets", None) or getattr(args, "max_slips", None),
         environment="*",
         handoff="*",
+        max_slips=getattr(args, "max_slips", None),
+        max_legs_per_market=getattr(args, "max_legs_per_market", None),
+        allow_fewer=getattr(args, "allow_fewer", False),
     )
     out_dir = args.out_dir or Path("runs") / args.slate_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1606,6 +1736,9 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         n_tickets=getattr(args, "n_tickets", None),
         environment=getattr(args, "environment", None),
         handoff=getattr(args, "from_ceminidfs", None),
+        max_slips=getattr(args, "max_slips", None),
+        max_legs_per_market=getattr(args, "max_legs_per_market", None),
+        allow_fewer=getattr(args, "allow_fewer", False),
     )
     captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     strict = getattr(args, "strict", True)
@@ -1721,7 +1854,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         per_leg = 0.0
     dists = read_distributions(args.distributions) if args.distributions else {}
     roster = None if getattr(args, "no_roster", False) else load_roster(args.roster)
-    environment = read_environment(args.environment)
+    environment = fill_environment_from_book_lines(read_environment(args.environment), lines)
     live, excluded = evaluate_legs(
         lines,
         dists,
@@ -1965,9 +2098,14 @@ def _cmd_compose(args: argparse.Namespace) -> int:
             return 2
     if weak_fails:
         return 2
-    # P0: fewer tickets than --n-tickets is a hard fail. Do not pad the card.
-    if len(tickets) != n_tickets:
+    # Fewer tickets than --n-tickets is a hard fail. Do not pad the card.
+    # More tickets than the request is also a fail. --allow-fewer softens
+    # only the short side.
+    if len(tickets) > n_tickets:
         return 2
+    code = shortfall_exit(len(tickets), n_tickets, bool(getattr(args, "allow_fewer", False)))
+    if code is not None:
+        return code
     return 0
 
 
@@ -2323,6 +2461,25 @@ def _cmd_closings(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_check_inactives(args: argparse.Namespace) -> int:
+    hits = check_card_inactives(
+        args.card,
+        args.inactives,
+        entered=getattr(args, "entered", None),
+        scratches=getattr(args, "scratches", None),
+    )
+    if not hits:
+        print(f"inactives-clear card={args.card}")
+        return 0
+    for hit in hits:
+        print(
+            f"INACTIVE {hit.player_name} status={hit.status} source={hit.source} "
+            f"where={hit.where} ticket={hit.ticket_id or '-'} market={hit.market or '-'}"
+        )
+    print(f"inactives-flagged count={len(hits)}")
+    return 2
+
+
 def _cmd_clv(args: argparse.Namespace) -> int:
     report = clv_report(args.ledger, min_legs=args.min_legs)
     if args.json:
@@ -2353,6 +2510,7 @@ def main(argv: list[str] | None = None) -> int:
         "clv": _cmd_clv,
         "jev-gate": _cmd_jev_gate,
         "fetch": _cmd_fetch,
+        "check-inactives": _cmd_check_inactives,
     }
     try:
         return handlers[args.command](args)

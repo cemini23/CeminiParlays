@@ -42,6 +42,17 @@ def test_tua_tagovailoa_is_a_falcon() -> None:
     assert found.team == "ATL"
 
 
+def test_moved_2026_players_match_espn() -> None:
+    roster = load_roster()
+    assert lookup_player(_line("J.J. McCarthy", "NYG"), roster).team == "NYG"
+    assert roster_mismatch(_line("J.J. McCarthy", "MIN"), roster) == "wrong-team"
+    assert lookup_player(_line("Davante Adams", "LAR"), roster).team == "LAR"
+    assert roster_mismatch(_line("Davante Adams", "LV"), roster) == "wrong-team"
+    assert lookup_player(_line("Isiah Pacheco", "DET"), roster).team == "DET"
+    assert roster_mismatch(_line("Isiah Pacheco", "KC"), roster) == "wrong-team"
+    assert lookup_player(_line("Kenneth Walker III", "KC"), roster).team == "KC"
+
+
 def test_unknown_player_passes() -> None:
     roster = load_roster()
     assert roster_mismatch(_line("Brand New Callup", "KC"), roster) is None

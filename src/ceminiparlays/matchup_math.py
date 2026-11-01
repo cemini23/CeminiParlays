@@ -361,6 +361,71 @@ def sigma_floor(kind: str, line: float) -> float:
     raise ValueError(f"unknown sigma kind: {kind}")
 
 
+#: Full-game yardage props. A two-way main line is not a 95 percent proposition.
+FULL_GAME_YARD_MARKETS = frozenset({"pass_yds", "rush_yds", "rec_yds"})
+RUSH_REC_SIGMA_SHARE = 0.38
+RUSH_REC_SIGMA_MIN = 14.0
+PASS_YARD_SIGMA_MIN = 58.0
+BOOK_PROB_BAND = 0.16
+MAIN_LINE_P_LO = 0.18
+MAIN_LINE_P_HI = 0.78
+
+
+def full_game_yard_sigma(market: str, line: float, player_rmse: float | None = None) -> float:
+    """Dispersion floor for a full-game yardage line.
+
+    Rush and receiving yards use ``max(0.38 * line, 14)``. Passing yards use
+    58. A player-level RMSE can only widen that floor.
+    """
+
+    token = str(market or "").strip().lower()
+    posted = abs(float(line))
+    if token == "pass_yds":
+        floor = PASS_YARD_SIGMA_MIN
+    elif token in {"rush_yds", "rec_yds"}:
+        floor = max(RUSH_REC_SIGMA_SHARE * posted, RUSH_REC_SIGMA_MIN)
+    else:
+        raise ValueError(f"not a full-game yardage market: {market}")
+    rmse = 0.0
+    if player_rmse is not None:
+        try:
+            rmse = float(player_rmse)
+        except (TypeError, ValueError):
+            rmse = 0.0
+        if not math.isfinite(rmse) or rmse < 0.0:
+            rmse = 0.0
+    return max(floor, rmse)
+
+
+def clip_main_line_prob(p_raw: float, p_book_fair: float) -> float:
+    """Keep a main-line probability inside the book band and ``[0.18, 0.78]``.
+
+    ``p_model = clip(p_raw, p_book_fair - 0.16, p_book_fair + 0.16)``, then
+    hard-clip to ``[0.18, 0.78]``. ``p_book_fair`` is the vig-stripped
+    probability of the same side as ``p_raw`` (the over, when ``p_raw`` is
+    ``P(stat > line)``).
+    """
+
+    raw = min(1.0, max(0.0, float(p_raw)))
+    fair = min(1.0, max(0.0, float(p_book_fair)))
+    if not math.isfinite(raw) or not math.isfinite(fair):
+        raise ValueError("probability is not finite")
+    banded = min(max(raw, fair - BOOK_PROB_BAND), fair + BOOK_PROB_BAND)
+    return min(max(banded, MAIN_LINE_P_LO), MAIN_LINE_P_HI)
+
+
+def anchored_gamma_shape_rate(
+    market: str,
+    line: float,
+    mean: float,
+    sd: float,
+) -> tuple[float, float]:
+    """Gamma shape and rate with the full-game yardage dispersion floor."""
+
+    widened = max(float(sd), full_game_yard_sigma(market, line))
+    return gamma_shape_rate(mean, widened)
+
+
 def shrunk(n: int, raw: float, league: float) -> float:
     return shrink_share(n, raw, league, SHRINK_K)
 

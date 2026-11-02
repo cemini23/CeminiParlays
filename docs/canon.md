@@ -119,3 +119,9 @@ Quarter receiving yards and quarter rushing yards use a compound Poisson-gamma h
 Regime correlations are stored in `config/matchup_regime_rho.json`. `correlation.py` reads that file only after the full-game prior is missing, and only when a stat is a matchup token. Compose can price a same-game research joint with the Gaussian copula. Compose does not pair one player's receptions and receiving yards in the same quarter. The naive decimal is the product of the single-leg prices. When the largest pair rho is above 0.15 and the price source is `leg_odds_naive`, the research decimal uses the book haircut: vigged independent probability plus 0.55 times the gap to the vigged copula. That decimal is not the displayed SGP price. The print stays unconfirmed. Do not add a stake weight.
 
 The 2026 week-6 slate is unplayed. Model EV is not realized EV. The live Brier columns stay blank. The history Brier is the calibration key.
+
+## C25. The slip screen describes. The operator decides
+
+`ceminiparlays slip-screen` reads a slip the operator pasted into a local file. It returns leg count, market labels, a same-game or same-player flag, and the implied probability of the verbatim parlay price. A risk band is printed only on the same line as its measured exact-match rate from the 200-slip sample. Until that file exists, the band is withheld and the local model stays unwired.
+
+The screen describes a slip. The operator decides. Nothing in this system acts. No output path connects to a bet-submission surface. A request for a gate that blocks or permits placement is outside this command. The Jev gate remains the marker on a composed card. The slip screen does not mark, size, or submit.

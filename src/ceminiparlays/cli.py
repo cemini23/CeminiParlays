@@ -78,6 +78,19 @@ from ceminiparlays.jev_gate import (
     verdict_line,
     write_jev_gate_report,
 )
+from ceminiparlays.slip_annotations import load_annotated
+from ceminiparlays.slip_screen import (
+    MODEL_ID,
+    REQUIRED_N,
+    SAMPLE_DATE,
+    describe_slip,
+    format_accuracy,
+    format_screen,
+    format_withheld,
+    load_accuracy,
+    measure_slips,
+    write_accuracy,
+)
 from ceminiparlays.io import read_distributions, read_games, read_manual_lines, write_csv
 from ceminiparlays.kelly import stake_dollars
 from ceminiparlays.markets import AUTO_MARKETS, parse_markets
@@ -855,6 +868,36 @@ def build_parser() -> argparse.ArgumentParser:
             "block row still exits 2. Default fails closed on all three."
         ),
     )
+
+    screen = sub.add_parser(
+        "slip-screen",
+        help="Describe a pasted slip. The operator decides",
+        description=(
+            "Read slip text from a file the operator saved. "
+            "The screen describes a slip. It returns facts and a risk band. "
+            "The operator decides. Nothing in this system acts. "
+            "No output path connects to a bet-submission surface. "
+            "The local model stays unwired until a 200-slip accuracy file exists."
+        ),
+    )
+    screen.add_argument("--text", type=Path, required=True, help="Pasted slip text. A local file.")
+    screen.add_argument(
+        "--accuracy",
+        type=Path,
+        default=None,
+        help="Accuracy JSON from slip-screen-measure. Required before the model runs.",
+    )
+    measure = sub.add_parser(
+        "slip-screen-measure",
+        help="Measure the local screen on the 200 annotated slips",
+        description=(
+            "Run LiquidAI/d1-2B on the annotated slips and write per-field exact match. "
+            "The model stays on this machine. Slip text is not sent to a remote model. "
+            "This command does not place a bet."
+        ),
+    )
+    measure.add_argument("--annotated", type=Path, required=True, help="The 200-slip JSON file.")
+    measure.add_argument("--out", type=Path, required=True, help="Where to write the accuracy JSON.")
 
     fetch = sub.add_parser(
         "fetch",
@@ -2492,6 +2535,54 @@ def _cmd_clv(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_slip_screen(args: argparse.Namespace) -> int:
+    if args.accuracy is None:
+        print(
+            format_withheld(
+                "Accuracy is not measured. The local model stays unwired."
+            ),
+            end="",
+        )
+        return 2
+    report = load_accuracy(args.accuracy)
+    if not report.allows_risk_band():
+        print(
+            format_withheld(
+                "The accuracy file does not cover 200 slips of LiquidAI/d1-2B "
+                "on the 2026-11-01 sample. The local model stays unwired."
+            ),
+            end="",
+        )
+        return 2
+    text = args.text.read_text(encoding="utf-8")
+    from ceminiparlays.d1_local import load_evaluator
+
+    facts = describe_slip(text, load_evaluator(), report)
+    print(format_screen(facts), end="")
+    return 0
+
+
+def _cmd_slip_screen_measure(args: argparse.Namespace) -> int:
+    slips = load_annotated(args.annotated)
+    if len(slips) != REQUIRED_N:
+        raise ValueError("the annotated set must contain 200 slips")
+    dates = {slip["sample_date"] for slip in slips}
+    if dates != {SAMPLE_DATE}:
+        raise ValueError("the annotated sample date must be 2026-11-01")
+    from ceminiparlays.d1_local import load_evaluator
+
+    report = measure_slips(
+        slips,
+        load_evaluator(),
+        model_id=MODEL_ID,
+        sample_date=SAMPLE_DATE,
+    )
+    write_accuracy(args.out, report)
+    print(format_accuracy(report), end="")
+    print(f"wrote {args.out}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -2509,6 +2600,8 @@ def main(argv: list[str] | None = None) -> int:
         "closings": _cmd_closings,
         "clv": _cmd_clv,
         "jev-gate": _cmd_jev_gate,
+        "slip-screen": _cmd_slip_screen,
+        "slip-screen-measure": _cmd_slip_screen_measure,
         "fetch": _cmd_fetch,
         "check-inactives": _cmd_check_inactives,
     }

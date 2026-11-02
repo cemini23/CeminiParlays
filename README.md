@@ -173,6 +173,21 @@ ceminiparlays jev-gate \
 # Stage 2 shrinks quarter-Kelly by the epistemic confidence.
 # Stage 3 caps total slate exposure and scales every ticket down together.
 
+# Describe a pasted slip. The operator decides. Nothing here acts.
+ceminiparlays slip-screen --text slip.txt
+# Prints the boundary and withholds the risk band.
+# The local model stays unwired until you measure it:
+ceminiparlays slip-screen-measure \
+  --annotated tests/fixtures/slip_screen/annotated.json \
+  --out runs/slip-screen/accuracy.json
+# Needs a local LiquidAI/d1-2B install (transformers>=5.19, torch).
+# Slip text stays on this machine. No slip image is sent.
+# After that file exists:
+ceminiparlays slip-screen --text slip.txt \
+  --accuracy runs/slip-screen/accuracy.json
+# The risk band, when shown, sits beside its exact-match rate.
+# Licence: third_party/LiquidAI-d1-2B/LICENSE (LFM Open License v1.0).
+
 # Optional: perturb the leg-pair correlations from the game state before the copula.
 ceminiparlays rank --platform hardrock \
   --lines runs/2026-w05-sun/lines.csv \

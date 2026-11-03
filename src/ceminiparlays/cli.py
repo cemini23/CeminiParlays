@@ -42,6 +42,7 @@ from ceminiparlays.compose import (
     compose_tickets,
     concentration_warnings,
     drop_unavailable_first_td,
+    multi_leg_duplicates,
     estimate_multiplier,
     player_stat_ticket_counts,
     ticket_rows,
@@ -585,6 +586,16 @@ def build_parser() -> argparse.ArgumentParser:
     compose.add_argument("--max-odds", type=int, default=None)
     compose.add_argument("--n-tickets", type=int, default=5)
     compose.add_argument(
+        "--max-slips",
+        type=int,
+        default=25,
+        help=(
+            "Cap the composed ticket count. The default 25 does not shrink "
+            "--n-tickets. A tighter cap still leaves the shortfall check on "
+            "the requested count."
+        ),
+    )
+    compose.add_argument(
         "--max-exposure-per-player",
         type=int,
         default=None,
@@ -1112,13 +1123,10 @@ def _off_card_filter(
 
 
 def _require_environment_fields(tickets: list, environment: dict) -> None:
-    """Fail loud when a written ticket needs a blank implied_total.
+    """Fail loud when a written ticket has a blank spread or implied total.
 
-    Compose scores on ITT. A blank ``implied_total`` on a ticket game must not
-    produce a card or ``compose_itt.json``. Blank ``spread`` alone is common in
-    operator env files and is not scored here. Only runs when ``--environment``
-    pointed at a present file that yielded rows. A missing file stays a skip.
-    Does not invent numbers.
+    Only runs when ``--environment`` pointed at a present file that yielded
+    rows. A missing file stays a skip. Does not invent numbers.
     """
 
     if not environment or not tickets:
@@ -1134,11 +1142,10 @@ def _require_environment_fields(tickets: list, environment: dict) -> None:
                     f"environment blank implied_total for {label} "
                     f"({leg.line.team}); fill the field or omit --environment"
                 )
-            stat = str(getattr(leg.line, "stat_type", "") or "")
-            if stat in {"receptions_q4", "rec_yds_q4"} and row.spread is None:
+            if row.spread is None:
                 raise ValueError(
                     f"environment blank spread for {label} "
-                    f"({leg.line.team} {stat}); script tickets fail closed"
+                    f"({leg.line.team}); fill the field or omit --environment"
                 )
 
 
@@ -1817,9 +1824,10 @@ def _cmd_compose(args: argparse.Namespace) -> int:
             and american_to_decimal(max_odds) < american_to_decimal(min_odds)
         ):
             min_odds = None
-    n_tickets = args.n_tickets
-    if n_tickets < 1:
+    requested_tickets = int(args.n_tickets)
+    if requested_tickets < 1:
         raise ValueError("--n-tickets must be at least 1")
+    compose_limit = _slip_cap(args)
 
     late_path = getattr(args, "alert_late_active", None)
     if late_path is not None and not Path(late_path).is_file():
@@ -1972,7 +1980,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
 
     tickets = compose_tickets(
         live,
-        n_tickets=n_tickets,
+        n_tickets=compose_limit,
         sizes=sizes,
         min_odds=min_odds,
         max_odds=max_odds,
@@ -1981,9 +1989,14 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         max_legs_per_market=max_legs_per_market,
         allow_high_receiving=bool(getattr(args, "allow_rec_line", False)),
     )
-    # A present --environment file with a blank implied_total on a ticket game
-    # fails before any ticket CSV, card, or compose_itt.json write.
-    # Blank spread is not scored and does not fail this check.
+    dupes = multi_leg_duplicates(tickets)
+    if dupes:
+        print(f"composed={len(tickets)} requested={requested_tickets} out={out_dir}")
+        for item in dupes:
+            print(f"DUPLICATE_LEG {item}")
+        return 2
+    # A present --environment file with a blank implied_total or spread on a
+    # ticket game fails before any ticket CSV, card, or compose_itt.json write.
     if args.environment is not None and Path(args.environment).is_file():
         _require_environment_fields(tickets, environment)
     if args.environment is not None:
@@ -2104,7 +2117,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     payload = _compose_card_payload(
         captured_at=captured_at,
         platform=platform,
-        reason="ok" if len(tickets) == n_tickets else "no-qualifying-legs",
+        reason="ok" if len(tickets) == requested_tickets else "no-qualifying-legs",
         edge_gate=edge_gate,
         min_edge=min_edge,
         tickets=tickets,
@@ -2122,8 +2135,8 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         md_path = Path(card_md)
         if not md_path.is_absolute():
             md_path = out_dir / md_path
-        md_path.write_text(_compose_card_md(tickets), encoding="utf-8")
-    print(f"composed={len(tickets)} requested={n_tickets} out={out_dir}")
+        md_path.write_text(_compose_card_md(tickets, priced_slips), encoding="utf-8")
+    print(f"composed={len(tickets)} requested={requested_tickets} out={out_dir}")
     for warning in concentration_warnings(tickets):
         print(f"warning: {warning}")
     print(card)
@@ -2144,17 +2157,53 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     # Fewer tickets than --n-tickets is a hard fail. Do not pad the card.
     # More tickets than the request is also a fail. --allow-fewer softens
     # only the short side.
-    if len(tickets) > n_tickets:
+    if len(tickets) > requested_tickets:
         return 2
-    code = shortfall_exit(len(tickets), n_tickets, bool(getattr(args, "allow_fewer", False)))
+    code = shortfall_exit(
+        len(tickets),
+        requested_tickets,
+        bool(getattr(args, "allow_fewer", False)),
+    )
     if code is not None:
         return code
     return 0
 
 
-def _compose_card_md(tickets: list) -> str:
-    """Redacted markdown card: legs only. No stake, wallets, or API keys."""
+def _ticket_model_text(ticket: list, slip: object | None) -> str:
+    """Numeric copula probability and the book implied probability.
 
+    The text has no stake and no currency sign.
+    """
+
+    model: float | None = None
+    if slip is not None and getattr(slip, "p_joint", None) is not None:
+        model = float(slip.p_joint)
+    else:
+        product = 1.0
+        for leg in ticket:
+            prob = leg.model_p if leg.model_p is not None else leg.fair_p
+            if prob is None:
+                product = 0.0
+                break
+            product *= float(prob)
+        if ticket and product > 0.0:
+            model = product
+    if model is None:
+        return ""
+    text = f"model prob {model:.4f}"
+    multiplier = getattr(slip, "multiplier", None) if slip is not None else None
+    if multiplier:
+        text = f"{text}; book implied {1.0 / float(multiplier):.4f}"
+    return text
+
+
+def _compose_card_md(tickets: list, slips: dict | None = None) -> str:
+    """Redacted markdown card: legs and numeric model probability.
+
+    No stake, wallets, or API keys.
+    """
+
+    priced = slips or {}
     lines = [
         "# CeminiParlays card",
         "",
@@ -2166,6 +2215,9 @@ def _compose_card_md(tickets: list) -> str:
         return "\n".join(lines) + "\n"
     for index, ticket in enumerate(tickets, start=1):
         lines.append(f"## Ticket {index}")
+        shown = _ticket_model_text(ticket, priced.get(index))
+        if shown:
+            lines.append(shown)
         for leg in ticket:
             line = leg.line
             lines.append(f"- {line.player_name} {line.stat_type} {line.line}")

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Mapping
 
 from ceminiparlays.io import LineRow
-from ceminiparlays.names import fold_name
+from ceminiparlays.names import alias_fold_keys
 from ceminiparlays.resources import read_config_text
 
 TEAM_ALIASES = {
@@ -111,9 +111,9 @@ def lookup_player(line: LineRow, roster: Roster) -> RosterPlayer | None:
     if line.player_key:
         candidates.append(line.player_key)
         candidates.append(roster.aliases.get(line.player_key.lower(), ""))
-    folded = fold_name(line.player_name)
-    candidates.append(folded)
-    candidates.append(roster.aliases.get(folded, ""))
+    for folded in alias_fold_keys(line.player_name):
+        candidates.append(folded)
+        candidates.append(roster.aliases.get(folded, ""))
     candidates.append(roster.aliases.get(line.player_name.strip().lower(), ""))
     for key in candidates:
         if key and key in roster.players:

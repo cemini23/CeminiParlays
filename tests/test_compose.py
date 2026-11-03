@@ -290,8 +290,8 @@ def test_same_game_first_td_stays_skipped_under_market_cap() -> None:
     )
     pairs = {frozenset(leg.line.player_name for leg in ticket) for ticket in tickets}
     assert frozenset({"A TD", "B TD"}) not in pairs
-    assert frozenset({"A TD", "C TD"}) in pairs
-    assert frozenset({"B TD", "C TD"}) in pairs
+    assert len(tickets) == 1
+    assert pairs <= {frozenset({"A TD", "C TD"}), frozenset({"B TD", "C TD"})}
 
 
 def test_estimate_multiplier_from_leg_odds_product() -> None:

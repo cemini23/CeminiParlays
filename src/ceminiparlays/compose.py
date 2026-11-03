@@ -223,6 +223,41 @@ def _score(
     return (primary, itt_total if have_itt else 0.0, fair_total)
 
 
+def _select_disjoint(scored: list, limit: int, blocked: set[tuple[str, str, str]]) -> list:
+    """Pick up to ``limit`` combos that share no leg with each other or ``blocked``.
+
+    ``scored`` is best-first. A one-ticket greedy pack can hide a fuller card,
+    so a short pack retries after it drops the current first combo.
+    """
+
+    def pack(rows: list) -> list:
+        picked: list = []
+        used = set(blocked)
+        seen: set[frozenset[tuple[str, str, str]]] = set()
+        for _score_value, _multiplier, combo in rows:
+            keys = {_leg_key(leg) for leg in combo}
+            signature = frozenset(keys)
+            if signature in seen or keys & used:
+                continue
+            picked.append(combo)
+            seen.add(signature)
+            used |= keys
+            if len(picked) >= limit:
+                break
+        return picked
+
+    best = pack(scored)
+    if len(best) >= limit:
+        return best
+    for start in range(1, min(len(scored), 24)):
+        trial = pack(scored[start:])
+        if len(trial) > len(best):
+            best = trial
+        if len(best) >= limit:
+            break
+    return best
+
+
 def compose_tickets(
     live: list[EvaluatedLeg],
     *,
@@ -237,9 +272,10 @@ def compose_tickets(
 ) -> list[list[EvaluatedLeg]]:
     """Pick up to ``n_tickets`` diversified tickets from ``live``.
 
-    A first pass fills tickets with no shared legs; a second pass lets a card
-    reuse an anchor leg to reach ``n_tickets`` (never a duplicate ticket). Each
-    ticket uses distinct games. Same-game first-TD pairs never rank. When
+    A player prop may sit on at most one multi-leg ticket. A 1-leg ticket may
+    repeat a prop that is already on that one multi-leg ticket, and it may not
+    repeat the prop on a second single. Each ticket uses distinct games.
+    Same-game first-TD pairs never rank. When
     ``max_legs_per_market`` is an int >= 1, a combo where one ``stat_type``
     appears more than that many times is skipped. ``None`` or ``0`` is no cap.
     The odds window uses the best typed estimate (row M → slip_odds → leg_odds
@@ -270,6 +306,8 @@ def compose_tickets(
     candidate_pool = ordered[:COMPOSE_POOL]
     tickets: list[list[EvaluatedLeg]] = []
     chosen: set[frozenset[tuple[str, str, str]]] = set()
+    multi_keys: set[tuple[str, str, str]] = set()
+    single_keys: set[tuple[str, str, str]] = set()
     for size in sizes:
         if len(tickets) >= n_tickets:
             break
@@ -300,27 +338,21 @@ def compose_tickets(
                 item[1],
             )
         )
-        # Pass 1: no leg appears on two tickets (maximum diversification).
-        used: set[tuple[str, str, str]] = set()
-        for _score_value, _multiplier, combo in scored:
-            if len(tickets) >= n_tickets:
-                break
+        # Multi-leg keys are banned across every size. A 1-leg ticket may
+        # share a key with one multi-leg ticket, not with another single.
+        room = n_tickets - len(tickets)
+        blocked = single_keys if size <= 1 else multi_keys
+        for combo in _select_disjoint(scored, room, blocked):
             keys = {_leg_key(leg) for leg in combo}
-            if keys & used:
+            signature = frozenset(keys)
+            if signature in chosen:
                 continue
             tickets.append(list(combo))
-            used |= keys
-            chosen.add(frozenset(keys))
-        # Pass 2: the card is a menu of alternatives, so allow a shared anchor
-        # leg to fill the remaining requested tickets (never a duplicate ticket).
-        for _score_value, _multiplier, combo in scored:
-            if len(tickets) >= n_tickets:
-                break
-            keys = frozenset(_leg_key(leg) for leg in combo)
-            if keys in chosen:
-                continue
-            tickets.append(list(combo))
-            chosen.add(keys)
+            chosen.add(signature)
+            if size <= 1:
+                single_keys |= keys
+            else:
+                multi_keys |= keys
     return tickets
 
 
@@ -344,6 +376,29 @@ def player_stat_ticket_counts(tickets: list[list[EvaluatedLeg]]) -> dict[tuple[s
             seen.add(key)
             counts[key] = counts.get(key, 0) + 1
     return counts
+
+
+def multi_leg_duplicates(tickets: list[list[EvaluatedLeg]]) -> list[str]:
+    """Player props that sit on two multi-leg tickets.
+
+    A 1-leg ticket is ignored. The same prop on two parlays or two SGPs is
+    a duplicate. Different markets are different props.
+    """
+
+    seen: dict[tuple[str, str, str], int] = {}
+    found: list[str] = []
+    for index, ticket in enumerate(tickets, start=1):
+        if len(ticket) < 2:
+            continue
+        for leg in ticket:
+            key = _leg_key(leg)
+            prior = seen.get(key)
+            if prior is None:
+                seen[key] = index
+                continue
+            player, stat, side = key
+            found.append(f"{player} {stat} {side} on ticket {prior} and ticket {index}")
+    return found
 
 
 def concentration_warnings(tickets: list[list[EvaluatedLeg]]) -> list[str]:

@@ -1,6 +1,9 @@
 """Grade a saved card from synthetic play-by-play. Hard Rock history is not read."""
 
-from ceminiparlays.grade_card import LEDGER_COLUMNS, grade_rows, main
+import pytest
+
+from ceminiparlays.grade_card import LEDGER_COLUMNS, archive_card_copies, grade_rows, main
+from ceminiparlays.names import AliasRequiredError
 from ceminiparlays.odds import american_to_decimal
 
 
@@ -156,6 +159,50 @@ def test_full_game_without_quarter_and_q3_total() -> None:
 def test_missing_quarter_on_a_player_row_stays_ungraded() -> None:
     grade = grade_rows([_row()], [{"game_id": "2026_07_GB_DET", "complete_pass": 2}])
     assert grade.legs[0].result == "ungraded"
+
+
+def test_known_alias_grades_the_leg() -> None:
+    play = _catch(4)
+    play["receiver_player_id"] = ""
+    play["receiver_player_name"] = "Kenneth Gainwell"
+    grade = grade_rows([_row(player_name="Kenny Gainwell", gsis_id="")], [play])
+    assert grade.legs[0].result == "win"
+
+
+def test_unique_box_alias_raises_instead_of_void() -> None:
+    row = _row(player_name="K. Walker", gsis_id="", team="SEA", opp="SF", market="receptions_q4")
+    row["position"] = "RB"
+    play = {
+        "game_id": "2026_07_GB_DET",
+        "qtr": 4,
+        "posteam": "SEA",
+        "defteam": "SF",
+        "status": "STATUS_FINAL",
+        "receiver_player_name": "Kenneth Walker III",
+        "position": "RB",
+        "complete_pass": 1,
+    }
+    with pytest.raises(AliasRequiredError) as caught:
+        grade_rows([row], [play])
+    assert caught.value.ticket_name == "K. Walker"
+    assert caught.value.box_name == "Kenneth Walker III"
+    assert "AliasRequiredError" in str(caught.value)
+
+
+def test_archive_copies_the_markdown(tmp_path) -> None:
+    card = tmp_path / "2026-11-01_hardrock_card.csv"
+    card.write_text("ticket_id\nB2\n", encoding="utf-8")
+    doc = tmp_path / "2026-11-01-sunday-hardrock-card.md"
+    doc.write_text("card\n", encoding="utf-8")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    written = archive_card_copies(card, "2026-11-01", workspace=workspace, doc_path=doc)
+    assert len(written) == 4
+    assert written[0].name == "compose_card_2026-11-01.csv"
+    assert written[1].name == "hardrock_card_2026-11-01.csv"
+    assert written[2].name == doc.name
+    assert written[3].name == doc.name
+    assert written[2].read_text(encoding="utf-8") == "card\n"
 
 
 def test_cli_requires_one_source() -> None:

@@ -1,4 +1,4 @@
-"""Book lines fill a blank spread and implied total. A script leg still fails closed."""
+"""Book lines fill a blank spread and implied total. A blank spread still fails closed."""
 
 from pathlib import Path
 
@@ -33,6 +33,8 @@ def test_blank_cells_fill_from_the_book_and_typed_cells_stay(tmp_path: Path) -> 
 
 
 def test_script_market_fails_closed_when_spread_is_blank(tmp_path: Path) -> None:
+    """PA-8: a blank spread fails on every written ticket, including rush yards."""
+
     path = tmp_path / "environment.csv"
     path.write_text(
         "game_id,team,opp,implied_total,spread\nG1,BUF,BAL,24.0,\n",
@@ -48,8 +50,7 @@ def test_script_market_fails_closed_when_spread_is_blank(tmp_path: Path) -> None
     class _Leg:
         line = _Line()
 
-    with pytest.raises(ValueError, match="blank spread"):
-        _require_environment_fields([[_Leg()]], environment)
-
-    _Line.stat_type = "rush_yds"
-    _require_environment_fields([[_Leg()]], environment)
+    for stat in ("receptions_q4", "rush_yds"):
+        _Line.stat_type = stat
+        with pytest.raises(ValueError, match="blank spread"):
+            _require_environment_fields([[_Leg()]], environment)

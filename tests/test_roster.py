@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from ceminiparlays.io import LineRow
 from ceminiparlays.roster import load_roster, lookup_player, normalize_team, roster_mismatch
 from ceminiparlays.slips import evaluate_legs, resolve_slip_sizes
@@ -51,6 +54,19 @@ def test_moved_2026_players_match_espn() -> None:
     assert lookup_player(_line("Isiah Pacheco", "DET"), roster).team == "DET"
     assert roster_mismatch(_line("Isiah Pacheco", "KC"), roster) == "wrong-team"
     assert lookup_player(_line("Kenneth Walker III", "KC"), roster).team == "KC"
+
+
+def test_roster_copies_use_the_2026_team_set() -> None:
+    root = Path(__file__).resolve().parents[1]
+    left = root / "config" / "rosters" / "nfl.json"
+    right = root / "src" / "ceminiparlays" / "data" / "rosters" / "nfl.json"
+    assert left.read_bytes() == right.read_bytes()
+    teams = set(json.loads((root / "config" / "nfl_teams.json").read_text(encoding="utf-8")).values())
+    roster = json.loads(left.read_text(encoding="utf-8"))
+    assert roster["season"] == 2026
+    assert len(teams) == 32
+    for entry in roster["players"].values():
+        assert entry["team"] in teams
 
 
 def test_unknown_player_passes() -> None:

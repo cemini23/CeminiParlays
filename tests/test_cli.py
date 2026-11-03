@@ -792,8 +792,34 @@ def test_rank_non_numeric_line_is_no_line(tmp_path: Path, capsys) -> None:
     assert "dropped Bad Line: no-line" in out
 
 
+def _env_with_present_spreads(tmp_path: Path) -> Path:
+    """Copy the example env and put 0.0 in each blank spread cell.
+
+    The product does not invent a book spread. This fixture only makes the
+    cell present so the five-ticket path can pass the null-spread gate.
+    """
+
+    import csv
+
+    source = ROOT / "examples" / "environment.csv"
+    dest = tmp_path / "environment_spreads.csv"
+    with source.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        rows = list(reader)
+        fieldnames = list(reader.fieldnames or [])
+    for row in rows:
+        if str(row.get("spread") or "").strip() == "":
+            row["spread"] = "0.0"
+    with dest.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+    return dest
+
+
 def test_compose_auto_writes_five_tickets(tmp_path: Path, capsys) -> None:
     out_dir = tmp_path / "compose"
+    env = _env_with_present_spreads(tmp_path)
     code = main(
         [
             "compose",
@@ -802,7 +828,7 @@ def test_compose_auto_writes_five_tickets(tmp_path: Path, capsys) -> None:
             str(ROOT / "examples" / "sunday_lines.csv"),
             "--allow-rec-line",
             "--environment",
-            str(ROOT / "examples" / "environment.csv"),
+            str(env),
             "--out-dir",
             str(out_dir),
         ]
@@ -817,7 +843,7 @@ def test_compose_auto_writes_five_tickets(tmp_path: Path, capsys) -> None:
     assert "do not submit" in out.lower()
     itt = json.loads((out_dir / "compose_itt.json").read_text(encoding="utf-8"))
     assert itt["captured_at"].endswith("Z")
-    assert itt["source"] == "environment.csv"
+    assert itt["source"] == "environment_spreads.csv"
     assert itt["rows"]
     used_games = {
         tuple(sorted({row["team"], row["opp"]}))
@@ -1101,13 +1127,15 @@ def test_compose_max_exposure_exits_two_when_set(tmp_path: Path, capsys) -> None
     ]
     code = main(argv)
     out = capsys.readouterr().out
-    assert code == 0
-    assert "same-family concentration" in out
+    assert code == 2
+    assert "composed=1 requested=2" in out
+    assert "same-family concentration" not in out
 
     code = main([*argv, "--max-exposure-per-player", "1"])
     out = capsys.readouterr().out
     assert code == 2
-    assert "same-family concentration" in out
+    assert "composed=1 requested=2" in out
+    assert "same-family concentration" not in out
 
 
 def test_compose_card_md_is_redacted(tmp_path: Path, capsys) -> None:
@@ -1161,7 +1189,11 @@ def test_compose_auto_window_can_leave_no_tickets(tmp_path: Path, capsys) -> Non
 
 
 def test_compose_n_tickets_undershoot_exits_two(tmp_path: Path, capsys) -> None:
-    """P0: composed < --n-tickets still prints composed= and exits 2."""
+    """P0: composed < --n-tickets still prints composed= and exits 2.
+
+    Three players can fill one 2-leg ticket. A second ticket would reuse a
+    player prop, so the card stops at one and still reports the shortfall.
+    """
 
     lines = tmp_path / "lines.csv"
     lines.write_text(
@@ -1196,12 +1228,12 @@ def test_compose_n_tickets_undershoot_exits_two(tmp_path: Path, capsys) -> None:
     )
     out = capsys.readouterr().out
     assert code == 2
-    assert "composed=2 requested=5" in out
+    assert "composed=1 requested=5" in out
     assert out.splitlines()[0].startswith("flags legs=2")
     assert "n_tickets=5" in out.splitlines()[0]
     assert "environment=-" in out.splitlines()[0]
     assert "handoff=-" in out.splitlines()[0]
-    assert len(list(out_dir.glob("ticket-*.csv"))) == 2
+    assert len(list(out_dir.glob("ticket-*.csv"))) == 1
 
 
 def test_compose_blank_environment_raises_before_writes(tmp_path: Path, capsys) -> None:
@@ -1256,6 +1288,76 @@ def test_compose_blank_environment_raises_before_writes(tmp_path: Path, capsys) 
     assert not list(out_dir.glob("ticket-*.csv"))
     assert "flags " in captured.out
     assert f"environment={env}" in captured.out.splitlines()[0]
+
+
+def test_compose_blank_spread_exits_before_writes(tmp_path: Path, capsys) -> None:
+    lines = tmp_path / "lines.csv"
+    lines.write_text(
+        "slate_id,platform,player_name,player_key,team,opp,stat_type,line,side,"
+        "line_type,captured_at,injury_status,book_over,book_under,leg_odds\n"
+        "s,hardrock,Josh Allen,josh_allen,BUF,MIA,pass_yds,249.5,more,"
+        "standard,,,-110,-110,100\n"
+        "s,hardrock,Saquon Barkley,saquon_barkley,PHI,ATL,rush_yds,89.5,more,"
+        "standard,,,-110,-110,105\n",
+        encoding="utf-8",
+    )
+    env = tmp_path / "environment.csv"
+    env.write_text(
+        "game_id,team,opp,implied_total,spread,roof,weather_exposed,wind_mph,precip_pop\n"
+        "BUF@MIA,BUF,MIA,22.0,,open,true,12,20\n"
+        "BUF@MIA,MIA,BUF,21.0,,open,true,12,20\n"
+        "PHI@ATL,PHI,ATL,23.0,,retractable,false,,\n"
+        "PHI@ATL,ATL,PHI,24.0,,retractable,false,,\n",
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--lines",
+            str(lines),
+            "--platform",
+            "hardrock",
+            "--legs",
+            "2",
+            "--n-tickets",
+            "1",
+            "--no-strict",
+            "--no-roster",
+            "--environment",
+            str(env),
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "blank spread" in captured.err
+    assert not (out_dir / "card.txt").exists()
+    assert not list(out_dir.glob("ticket-*.csv"))
+
+
+def test_compose_max_slips_keeps_the_requested_count(tmp_path: Path, capsys) -> None:
+    out_dir = tmp_path / "compose"
+    code = main(
+        [
+            "compose",
+            "--auto",
+            "--lines",
+            str(ROOT / "examples" / "sunday_lines.csv"),
+            "--allow-rec-line",
+            "--n-tickets",
+            "5",
+            "--max-slips",
+            "2",
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "composed=2 requested=5" in out
+    assert len(list(out_dir.glob("ticket-*.csv"))) == 2
 
 
 def test_bankroll_cli_prints_flat_and_kelly(capsys) -> None:

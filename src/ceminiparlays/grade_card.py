@@ -14,8 +14,10 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ceminiparlays.names import AliasRequiredError, names_match, unique_box_alias
 from ceminiparlays.odds import american_to_decimal
-from ceminiparlays.sunday_card import norm_name
+
+_FINAL_STATUS = {"STATUS_FINAL", "FINAL", "FINAL/OT"}
 
 CORE_LEDGER_COLUMNS = (
     "ticket_id",
@@ -134,13 +136,61 @@ def _points(play: dict) -> float:
     return points
 
 
+def _is_final_play(play: dict) -> bool:
+    """A blank status means the supplied box is final."""
+
+    status = str(play.get("status") or play.get("game_status") or "").strip()
+    if not status:
+        return True
+    token = status.upper().replace(" ", "")
+    return token in _FINAL_STATUS
+
+
 def _same_player(play: dict, id_field: str, name_field: str, leg: dict) -> bool:
     gsis = str(leg.get("gsis_id") or "").strip()
     if gsis and str(play.get(id_field) or "").strip() == gsis:
         return True
-    left = norm_name(str(play.get(name_field) or ""))
-    right = norm_name(str(leg.get("player_name") or ""))
-    return bool(left) and left == right
+    return names_match(str(play.get(name_field) or ""), str(leg.get("player_name") or ""))
+
+
+def _player_in_game(plays: list[dict], leg: dict) -> bool:
+    fields = (
+        ("receiver_player_id", "receiver_player_name"),
+        ("rusher_player_id", "rusher_player_name"),
+        ("passer_player_id", "passer_player_name"),
+    )
+    for play in plays:
+        if not _same_game(play, leg):
+            continue
+        for id_field, name_field in fields:
+            if _same_player(play, id_field, name_field, leg):
+                return True
+    return False
+
+
+def _box_players(plays: list[dict], leg: dict) -> list[dict]:
+    rows: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    fields = (
+        ("receiver_player_name", "receiver_position"),
+        ("rusher_player_name", "rusher_position"),
+        ("passer_player_name", "passer_position"),
+    )
+    for play in plays:
+        if not _same_game(play, leg):
+            continue
+        for name_field, pos_field in fields:
+            name = str(play.get(name_field) or "").strip()
+            if not name:
+                continue
+            position = str(play.get(pos_field) or play.get("position") or "")
+            team = str(play.get("posteam") or "")
+            key = (name, team, position)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append({"name": name, "team": team, "position": position})
+    return rows
 
 
 def _same_game(play: dict, leg: dict) -> bool:
@@ -162,9 +212,10 @@ def actual_stat(plays: list[dict], leg: dict) -> float | None:
     if spec is None:
         return None
     id_field, name_field, value_field, quarter, how = spec
+    usable = [play for play in plays if _is_final_play(play)]
     total = 0.0
     seen = False
-    for play in plays:
+    for play in usable:
         if not _same_game(play, leg):
             continue
         play_quarter = _quarter(play)
@@ -179,6 +230,18 @@ def actual_stat(plays: list[dict], leg: dict) -> float | None:
         total += _num(play, value_field)
         seen = True
     if not seen:
+        if _player_in_game(usable, leg):
+            return None
+        team = str(leg.get("team") or "")
+        position = str(leg.get("position") or "")
+        match = unique_box_alias(
+            str(leg.get("player_name") or ""),
+            team,
+            position,
+            _box_players(usable, leg),
+        )
+        if match:
+            raise AliasRequiredError(str(leg.get("player_name") or ""), match, team, position)
         return None
     return total
 
@@ -293,8 +356,17 @@ def _write_table(path: Path, rows: list[dict[str, str]]) -> None:
         writer.writerows(rows)
 
 
-def archive_card_copies(card_path: Path, slate_date: str, workspace: Path | None = None) -> list[Path]:
-    """Copy a card into the slate and recap folders when ``/workspace`` exists."""
+def archive_card_copies(
+    card_path: Path,
+    slate_date: str,
+    workspace: Path | None = None,
+    doc_path: Path | None = None,
+) -> list[Path]:
+    """Copy a card into the slate and recap folders when ``/workspace`` exists.
+
+    The CSV names stay ``compose_card_{date}.csv`` and ``hardrock_card_{date}.csv``.
+    A markdown path is copied into both folders under its own file name.
+    """
 
     root = workspace if workspace is not None else Path("/workspace")
     if not root.is_dir():
@@ -302,15 +374,24 @@ def archive_card_copies(card_path: Path, slate_date: str, workspace: Path | None
     source = Path(card_path)
     if not source.is_file():
         raise FileNotFoundError(f"card file missing: {source}")
-    targets = [
-        root / "parlays-slate" / slate_date / f"compose_card_{slate_date}.csv",
-        root / "parlays-recap" / slate_date / f"hardrock_card_{slate_date}.csv",
-    ]
     written: list[Path] = []
-    for target in targets:
+    folders = ("parlays-slate", "parlays-recap")
+    csv_names = (
+        f"compose_card_{slate_date}.csv",
+        f"hardrock_card_{slate_date}.csv",
+    )
+    for folder, name in zip(folders, csv_names, strict=True):
+        target = root / folder / slate_date / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
         written.append(target)
+    document = Path(doc_path) if doc_path is not None else None
+    if document is not None and document.is_file():
+        for folder in folders:
+            target = root / folder / slate_date / document.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(document, target)
+            written.append(target)
     return written
 
 
@@ -407,21 +488,35 @@ def plays_from_summary(summary: dict) -> list[dict]:
     """
 
     if "plays" in summary:
-        return [dict(play) for play in summary["plays"]]
+        game_status = str(summary.get("status") or summary.get("game_status") or "")
+        plays = []
+        for play in summary["plays"]:
+            copied = dict(play)
+            if game_status and not copied.get("status") and not copied.get("game_status"):
+                copied["status"] = game_status
+            plays.append(copied)
+        return plays
     plays: list[dict] = []
+    game_status = str(summary.get("status") or summary.get("game_status") or "")
     for player in summary.get("players") or []:
         quarter = player.get("qtr")
+        position = player.get("position") or ""
         play = {
             "game_id": player.get("game_id") or "",
             "qtr": quarter if quarter not in (None, "") else None,
             "posteam": player.get("team") or "",
             "defteam": player.get("opp") or "",
+            "status": player.get("status") or player.get("game_status") or game_status,
+            "position": position,
             "receiver_player_id": player.get("gsis_id") or "",
             "receiver_player_name": player.get("player_name") or player.get("name") or "",
+            "receiver_position": position,
             "rusher_player_id": player.get("gsis_id") or "",
             "rusher_player_name": player.get("player_name") or player.get("name") or "",
+            "rusher_position": position,
             "passer_player_id": player.get("gsis_id") or "",
             "passer_player_name": player.get("player_name") or player.get("name") or "",
+            "passer_position": position,
             "complete_pass": player.get("receptions") or 0,
             "receiving_yards": player.get("rec_yds") or 0,
             "rushing_yards": player.get("rush_yds") or 0,

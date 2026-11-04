@@ -1,0 +1,12 @@
+{
+  "fingerprints": {
+    "clv --ledger examples/ledger_week5.csv": "13e45df56ce0d094e7468066725722a1abfeb929caa4a7326eaba306734fbd88",
+    "clv --ledger examples/ledger_week5_clv.csv": "13e45df56ce0d094e7468066725722a1abfeb929caa4a7326eaba306734fbd88",
+    "clv --ledger examples/ledger_week5_clv.csv --json": "89aee40e80bbbada856a629cae95a0b01e6b27fdbd2d09cb24ba1adf94325e2d",
+    "devig --over -110 --under -110": "8712bc75886e8627f413e6d62069846929422d0c7e5ec6890d87b65dff329611",
+    "grade --ledger examples/ledger.csv": "1e3b93150778ad06bfd2c4c484812e41def85163f07309e1db40cdf30f6728c6",
+    "grade --ledger examples/ledger_week1_hardrock.csv": "387a73d35a0a6655aaf1478fe74501c7b3d456dd15f892e7fe5c34b7afae9199",
+    "rank --lines examples/hardrock_lines.csv --distributions examples/distributions.csv --platform hardrock --mode power --no-strict": "9e36a32411cd157058b875e9f686e33da9230328db2174daa7f4bb2ec8a3d793"
+  },
+  "version": 1
+}

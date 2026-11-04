@@ -526,57 +526,28 @@ def select_legs(
     return chosen, dropped, index
 
 
-def _player_leg(
+def _split_fields(share, period: str, dropped: dict[str, int]):
+    """The period fields, or None when the split is not real."""
+
+    fields = _period_fields(share, period)
+    n, shrunk, league, se, _player_sd = fields
+    if not is_real_split(n, shrunk, league, se):
+        dropped["no_split"] += 1
+        return None
+    return fields
+
+
+def _leg_from_full(
     row: dict[str, str],
     market: str,
-    base: str,
-    period: str,
-    index: _ShareIndex,
-    grouped: dict[tuple[str, str, str, str], list[dict[str, str]]],
+    sigma_base: str,
+    fields,
+    full: dict[str, str] | None,
     dropped: dict[str, int],
 ) -> Leg | None:
-    share = index.player(base, str(row.get("player_name") or ""), str(row.get("player_key") or ""))
-    if share is None:
-        dropped["unmatched"] += 1
-        return None
-    n, shrunk, league, se, player_sd = _period_fields(share, period)
-    if not is_real_split(n, shrunk, league, se):
-        dropped["no_split"] += 1
-        return None
-    full = _one_standard(grouped, str(row.get("commence_time") or ""), base, str(row.get("player_key") or ""))
-    if full is None:
-        dropped["no_full_line"] += 1
-        return None
-    full_line = _parse_float(full.get("line"))
-    posted = _parse_float(row.get("line"))
-    if full_line is None or posted is None:
-        dropped["no_full_line"] += 1
-        return None
-    mean = full_line * shrunk
-    if pick_side(mean, posted) is None:
-        dropped["tie"] += 1
-        return None
-    leg = _make_leg(market, row, mean=mean, sigma=_sigma(base, full_line, posted, player_sd), full_line=full_line)
-    if leg is None:
-        dropped["no_price"] += 1
-    return leg
+    """Scale the full line by the half share and price the leg."""
 
-
-def _team_total_leg(
-    row: dict[str, str],
-    index: _ShareIndex,
-    grouped: dict[tuple[str, str, str, str], list[dict[str, str]]],
-    dropped: dict[str, int],
-) -> Leg | None:
-    share = index.team(str(row.get("team") or ""))
-    if share is None:
-        dropped["unmatched"] += 1
-        return None
-    n, shrunk, league, se, player_sd = _period_fields(share, "h1")
-    if not is_real_split(n, shrunk, league, se):
-        dropped["no_split"] += 1
-        return None
-    full = _team_full_line(grouped, row, "team_total")
+    _n, shrunk, _league, _se, player_sd = fields
     if full is None:
         dropped["no_full_line"] += 1
         return None
@@ -590,15 +561,59 @@ def _team_total_leg(
         dropped["tie"] += 1
         return None
     leg = _make_leg(
-        "team_total_h1",
+        market,
         row,
         mean=mean,
-        sigma=_sigma("team_points", full_line, posted, player_sd),
+        sigma=_sigma(sigma_base, full_line, posted, player_sd),
         full_line=full_line,
     )
     if leg is None:
         dropped["no_price"] += 1
     return leg
+
+
+def _player_leg(
+    row: dict[str, str],
+    market: str,
+    base: str,
+    period: str,
+    index: _ShareIndex,
+    grouped: dict[tuple[str, str, str, str], list[dict[str, str]]],
+    dropped: dict[str, int],
+) -> Leg | None:
+    share = index.player(
+        base, str(row.get("player_name") or ""), str(row.get("player_key") or "")
+    )
+    if share is None:
+        dropped["unmatched"] += 1
+        return None
+    fields = _split_fields(share, period, dropped)
+    if fields is None:
+        return None
+    full = _one_standard(
+        grouped,
+        str(row.get("commence_time") or ""),
+        base,
+        str(row.get("player_key") or ""),
+    )
+    return _leg_from_full(row, market, base, fields, full, dropped)
+
+
+def _team_total_leg(
+    row: dict[str, str],
+    index: _ShareIndex,
+    grouped: dict[tuple[str, str, str, str], list[dict[str, str]]],
+    dropped: dict[str, int],
+) -> Leg | None:
+    share = index.team(str(row.get("team") or ""))
+    if share is None:
+        dropped["unmatched"] += 1
+        return None
+    fields = _split_fields(share, "h1", dropped)
+    if fields is None:
+        return None
+    full = _team_full_line(grouped, row, "team_total")
+    return _leg_from_full(row, "team_total_h1", "team_points", fields, full, dropped)
 
 
 def _game_total_leg(

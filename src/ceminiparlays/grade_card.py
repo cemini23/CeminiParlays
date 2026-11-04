@@ -375,6 +375,49 @@ def archive_card_copies(
     return written
 
 
+#: A typed leg status wins over the play-by-play result.
+_EXPLICIT_RESULTS = {
+    "miss": "loss",
+    "loss": "loss",
+    "win": "win",
+    "hit": "win",
+    "won": "win",
+    "void": "void",
+    "push": "void",
+    "pending": "pending",
+    "ungraded": "ungraded",
+}
+
+
+def _grade_leg_row(
+    row: dict[str, str], plays: list[dict]
+) -> tuple[str, float | None, float | None]:
+    """``(result, actual, model_p)``. A row with no line or model is ungraded."""
+
+    try:
+        line = float(row["line"])
+        model_p = float(row["model_prob"])
+    except (TypeError, ValueError, KeyError):
+        return "ungraded", None, None
+    result = _EXPLICIT_RESULTS.get(str(row.get("leg_status") or "").strip().lower())
+    if result is not None:
+        return result, None, model_p
+    actual = actual_stat(plays, row)
+    if actual is None:
+        return "ungraded", None, model_p
+    return _result(str(row.get("side") or ""), line, actual), actual, model_p
+
+
+def _held(results: list[str]) -> bool:
+    """A ticket with no loss and an open leg waits. It is not settled."""
+
+    if any(str(result).strip().lower() in {"loss", "miss"} for result in results):
+        return False
+    return any(
+        str(result).strip().lower() in {"ungraded", "pending"} for result in results
+    )
+
+
 def grade_rows(rows: list[dict[str, str]], plays: list[dict]) -> CardGrade:
     """Grade ledger rows. ``plays`` are nflverse-shaped dicts or summary rows."""
 
@@ -392,33 +435,7 @@ def grade_rows(rows: list[dict[str, str]], plays: list[dict]) -> CardGrade:
         ordered = sorted(group, key=lambda row: int(float(row.get("leg_num") or 1)))
         results: list[str] = []
         for row in ordered:
-            try:
-                line = float(row["line"])
-                model_p = float(row["model_prob"])
-            except (TypeError, ValueError, KeyError):
-                results.append("ungraded")
-                leg_grades.append(
-                    LegGrade(ticket_id, int(float(row.get("leg_num") or 0)), str(row.get("market") or ""), "ungraded", None, 0.0)
-                )
-                continue
-            actual = None
-            explicit = str(row.get("leg_status") or "").strip().lower()
-            if explicit in {"miss", "loss"}:
-                result = "loss"
-            elif explicit in {"win", "hit", "won"}:
-                result = "win"
-            elif explicit in {"void", "push"}:
-                result = "void"
-            elif explicit in {"pending"}:
-                result = "pending"
-            elif explicit in {"ungraded"}:
-                result = "ungraded"
-            else:
-                actual = actual_stat(plays, row)
-                if actual is None:
-                    result = "ungraded"
-                else:
-                    result = _result(str(row.get("side") or ""), line, actual)
+            result, actual, model_p = _grade_leg_row(row, plays)
             results.append(result)
             leg_grades.append(
                 LegGrade(
@@ -427,17 +444,15 @@ def grade_rows(rows: list[dict[str, str]], plays: list[dict]) -> CardGrade:
                     str(row.get("market") or ""),
                     result,
                     actual,
-                    model_p,
+                    0.0 if model_p is None else model_p,
                 )
             )
             if result in {"win", "loss"}:
                 outcome = 1.0 if result == "win" else 0.0
-                brier_terms.append((model_p - outcome) ** 2)
+                brier_terms.append(((model_p or 0.0) - outcome) ** 2)
         ticket_result, ticket_profit = _ticket_profit(ordered, results)
         tagged = _tag_leg_statuses(ordered, results)
-        if any(str(result).strip().lower() in {"loss", "miss"} for result in results):
-            ledger_rows.extend(tagged)
-        elif any(str(result).strip().lower() in {"ungraded", "pending"} for result in results):
+        if _held(results):
             hold_rows.extend(tagged)
         else:
             ledger_rows.extend(tagged)
@@ -460,6 +475,66 @@ def grade_rows(rows: list[dict[str, str]], plays: list[dict]) -> CardGrade:
     )
 
 
+def _first_value(default, *candidates):
+    """The first non-empty candidate, else ``default``. Type is preserved."""
+
+    for candidate in candidates:
+        if candidate:
+            return candidate
+    return default
+
+
+def _copied_play(play: dict, game_status: str) -> dict:
+    copied = dict(play)
+    if game_status and not copied.get("status") and not copied.get("game_status"):
+        copied["status"] = game_status
+    return copied
+
+
+def _player_play(player: dict, game_status: str) -> dict:
+    """One row that stands in for a player at every skill position."""
+
+    quarter = player.get("qtr")
+    position = _first_value("", player.get("position"))
+    name = _first_value("", player.get("player_name"), player.get("name"))
+    gsis = _first_value("", player.get("gsis_id"))
+    return {
+        "game_id": _first_value("", player.get("game_id")),
+        "qtr": quarter if quarter not in (None, "") else None,
+        "posteam": _first_value("", player.get("team")),
+        "defteam": _first_value("", player.get("opp")),
+        "status": _first_value(
+            "", player.get("status"), player.get("game_status"), game_status
+        ),
+        "position": position,
+        "receiver_player_id": gsis,
+        "receiver_player_name": name,
+        "receiver_position": position,
+        "rusher_player_id": gsis,
+        "rusher_player_name": name,
+        "rusher_position": position,
+        "passer_player_id": gsis,
+        "passer_player_name": name,
+        "passer_position": position,
+        "complete_pass": _first_value(0, player.get("receptions")),
+        "receiving_yards": _first_value(0, player.get("rec_yds")),
+        "rushing_yards": _first_value(0, player.get("rush_yds")),
+        "passing_yards": _first_value(0, player.get("pass_yds")),
+        "interception": _first_value(0, player.get("interceptions")),
+        "points": _first_value(0, player.get("points")),
+    }
+
+
+def _quarter_play(score: dict) -> dict:
+    return {
+        "game_id": _first_value("", score.get("game_id")),
+        "qtr": score.get("qtr"),
+        "posteam": _first_value("", score.get("team")),
+        "defteam": _first_value("", score.get("opp")),
+        "points": _first_value(0, score.get("points")),
+    }
+
+
 def plays_from_summary(summary: dict) -> list[dict]:
     """Normalize an ESPN-style summary or a ``plays`` list into grader plays.
 
@@ -467,54 +542,15 @@ def plays_from_summary(summary: dict) -> list[dict]:
     quarter on the row, or pass play-by-play in ``plays``.
     """
 
+    game_status = str(
+        _first_value("", summary.get("status"), summary.get("game_status"))
+    )
     if "plays" in summary:
-        game_status = str(summary.get("status") or summary.get("game_status") or "")
-        plays = []
-        for play in summary["plays"]:
-            copied = dict(play)
-            if game_status and not copied.get("status") and not copied.get("game_status"):
-                copied["status"] = game_status
-            plays.append(copied)
-        return plays
-    plays: list[dict] = []
-    game_status = str(summary.get("status") or summary.get("game_status") or "")
-    for player in summary.get("players") or []:
-        quarter = player.get("qtr")
-        position = player.get("position") or ""
-        play = {
-            "game_id": player.get("game_id") or "",
-            "qtr": quarter if quarter not in (None, "") else None,
-            "posteam": player.get("team") or "",
-            "defteam": player.get("opp") or "",
-            "status": player.get("status") or player.get("game_status") or game_status,
-            "position": position,
-            "receiver_player_id": player.get("gsis_id") or "",
-            "receiver_player_name": player.get("player_name") or player.get("name") or "",
-            "receiver_position": position,
-            "rusher_player_id": player.get("gsis_id") or "",
-            "rusher_player_name": player.get("player_name") or player.get("name") or "",
-            "rusher_position": position,
-            "passer_player_id": player.get("gsis_id") or "",
-            "passer_player_name": player.get("player_name") or player.get("name") or "",
-            "passer_position": position,
-            "complete_pass": player.get("receptions") or 0,
-            "receiving_yards": player.get("rec_yds") or 0,
-            "rushing_yards": player.get("rush_yds") or 0,
-            "passing_yards": player.get("pass_yds") or 0,
-            "interception": player.get("interceptions") or 0,
-            "points": player.get("points") or 0,
-        }
-        plays.append(play)
-    for score in summary.get("quarters") or []:
-        plays.append(
-            {
-                "game_id": score.get("game_id") or "",
-                "qtr": score.get("qtr"),
-                "posteam": score.get("team") or "",
-                "defteam": score.get("opp") or "",
-                "points": score.get("points") or 0,
-            }
-        )
+        return [_copied_play(play, game_status) for play in summary["plays"]]
+    plays = [
+        _player_play(player, game_status) for player in summary.get("players") or []
+    ]
+    plays.extend(_quarter_play(score) for score in summary.get("quarters") or [])
     return plays
 
 

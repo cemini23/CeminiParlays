@@ -171,16 +171,28 @@ def _person_key(name: str, team: str) -> tuple[str, str]:
     return canonical_team(team), canonical_person(name)
 
 
-def counts_from_plays(
-    plays: list[dict],
-    *,
-    before_week: int | None = None,
-) -> dict[tuple[str, str], UsageBundle]:
-    """Sum targets and rushes from local play-by-play.
+def _play_names(play: dict) -> list[tuple[str, str]]:
+    """The receiver on a pass attempt and the rusher on a rush attempt."""
 
-    The key is ``(team, canonical person)``. ``before_week`` drops that week
-    and every later week when the play has a week number.
-    """
+    names: list[tuple[str, str]] = []
+    if (_finite(play.get("pass_attempt")) or 0.0) > 0.0:
+        receiver = str(play.get("receiver_player_name") or "").strip()
+        if receiver:
+            names.append(("pass", receiver))
+    if (_finite(play.get("rush_attempt")) or 0.0) > 0.0:
+        rusher = str(play.get("rusher_player_name") or "").strip()
+        if rusher:
+            names.append(("rush", rusher))
+    return names
+
+
+def _accumulate(
+    plays: list[dict], before_week: int | None
+) -> tuple[
+    dict[tuple[str, str], dict[str, float]],
+    dict[tuple[tuple[str, str], int], dict[str, float]],
+]:
+    """Season buckets, plus one bucket per person and week."""
 
     season: dict[tuple[str, str], dict[str, float]] = {}
     by_week: dict[tuple[tuple[str, str], int], dict[str, float]] = {}
@@ -192,17 +204,8 @@ def counts_from_plays(
             continue
         week_value = _finite(play.get("week"))
         week = int(week_value) if week_value is not None else None
-        names: list[tuple[str, str]] = []
-        if (_finite(play.get("pass_attempt")) or 0.0) > 0.0:
-            receiver = str(play.get("receiver_player_name") or "").strip()
-            if receiver:
-                names.append(("pass", receiver))
-        if (_finite(play.get("rush_attempt")) or 0.0) > 0.0:
-            rusher = str(play.get("rusher_player_name") or "").strip()
-            if rusher:
-                names.append(("rush", rusher))
         seen: set[tuple[str, str]] = set()
-        for _kind, name in names:
+        for _kind, name in _play_names(play):
             key = _person_key(name, team)
             if key in seen or not key[1]:
                 continue
@@ -213,17 +216,41 @@ def counts_from_plays(
                 week_key = (key, week)
                 by_week.setdefault(week_key, _empty_bucket())
                 _add_play(by_week[week_key], play)
-    bundles: dict[tuple[str, str], UsageBundle] = {}
-    for key, bucket in season.items():
-        recent: QuarterCounts | None = None
-        weeks = sorted(week for (person, week) in by_week if person == key)
-        for week in reversed(weeks):
-            sample = _bucket_counts(by_week[(key, week)])
-            if sample.total_rush_att >= HEAVY_RUSH_ATT:
-                recent = sample
-                break
-        bundles[key] = UsageBundle(season=_bucket_counts(bucket), recent=recent)
-    return bundles
+    return season, by_week
+
+
+def _recent_heavy(
+    by_week: dict[tuple[tuple[str, str], int], dict[str, float]],
+    key: tuple[str, str],
+) -> QuarterCounts | None:
+    """The latest week whose rush count clears the heavy-game bar."""
+
+    weeks = sorted(week for (person, week) in by_week if person == key)
+    for week in reversed(weeks):
+        sample = _bucket_counts(by_week[(key, week)])
+        if sample.total_rush_att >= HEAVY_RUSH_ATT:
+            return sample
+    return None
+
+
+def counts_from_plays(
+    plays: list[dict],
+    *,
+    before_week: int | None = None,
+) -> dict[tuple[str, str], UsageBundle]:
+    """Sum targets and rushes from local play-by-play.
+
+    The key is ``(team, canonical person)``. ``before_week`` drops that week
+    and every later week when the play has a week number.
+    """
+
+    season, by_week = _accumulate(plays, before_week)
+    return {
+        key: UsageBundle(
+            season=_bucket_counts(bucket), recent=_recent_heavy(by_week, key)
+        )
+        for key, bucket in season.items()
+    }
 
 
 def _initial(name: str) -> str:

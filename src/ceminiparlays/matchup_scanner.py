@@ -37,6 +37,47 @@ def _ev(leg: dict[str, str]) -> float:
         return 0.0
 
 
+def _qualified_legs(
+    summaries: list[dict[str, object]], legs: list[dict[str, str]]
+) -> list[dict[str, str]]:
+    """Legs whose market passed both keys and whose EV clears the print bar."""
+
+    passed_set = {
+        str(row["market"]) for row in summaries if row.get("verdict") == "pass"
+    }
+    qualified = [
+        leg
+        for leg in legs
+        if str(leg.get("market")) in passed_set and _ev(leg) >= PRINT_EV
+    ]
+    qualified.sort(key=lambda leg: (-_ev(leg), str(leg.get("player_key"))))
+    return qualified
+
+
+def _jev_label(with_jev: bool, qualified: list[dict[str, str]]) -> str:
+    if with_jev:
+        return jev_route_status(True)
+    if not qualified:
+        return "not_called"
+    return "fail_closed"
+
+
+def _leg_row(leg: dict[str, str]) -> str:
+    return " ".join(
+        [
+            str(leg.get("player_name") or ""),
+            str(leg.get("market") or ""),
+            str(leg.get("side") or ""),
+            str(leg.get("line") or ""),
+            str(leg.get("price") or ""),
+            str(leg.get("ev") or ""),
+            str(leg.get("player_pct") or ""),
+            str(leg.get("def_pct") or ""),
+            str(leg.get("signal") or ""),
+        ]
+    )
+
+
 def format_flags(
     summaries: list[dict[str, object]],
     legs: list[dict[str, str]],
@@ -46,20 +87,7 @@ def format_flags(
     """Qualified legs only. ``ev <= 0`` is never printed."""
 
     passed = [str(row["market"]) for row in summaries if row.get("verdict") == "pass"]
-    passed_set = set(passed)
-    qualified = [
-        leg
-        for leg in legs
-        if str(leg.get("market")) in passed_set and _ev(leg) >= PRINT_EV
-    ]
-    qualified.sort(key=lambda leg: (-_ev(leg), str(leg.get("player_key"))))
-    if with_jev:
-        jev = jev_route_status(True)
-    elif not qualified:
-        jev = "not_called"
-    else:
-        jev = "fail_closed"
-    warned = any(_ev(leg) > WARN_EV for leg in qualified)
+    qualified = _qualified_legs(summaries, legs)
     warn_legs = sum(1 for leg in qualified if _ev(leg) > WARN_EV)
     mismatches = sum(
         1
@@ -69,8 +97,8 @@ def format_flags(
     lines = [
         f"qualified={len(qualified)}",
         "promoted=" + (",".join(passed) if passed else "none"),
-        f"jev={jev}",
-        f"calibration_warning={1 if warned else 0}",
+        f"jev={_jev_label(with_jev, qualified)}",
+        f"calibration_warning={1 if warn_legs else 0}",
         f"warn_legs={warn_legs}",
         f"team_mismatch={mismatches}",
     ]
@@ -78,22 +106,7 @@ def format_flags(
         lines.append("note=no cell cleared both the history key and the live key")
         return "\n".join(lines)
     lines.append("player market side line price ev player_pct def_pct signal")
-    for leg in qualified:
-        lines.append(
-            " ".join(
-                [
-                    str(leg.get("player_name") or ""),
-                    str(leg.get("market") or ""),
-                    str(leg.get("side") or ""),
-                    str(leg.get("line") or ""),
-                    str(leg.get("price") or ""),
-                    str(leg.get("ev") or ""),
-                    str(leg.get("player_pct") or ""),
-                    str(leg.get("def_pct") or ""),
-                    str(leg.get("signal") or ""),
-                ]
-            )
-        )
+    lines.extend(_leg_row(leg) for leg in qualified)
     return "\n".join(lines)
 
 

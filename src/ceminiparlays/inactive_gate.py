@@ -184,6 +184,80 @@ def discover_sidecars(card: Path) -> tuple[Path | None, Path | None]:
     return entered, scratches
 
 
+def _resolve_sidecars(
+    card: Path, entered: Path | None, scratches: Path | None
+) -> tuple[Path | None, Path | None]:
+    """The caller's paths win. Only the missing one is discovered."""
+
+    if entered is not None and scratches is not None:
+        return entered, scratches
+    found_entered, found_scratches = discover_sidecars(card)
+    return (
+        entered if entered is not None else found_entered,
+        scratches if scratches is not None else found_scratches,
+    )
+
+
+def _collect_names(groups: list[tuple[str, list[dict[str, str]]]]) -> list[str]:
+    names: list[str] = []
+    for _where, rows in groups:
+        for row in rows:
+            for name, _key, _gsis in _leg_names(row):
+                if name:
+                    names.append(name)
+    return names
+
+
+def _status_index(
+    inactives: Path, scratch_path: Path | None, names: list[str]
+) -> dict[str, tuple[str, str]]:
+    statuses = load_status_file(inactives)
+    if scratch_path is not None:
+        for key, value in load_scratches(scratch_path, names).items():
+            statuses.setdefault(key, value)
+    return statuses
+
+
+def _match_status(
+    name: str, player_key: str, gsis: str, statuses: dict[str, tuple[str, str]]
+) -> tuple[str, str] | None:
+    for key in _keys_for(name, player_key, gsis):
+        if key in statuses:
+            return statuses[key]
+    return None
+
+
+def _row_hits(
+    where: str,
+    row: dict[str, str],
+    statuses: dict[str, tuple[str, str]],
+    seen: set[tuple[str, str, str, str]],
+) -> list[InactiveHit]:
+    ticket_id = (row.get("ticket_id") or "").strip()
+    market = (row.get("market") or "").strip()
+    hits: list[InactiveHit] = []
+    for name, player_key, gsis in _leg_names(row):
+        matched = _match_status(name, player_key, gsis, statuses)
+        if matched is None:
+            continue
+        status, source = matched
+        token = (where, ticket_id, name or player_key or gsis, market)
+        if token in seen:
+            continue
+        seen.add(token)
+        hits.append(
+            InactiveHit(
+                player_name=name or player_key or gsis,
+                status=status,
+                source=source,
+                ticket_id=ticket_id,
+                market=market,
+                where=where,
+            )
+        )
+    return hits
+
+
 def check_card_inactives(
     card: Path,
     inactives: Path,
@@ -193,54 +267,14 @@ def check_card_inactives(
     """Return one hit for every Out, Inactive, or Doubtful leg."""
 
     card_rows = _read_rows(card)
-    entered_path = entered
-    scratch_path = scratches
-    if entered_path is None or scratch_path is None:
-        found_entered, found_scratches = discover_sidecars(card)
-        if entered_path is None:
-            entered_path = found_entered
-        if scratch_path is None:
-            scratch_path = found_scratches
+    entered_path, scratch_path = _resolve_sidecars(card, entered, scratches)
     groups: list[tuple[str, list[dict[str, str]]]] = [("card", card_rows)]
     if entered_path is not None:
         groups.append(("entered", _read_rows(entered_path)))
-    names: list[str] = []
-    for _where, rows in groups:
-        for row in rows:
-            for name, _key, _gsis in _leg_names(row):
-                if name:
-                    names.append(name)
-    statuses = load_status_file(inactives)
-    if scratch_path is not None:
-        for key, value in load_scratches(scratch_path, names).items():
-            statuses.setdefault(key, value)
+    statuses = _status_index(inactives, scratch_path, _collect_names(groups))
     hits: list[InactiveHit] = []
     seen: set[tuple[str, str, str, str]] = set()
     for where, rows in groups:
         for row in rows:
-            ticket_id = (row.get("ticket_id") or "").strip()
-            market = (row.get("market") or "").strip()
-            for name, player_key, gsis in _leg_names(row):
-                matched: tuple[str, str] | None = None
-                for key in _keys_for(name, player_key, gsis):
-                    if key in statuses:
-                        matched = statuses[key]
-                        break
-                if matched is None:
-                    continue
-                status, source = matched
-                token = (where, ticket_id, name or player_key or gsis, market)
-                if token in seen:
-                    continue
-                seen.add(token)
-                hits.append(
-                    InactiveHit(
-                        player_name=name or player_key or gsis,
-                        status=status,
-                        source=source,
-                        ticket_id=ticket_id,
-                        market=market,
-                        where=where,
-                    )
-                )
+            hits.extend(_row_hits(where, row, statuses, seen))
     return hits

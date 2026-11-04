@@ -310,6 +310,33 @@ _EXPLICIT_LEG_STATUS = {
 }
 
 
+def _leg_label(
+    index: int,
+    sides: list[str],
+    actual_parts: list[str],
+    line_parts: list[str],
+    market_parts: list[str],
+) -> str:
+    """One leg: an explicit token first, then the numeric grade."""
+
+    actual_raw = actual_parts[index].strip() if index < len(actual_parts) else ""
+    explicit = _EXPLICIT_LEG_STATUS.get(actual_raw.lower())
+    if explicit is not None and not _looks_numeric(actual_raw):
+        return explicit
+    if not actual_raw:
+        return "UNGRADED"
+    side = sides[index] if index < len(sides) else ""
+    line_raw = line_parts[index] if index < len(line_parts) else ""
+    try:
+        actual = _parse_leg_token(actual_raw)
+        line = _parse_leg_token(line_raw)
+    except (TypeError, ValueError):
+        return "UNGRADED"
+    stat_type = market_parts[index] if index < len(market_parts) else ""
+    result = _grade_leg(side, actual, line, canonical_ledger_market(stat_type))
+    return {"hit": "HIT", "miss": "MISS", "void": "VOID"}[result]
+
+
 def leg_status_labels(raw: dict[str, str]) -> list[str]:
     """One status per captured leg: ``HIT``, ``MISS``, ``VOID``, ``PENDING``, ``UNGRADED``.
 
@@ -317,35 +344,27 @@ def leg_status_labels(raw: dict[str, str]) -> list[str]:
     ``UNGRADED``. A numeric push is ``VOID``.
     """
 
-    sides = [part.strip().lower() for part in raw.get("sides", "").split("|") if part.strip()]
+    sides = [
+        part.strip().lower()
+        for part in raw.get("sides", "").split("|")
+        if part.strip()
+    ]
     actual_parts = [part.strip() for part in raw.get("actuals", "").split("|")]
     line_parts = [part.strip() for part in raw.get("lines", "").split("|")]
-    market_parts = [part.strip() for part in raw.get("market", "").split("|") if part.strip()]
+    market_parts = [
+        part.strip() for part in raw.get("market", "").split("|") if part.strip()
+    ]
     if not sides and raw.get("leg_statuses"):
-        return [part.strip().upper() for part in raw["leg_statuses"].split("|") if part.strip()]
-    labels: list[str] = []
+        return [
+            part.strip().upper()
+            for part in raw["leg_statuses"].split("|")
+            if part.strip()
+        ]
     width = max(len(sides), len(actual_parts), len(line_parts))
-    for index in range(width):
-        actual_raw = actual_parts[index].strip() if index < len(actual_parts) else ""
-        explicit = _EXPLICIT_LEG_STATUS.get(actual_raw.lower())
-        if explicit is not None and not _looks_numeric(actual_raw):
-            labels.append(explicit)
-            continue
-        if not actual_raw:
-            labels.append("UNGRADED")
-            continue
-        side = sides[index] if index < len(sides) else ""
-        line_raw = line_parts[index] if index < len(line_parts) else ""
-        try:
-            actual = _parse_leg_token(actual_raw)
-            line = _parse_leg_token(line_raw)
-        except (TypeError, ValueError):
-            labels.append("UNGRADED")
-            continue
-        stat_type = market_parts[index] if index < len(market_parts) else ""
-        result = _grade_leg(side, actual, line, canonical_ledger_market(stat_type))
-        labels.append({"hit": "HIT", "miss": "MISS", "void": "VOID"}[result])
-    return labels
+    return [
+        _leg_label(index, sides, actual_parts, line_parts, market_parts)
+        for index in range(width)
+    ]
 
 
 def _looks_numeric(text: str) -> bool:

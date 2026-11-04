@@ -114,6 +114,37 @@ def _regime_pair_rho(stat_a: str, stat_b: str, regime: str) -> float | None:
     return None
 
 
+def _same_prop_rho(a: LegRef, b: LegRef) -> float | None:
+    """The same prop on both sides is perfectly anti-correlated."""
+
+    if a.player_key != b.player_key or a.stat_type != b.stat_type:
+        return None
+    return 1.0 if _side_sign(a.side) == _side_sign(b.side) else -1.0
+
+
+def _same_game_raw(
+    a: LegRef,
+    b: LegRef,
+    priors: dict,
+    same_team: bool,
+    opp: bool,
+    regime: str,
+) -> float | None:
+    """The unsigned prior for a same-game pair, or None when none is recorded."""
+
+    want = tuple(sorted((a.stat_type, b.stat_type)))
+    if a.player_key and a.player_key == b.player_key:
+        raw = _lookup_rho(priors.get("same_player", []), want)
+        if raw is not None:
+            return raw
+    raw = _lookup_rho(priors.get("pairs", []), want, team=same_team, opp=opp)
+    if raw is not None:
+        return raw
+    if a.stat_type in MATCHUP_STATS or b.stat_type in MATCHUP_STATS:
+        return _regime_pair_rho(a.stat_type, b.stat_type, regime)
+    return None
+
+
 def _pair_rho(
     a: LegRef,
     b: LegRef,
@@ -121,35 +152,25 @@ def _pair_rho(
     allow_unmodeled: bool = False,
     regime: str = "neutral",
 ) -> float:
-    if a.player_key == b.player_key and a.stat_type == b.stat_type:
-        if _side_sign(a.side) == _side_sign(b.side):
-            return 1.0
-        return -1.0
+    same_prop = _same_prop_rho(a, b)
+    if same_prop is not None:
+        return same_prop
     same_team = _same_team(a, b)
     opp = _opponents(a, b)
     if not same_team and not opp:
         raw = float(priors.get("default_cross_game", 0.0))
         return raw * _side_sign(a.side) * _side_sign(b.side)
 
-    want = tuple(sorted((a.stat_type, b.stat_type)))
-    same_player = bool(a.player_key and a.player_key == b.player_key)
-    raw = None
-    if same_player:
-        raw = _lookup_rho(priors.get("same_player", []), want)
+    raw = _same_game_raw(a, b, priors, same_team, opp, regime)
     if raw is None:
-        raw = _lookup_rho(priors.get("pairs", []), want, team=same_team, opp=opp)
-    if raw is None and (a.stat_type in MATCHUP_STATS or b.stat_type in MATCHUP_STATS):
-        raw = _regime_pair_rho(a.stat_type, b.stat_type, regime)
-    if raw is None:
-        if allow_unmodeled:
-            raw = 0.08 if same_team else 0.05
-        else:
+        if not allow_unmodeled:
             # A same-game pair with no explicit prior would otherwise be priced
             # from a made-up default and misprice the ticket (A-03). Refuse it.
             raise UnmodeledCorrelationError(
                 f"no correlation prior for {a.stat_type}/{b.stat_type} "
                 f"({'same_team' if same_team else 'opponents'})"
             )
+        raw = 0.08 if same_team else 0.05
     return raw * _side_sign(a.side) * _side_sign(b.side)
 
 

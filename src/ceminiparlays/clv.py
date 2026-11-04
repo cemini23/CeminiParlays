@@ -303,6 +303,32 @@ def _verdict(n_legs: int, mean_pp: float, t_stat: float, min_legs: int) -> str:
     return "KEEP COLLECTING"
 
 
+def _t_and_p(mean: float, stdev: float, n_legs: int) -> tuple[float, float]:
+    """The t statistic and its one-sided p. Too few legs gives a sign only."""
+
+    if n_legs >= 2 and stdev > 0.0:
+        t_stat = mean / (stdev / math.sqrt(n_legs))
+        return t_stat, student_t_sf(t_stat, n_legs - 1)
+    if mean > 0.0:
+        return 0.0, 0.0
+    if mean < 0.0:
+        return 0.0, 1.0
+    return 0.0, 0.5
+
+
+def _basis_summary(legs: list[LegCLV]) -> tuple[str, dict[str, int]]:
+    """``same_book``, ``reference``, or ``mixed``, with the counts behind it."""
+
+    counts: dict[str, int] = {SAME_BOOK: 0, REFERENCE: 0}
+    for leg in legs:
+        counts[leg.basis] = counts.get(leg.basis, 0) + 1
+    if counts.get(REFERENCE, 0) and counts.get(SAME_BOOK, 0):
+        return "mixed", counts
+    if counts.get(REFERENCE, 0):
+        return REFERENCE, counts
+    return SAME_BOOK, counts
+
+
 def summarize(
     legs: list[LegCLV],
     *,
@@ -316,23 +342,10 @@ def summarize(
     mean = statistics.fmean(values) if values else 0.0
     median = statistics.median(values) if values else 0.0
     stdev = statistics.stdev(values) if n_legs >= 2 else 0.0
-    if n_legs >= 2 and stdev > 0.0:
-        t_stat = mean / (stdev / math.sqrt(n_legs))
-        p_value = student_t_sf(t_stat, n_legs - 1)
-    else:
-        t_stat = 0.0
-        p_value = 0.0 if mean > 0.0 else (1.0 if mean < 0.0 else 0.5)
+    t_stat, p_value = _t_and_p(mean, stdev, n_legs)
     mean_pp = mean * PP
     verdict = _verdict(n_legs, mean_pp, t_stat, min_legs)
-    basis_counts: dict[str, int] = {SAME_BOOK: 0, REFERENCE: 0}
-    for leg in legs:
-        basis_counts[leg.basis] = basis_counts.get(leg.basis, 0) + 1
-    if basis_counts.get(REFERENCE, 0) and basis_counts.get(SAME_BOOK, 0):
-        basis = "mixed"
-    elif basis_counts.get(REFERENCE, 0):
-        basis = REFERENCE
-    else:
-        basis = SAME_BOOK
+    basis, basis_counts = _basis_summary(legs)
     return {
         "n_legs": n_legs,
         "min_legs": min_legs,

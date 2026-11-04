@@ -258,6 +258,86 @@ def _select_disjoint(scored: list, limit: int, blocked: set[tuple[str, str, str]
     return best
 
 
+def _high_receiving_barred(leg: EvaluatedLeg, allow_high_receiving: bool) -> bool:
+    if allow_high_receiving:
+        return False
+    if (leg.line.stat_type or "").strip().lower() != "rec_yds":
+        return False
+    return leg.line.line >= 50
+
+
+def _compose_pool(
+    live: list[EvaluatedLeg],
+    markets: list[str] | None,
+    environment: Environment | None,
+    allow_high_receiving: bool,
+) -> list[EvaluatedLeg]:
+    """The legs this call may use: the market filter, the env bar, the rec bar."""
+
+    market_set = set(markets) if markets else None
+    skip_games = bool(market_set) and market_set.isdisjoint(GAME_STATS)
+    pool: list[EvaluatedLeg] = []
+    for leg in live:
+        if market_set is not None and leg.line.stat_type not in market_set:
+            continue
+        if skip_games and leg.line.stat_type in GAME_STATS:
+            continue
+        if not first_td_available(environment, leg):
+            continue
+        if _high_receiving_barred(leg, allow_high_receiving):
+            continue
+        pool.append(leg)
+    return pool
+
+
+def _combo_is_legal(combo, size: int, max_legs_per_market: int | None) -> bool:
+    """Distinct props, distinct games, no same-game first-TD pair, under the cap."""
+
+    if len({_leg_key(leg) for leg in combo}) < size:
+        return False
+    if len({_game_key(leg) for leg in combo}) < size:
+        return False
+    first_tds = [leg for leg in combo if is_first_td(leg.line.stat_type)]
+    if len(first_tds) > 1 and len({_game_key(leg) for leg in first_tds}) < len(
+        first_tds
+    ):
+        return False
+    return not _over_market_cap(combo, max_legs_per_market)
+
+
+def _scored_combos(
+    candidate_pool: list[EvaluatedLeg],
+    size: int,
+    environment: Environment | None,
+    min_odds: int | None,
+    max_odds: int | None,
+    max_legs_per_market: int | None,
+) -> list[tuple[tuple[float, float, float], float, tuple[EvaluatedLeg, ...]]]:
+    """Every legal, priced, in-window combo at one size, best first."""
+
+    scored: list[
+        tuple[tuple[float, float, float], float, tuple[EvaluatedLeg, ...]]
+    ] = []
+    for combo in combinations(candidate_pool, size):
+        if not _combo_is_legal(combo, size, max_legs_per_market):
+            continue
+        multiplier, _source, _unconfirmed = estimate_multiplier(list(combo))
+        if multiplier is None or multiplier <= 1.0:
+            continue
+        if not _in_window(multiplier, min_odds, max_odds):
+            continue
+        scored.append((_score(list(combo), environment), multiplier, combo))
+    scored.sort(
+        key=lambda item: (
+            -item[0][0],
+            -item[0][1],
+            -item[0][2],
+            item[1],
+        )
+    )
+    return scored
+
+
 def compose_tickets(
     live: list[EvaluatedLeg],
     *,
@@ -286,20 +366,7 @@ def compose_tickets(
 
     if n_tickets < 1:
         raise ValueError("n_tickets must be at least 1")
-    market_set = set(markets) if markets else None
-    skip_games = bool(market_set) and market_set.isdisjoint(GAME_STATS)
-    pool = [
-        leg
-        for leg in live
-        if (market_set is None or leg.line.stat_type in market_set)
-        and not (skip_games and leg.line.stat_type in GAME_STATS)
-        and first_td_available(environment, leg)
-        and (
-            allow_high_receiving
-            or (leg.line.stat_type or "").strip().lower() != "rec_yds"
-            or leg.line.line < 50
-        )
-    ]
+    pool = _compose_pool(live, markets, environment, allow_high_receiving)
     if not pool:
         return []
     ordered = sorted(pool, key=lambda leg: _score([leg], environment), reverse=True)
@@ -313,30 +380,8 @@ def compose_tickets(
             break
         if size < 1:
             raise ValueError("leg count must be >= 1")
-        scored: list[tuple[tuple[float, float, float], float, tuple[EvaluatedLeg, ...]]] = []
-        for combo in combinations(candidate_pool, size):
-            if len({_leg_key(leg) for leg in combo}) < size:
-                continue
-            if len({_game_key(leg) for leg in combo}) < size:
-                continue
-            first_tds = [leg for leg in combo if is_first_td(leg.line.stat_type)]
-            if len(first_tds) > 1 and len({_game_key(leg) for leg in first_tds}) < len(first_tds):
-                continue
-            if _over_market_cap(combo, max_legs_per_market):
-                continue
-            multiplier, _source, _unconfirmed = estimate_multiplier(list(combo))
-            if multiplier is None or multiplier <= 1.0:
-                continue
-            if not _in_window(multiplier, min_odds, max_odds):
-                continue
-            scored.append((_score(list(combo), environment), multiplier, combo))
-        scored.sort(
-            key=lambda item: (
-                -item[0][0],
-                -item[0][1],
-                -item[0][2],
-                item[1],
-            )
+        scored = _scored_combos(
+            candidate_pool, size, environment, min_odds, max_odds, max_legs_per_market
         )
         # Multi-leg keys are banned across every size. A 1-leg ticket may
         # share a key with one multi-leg ticket, not with another single.
@@ -537,17 +582,8 @@ def joint_ticket(marginals: list[float], prices: list[int], corr) -> dict[str, o
     }
 
 
-def rank_same_game(legs: list[dict], *, regime: str = "neutral") -> list[dict]:
-    """Price same-game pairs and same-player triples.
-
-    Cross-game combos stay on ``compose_tickets``. A pair with no regime
-    prior is skipped. Three-leg tickets are same-player only, because
-    cross-player rho was not estimated. A same-player receptions prop and
-    receiving-yards prop in one quarter are skipped. Sort is the
-    tax-adjusted SGP EV.
-    """
-
-    from ceminiparlays.correlation import LegRef, UnmodeledCorrelationError, correlation_matrix
+def _group_priced_legs(legs: list[dict]) -> dict[frozenset[str], list[dict]]:
+    """One bucket per game. A leg with no team, no price, or no model is out."""
 
     grouped: dict[frozenset[str], list[dict]] = {}
     for leg in legs:
@@ -563,51 +599,91 @@ def rank_same_game(legs: list[dict], *, regime: str = "neutral") -> list[dict]:
         if price == 0 or not math.isfinite(prob):
             continue
         grouped.setdefault(frozenset({team, opp}), []).append(leg)
+    return grouped
+
+
+def _same_game_combos(ordered: list[dict]) -> list[tuple[dict, ...]]:
+    """Every pair, plus the triples that share one player."""
+
+    combos: list[tuple[dict, ...]] = list(combinations(ordered, 2))
+    by_player: dict[str, list[dict]] = {}
+    for leg in ordered:
+        by_player.setdefault(str(leg.get("player_key") or ""), []).append(leg)
+    for player, rows in by_player.items():
+        if not player or len(rows) < 3:
+            continue
+        combos.extend(combinations(rows, 3))
+    return combos
+
+
+def _same_game_ticket(combo: tuple[dict, ...], regime: str) -> dict | None:
+    """A priced same-game ticket, or None when the combo cannot be priced."""
+
+    from ceminiparlays.correlation import (
+        LegRef,
+        UnmodeledCorrelationError,
+        correlation_matrix,
+    )
+
+    identity = {(str(leg.get("player_key")), str(leg.get("market"))) for leg in combo}
+    if len(identity) < len(combo):
+        return None
+    if any(
+        redundant_quarter_pair(left, right)
+        for left, right in combinations(combo, 2)
+    ):
+        return None
+    refs = [
+        LegRef(
+            player_key=str(leg.get("player_key") or ""),
+            team=str(leg.get("team") or ""),
+            opponent=str(leg.get("opp") or ""),
+            stat_type=str(leg.get("market") or ""),
+            side=str(leg.get("side") or ""),
+        )
+        for leg in combo
+    ]
+    try:
+        corr = correlation_matrix(refs, regime=regime)
+    except UnmodeledCorrelationError:
+        return None
+    try:
+        ticket = joint_ticket(
+            [float(leg["model_p"]) for leg in combo],
+            [int(float(leg["price"])) for leg in combo],
+            corr,
+        )
+    except (TypeError, ValueError):
+        return None
+    ticket["legs"] = list(combo)
+    ticket["n_legs"] = len(combo)
+    return ticket
+
+
+def rank_same_game(legs: list[dict], *, regime: str = "neutral") -> list[dict]:
+    """Price same-game pairs and same-player triples.
+
+    Cross-game combos stay on ``compose_tickets``. A pair with no regime
+    prior is skipped. Three-leg tickets are same-player only, because
+    cross-player rho was not estimated. A same-player receptions prop and
+    receiving-yards prop in one quarter are skipped. Sort is the
+    tax-adjusted SGP EV.
+    """
+
     priced: list[dict] = []
-    for game_legs in grouped.values():
+    for game_legs in _group_priced_legs(legs).values():
         ordered = sorted(
             game_legs,
-            key=lambda item: (str(item.get("player_key")), str(item.get("market")), str(item.get("side"))),
+            key=lambda item: (
+                str(item.get("player_key")),
+                str(item.get("market")),
+                str(item.get("side")),
+            ),
         )
-        combos: list[tuple[dict, ...]] = list(combinations(ordered, 2))
-        by_player: dict[str, list[dict]] = {}
-        for leg in ordered:
-            by_player.setdefault(str(leg.get("player_key") or ""), []).append(leg)
-        for player, rows in by_player.items():
-            if not player or len(rows) < 3:
-                continue
-            combos.extend(combinations(rows, 3))
-        for combo in combos:
-            identity = {(str(leg.get("player_key")), str(leg.get("market"))) for leg in combo}
-            if len(identity) < len(combo):
-                continue
-            if any(redundant_quarter_pair(left, right) for left, right in combinations(combo, 2)):
-                continue
-            refs = [
-                LegRef(
-                    player_key=str(leg.get("player_key") or ""),
-                    team=str(leg.get("team") or ""),
-                    opponent=str(leg.get("opp") or ""),
-                    stat_type=str(leg.get("market") or ""),
-                    side=str(leg.get("side") or ""),
-                )
-                for leg in combo
-            ]
-            try:
-                corr = correlation_matrix(refs, regime=regime)
-            except UnmodeledCorrelationError:
-                continue
-            try:
-                ticket = joint_ticket(
-                    [float(leg["model_p"]) for leg in combo],
-                    [int(float(leg["price"])) for leg in combo],
-                    corr,
-                )
-            except (TypeError, ValueError):
-                continue
-            ticket["legs"] = list(combo)
-            ticket["n_legs"] = len(combo)
-            priced.append(ticket)
+        for combo in _same_game_combos(ordered):
+            ticket = _same_game_ticket(combo, regime)
+            if ticket is not None:
+                priced.append(ticket)
     priced.sort(
         key=lambda item: (
             -float(item["tax_adjusted_sgp_ev"]),

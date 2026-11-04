@@ -379,6 +379,239 @@ def _american_ok(odds: int | None) -> bool:
         return False
 
 
+def _time_reason(
+    line: LineRow, reference_now: datetime, max_age: float | None
+) -> str | None:
+    kick = _parse_utc(line.commence_time)
+    if kick is not None and reference_now >= kick:
+        return "already-kicked"
+    if max_age is None:
+        return None
+    captured = _parse_utc(line.captured_at)
+    if captured is None:
+        return None
+    age_minutes = (reference_now - captured).total_seconds() / 60.0
+    return "stale-line" if age_minutes > max_age else None
+
+
+def _shape_reason(line: LineRow, td_priced: bool) -> str | None:
+    """A blank team, or a blank line on a leg that needs a real one."""
+
+    if not line.team or not line.opponent:
+        return "no-team"
+    if not isnan(line.line):
+        return None
+    if not (td_priced or line.contract_price is not None):
+        return "no-line"
+    # TD props and prediction contracts have no yard line; 0.5 is a display
+    # dummy, never priced.
+    line.line = NO_LINE_DUMMY
+    return None
+
+
+def _line_rules(line: LineRow, allow_high_receiving: bool) -> str | None:
+    if (
+        not allow_high_receiving
+        and (line.stat_type or "").strip().lower() == "rec_yds"
+        and line.line >= 50
+    ):
+        return "rec-line-bar"
+    if line.book_line is not None and abs(line.book_line - line.line) > 1e-9:
+        return "book-line-mismatch"
+    if (line.book_over is None) != (line.book_under is None):
+        return "one-sided-book"
+    return None
+
+
+def _no_source_reason(
+    line: LineRow, dist: DistRow | None, td_priced: bool
+) -> str | None:
+    """A leg with no model, no book, and no typed price carries nothing."""
+
+    if (
+        line.book_over is None
+        and line.ref_p is None
+        and line.ref_book_over is None
+        and dist is None
+        and line.fair_p is None
+        and not td_priced
+        and line.contract_price is None
+    ):
+        return "dropped"
+    return None
+
+
+def _odds_rules(line: LineRow, allow_integers: bool) -> str | None:
+    if not allow_integers and float(line.line).is_integer():
+        return "integer-line"
+    if not (
+        _american_ok(line.book_over)
+        and _american_ok(line.book_under)
+        and _american_ok(line.leg_odds)
+        and _american_ok(line.slip_odds)
+    ):
+        return "bad-odds"
+    return None
+
+
+def _rejection_reason(
+    line: LineRow,
+    dist: DistRow | None,
+    reference_now: datetime,
+    max_age: float | None,
+    roster: Roster | None,
+    allow_high_receiving: bool,
+    allow_integers: bool,
+) -> str | None:
+    """The first rule that keeps a line off the card, in reporting order."""
+
+    if is_scratched(line.injury_status):
+        return "scratch"
+    reason = _time_reason(line, reference_now, max_age)
+    if reason is not None:
+        return reason
+    td_priced = is_td_market(line.stat_type) and (
+        line.fair_p is not None or line.leg_odds is not None
+    )
+    reason = _shape_reason(line, td_priced)
+    if reason is not None:
+        return reason
+    if roster is not None and roster_mismatch(line, roster):
+        return "wrong-team"
+    reason = _line_rules(line, allow_high_receiving)
+    if reason is not None:
+        return reason
+    reason = _no_source_reason(line, dist, td_priced)
+    if reason is not None:
+        return reason
+    return _odds_rules(line, allow_integers)
+
+
+def _apply_weather(
+    line: LineRow,
+    fair_p: float,
+    model_p: float | None,
+    family: str,
+    environment: "Environment | None",
+    source: str,
+) -> tuple[float, float | None, str]:
+    """Move a model marginal. A market marginal already carries the book price."""
+
+    if environment is None or source not in {"fair_p", "distribution"}:
+        return fair_p, model_p, family
+    env_row = env_for(environment, line.team, line.opponent)
+    if env_row is None:
+        return fair_p, model_p, family
+    weather = apply_weather_discount(
+        fair_p,
+        env_row,
+        side=line.side,
+        stat_type=line.stat_type,
+    )
+    if abs(weather.adjusted - fair_p) <= 1e-12:
+        return fair_p, model_p, family
+    if model_p is not None:
+        model_p = weather.adjusted
+    return weather.adjusted, model_p, f"{family} [{weather.note}]"
+
+
+def _model_inputs(
+    line: LineRow, dist: DistRow | None, method: DevigMethod
+) -> tuple[float | None, str, float | None, str | None]:
+    try:
+        model_p, edge_source = model_prob_for_line(line, dist)
+    except KeyError:
+        model_p, edge_source = None, ""
+    except ValueError:
+        return None, "", None, "bad-distribution"
+    try:
+        market_implied, _market_source = market_implied_for_line(line, method)
+    except (KeyError, ValueError):
+        market_implied = None
+    return model_p, edge_source, market_implied, None
+
+
+def _build_leg(
+    line: LineRow,
+    *,
+    fair_p: float,
+    source: str,
+    fair: FairResult | None,
+    family: str,
+    model_p: float | None,
+    market_implied: float | None,
+    edge_source: str,
+    implied_p: float,
+    stored_implied: float,
+) -> EvaluatedLeg:
+    prop_edge = (
+        model_p - market_implied
+        if model_p is not None and market_implied is not None
+        else None
+    )
+    return EvaluatedLeg(
+        line=line,
+        fair_p=fair_p,
+        implied_p=stored_implied,
+        edge=(fair_p - implied_p) if implied_p > 0.0 else 0.0,
+        source=source,
+        family=family,
+        median=fair.median if fair else 0.0,
+        warn="questionable" if is_flagged(line.injury_status) else "",
+        p_over_at_median=fair.fair_p_at_median if fair else 0.0,
+        model_p=model_p,
+        market_implied_p=market_implied,
+        prop_edge=prop_edge,
+        edge_source=edge_source,
+    )
+
+
+def _price_leg(
+    line: LineRow,
+    dist: DistRow | None,
+    implied_p: float,
+    stored_implied: float,
+    method: DevigMethod,
+    require_model: bool,
+    environment: "Environment | None",
+) -> tuple[EvaluatedLeg | None, str | None]:
+    """The priced leg, or the warn token that kept it out."""
+
+    try:
+        fair_p, source, fair = fair_for_line(
+            line, dist, method=method, require_model=require_model
+        )
+    except ModelRequiredError:
+        return None, "no-model-marginal"
+    except (KeyError, ValueError):
+        return None, "dropped"
+
+    family = fair.family if fair else "book"
+    if fair is not None and fair.note:
+        family = f"{family} ({fair.note})"
+    model_p, edge_source, market_implied, reason = _model_inputs(line, dist, method)
+    if reason is not None:
+        return None, reason
+    fair_p, model_p, family = _apply_weather(
+        line, fair_p, model_p, family, environment, source
+    )
+    return (
+        _build_leg(
+            line,
+            fair_p=fair_p,
+            source=source,
+            fair=fair,
+            family=family,
+            model_p=model_p,
+            market_implied=market_implied,
+            edge_source=edge_source,
+            implied_p=implied_p,
+            stored_implied=stored_implied,
+        ),
+        None,
+    )
+
+
 def evaluate_legs(
     lines: list[LineRow],
     distributions: dict[tuple[str, str], DistRow],
@@ -413,137 +646,31 @@ def evaluate_legs(
     excluded: list[EvaluatedLeg] = []
     for line in lines:
         dist = distributions.get((line.player_key, line.stat_type))
-        if is_scratched(line.injury_status):
-            excluded.append(_excluded_leg(line, stored_implied, "scratch"))
-            continue
-        kick = _parse_utc(line.commence_time)
-        if kick is not None and reference_now >= kick:
-            excluded.append(_excluded_leg(line, stored_implied, "already-kicked"))
-            continue
-        if max_line_age_minutes is not None:
-            captured = _parse_utc(line.captured_at)
-            if captured is not None:
-                age_minutes = (reference_now - captured).total_seconds() / 60.0
-                if age_minutes > max_line_age_minutes:
-                    excluded.append(_excluded_leg(line, stored_implied, "stale-line"))
-                    continue
-        if not line.team or not line.opponent:
-            excluded.append(_excluded_leg(line, stored_implied, "no-team"))
-            continue
-        td_market = is_td_market(line.stat_type)
-        td_priced = td_market and (
-            line.fair_p is not None or line.leg_odds is not None
+        reason = _rejection_reason(
+            line,
+            dist,
+            reference_now,
+            max_line_age_minutes,
+            roster,
+            allow_high_receiving,
+            allow_integers,
         )
-        line_optional = td_priced or line.contract_price is not None
-        if isnan(line.line):
-            if not line_optional:
-                excluded.append(_excluded_leg(line, stored_implied, "no-line"))
-                continue
-            # TD props and prediction contracts have no yard line; 0.5 is a
-            # display dummy, never priced.
-            line.line = NO_LINE_DUMMY
-        if roster is not None and roster_mismatch(line, roster):
-            excluded.append(_excluded_leg(line, stored_implied, "wrong-team"))
-            continue
-        if (
-            not allow_high_receiving
-            and (line.stat_type or "").strip().lower() == "rec_yds"
-            and line.line >= 50
-        ):
-            excluded.append(_excluded_leg(line, stored_implied, "rec-line-bar"))
-            continue
-        if line.book_line is not None and abs(line.book_line - line.line) > 1e-9:
-            excluded.append(_excluded_leg(line, stored_implied, "book-line-mismatch"))
-            continue
-        if (line.book_over is None) != (line.book_under is None):
-            excluded.append(_excluded_leg(line, stored_implied, "one-sided-book"))
-            continue
-        if (
-            line.book_over is None
-            and line.ref_p is None
-            and line.ref_book_over is None
-            and dist is None
-            and line.fair_p is None
-            and not td_priced
-            and line.contract_price is None
-        ):
-            excluded.append(_excluded_leg(line, stored_implied, "dropped"))
-            continue
-        if not allow_integers and float(line.line).is_integer():
-            excluded.append(_excluded_leg(line, stored_implied, "integer-line"))
-            continue
-        if not (
-            _american_ok(line.book_over)
-            and _american_ok(line.book_under)
-            and _american_ok(line.leg_odds)
-            and _american_ok(line.slip_odds)
-        ):
-            excluded.append(_excluded_leg(line, stored_implied, "bad-odds"))
-            continue
-        try:
-            fair_p, source, fair = fair_for_line(
-                line, dist, method=method, require_model=require_model
+        if reason is None:
+            leg, reason = _price_leg(
+                line,
+                dist,
+                implied_p,
+                stored_implied,
+                method,
+                require_model,
+                environment,
             )
-        except ModelRequiredError:
-            excluded.append(_excluded_leg(line, stored_implied, "no-model-marginal"))
+        else:
+            leg = None
+        if leg is None:
+            excluded.append(_excluded_leg(line, stored_implied, reason or "dropped"))
             continue
-        except (KeyError, ValueError):
-            excluded.append(_excluded_leg(line, stored_implied, "dropped"))
-            continue
-        warn = "questionable" if is_flagged(line.injury_status) else ""
-        family = fair.family if fair else "book"
-        if fair is not None and fair.note:
-            family = f"{family} ({fair.note})"
-        edge = (fair_p - implied_p) if implied_p > 0.0 else 0.0
-        try:
-            model_p, edge_source = model_prob_for_line(line, dist)
-        except KeyError:
-            model_p, edge_source = None, ""
-        except ValueError:
-            excluded.append(_excluded_leg(line, stored_implied, "bad-distribution"))
-            continue
-        try:
-            market_implied, _market_source = market_implied_for_line(line, method)
-        except (KeyError, ValueError):
-            market_implied = None
-        # Weather moves a model marginal only; a market-only marginal already
-        # carries the book's own weather price (A-07).
-        if environment is not None and source in {"fair_p", "distribution"}:
-            env_row = env_for(environment, line.team, line.opponent)
-            if env_row is not None:
-                weather = apply_weather_discount(
-                    fair_p,
-                    env_row,
-                    side=line.side,
-                    stat_type=line.stat_type,
-                )
-                if abs(weather.adjusted - fair_p) > 1e-12:
-                    fair_p = weather.adjusted
-                    if model_p is not None:
-                        model_p = weather.adjusted
-                    family = f"{family} [{weather.note}]"
-        prop_edge = (
-            model_p - market_implied
-            if model_p is not None and market_implied is not None
-            else None
-        )
-        live.append(
-            EvaluatedLeg(
-                line=line,
-                fair_p=fair_p,
-                implied_p=stored_implied,
-                edge=edge,
-                source=source,
-                family=family,
-                median=fair.median if fair else 0.0,
-                warn=warn,
-                p_over_at_median=fair.fair_p_at_median if fair else 0.0,
-                model_p=model_p,
-                market_implied_p=market_implied,
-                prop_edge=prop_edge,
-                edge_source=edge_source,
-            )
-        )
+        live.append(leg)
     return live, excluded
 
 
@@ -668,6 +795,377 @@ def combo_over_market_cap(combo: tuple, max_legs_per_market: int | None) -> bool
     return False
 
 
+@dataclass
+class _RankContext:
+    """Everything one rank call needs, carried across combos."""
+
+    platform: str
+    mode: str
+    slip_size: int
+    n_sims: int
+    seed: int
+    displayed_multiplier: float | None
+    profile_dir: Path | None
+    priors: dict
+    shade_pp: float
+    allow_unmodeled_correlation: bool
+    scores_by_game: dict | None
+    max_legs_per_market: int | None
+    sportsbook: bool
+    prediction: bool
+    priced_venue: bool
+    is_flex: bool
+    notes: list[str]
+    pickem_hurdle: float | None = None
+
+
+def _refs_for(combo) -> list[LegRef]:
+    return [
+        LegRef(
+            player_key=leg.line.player_key,
+            team=leg.line.team,
+            opponent=leg.line.opponent,
+            stat_type=leg.line.stat_type,
+            side=leg.line.side,
+        )
+        for leg in combo
+    ]
+
+
+def _ticket_id_skip(combo) -> str | None:
+    ticket_ids = {leg.line.ticket_id for leg in combo if leg.line.ticket_id}
+    if ticket_ids and any(not leg.line.ticket_id for leg in combo):
+        return "mixed-ticket-id"
+    if len(ticket_ids) > 1:
+        return "mixed-ticket-id"
+    return None
+
+
+def _same_game_first_td(refs: list[LegRef]) -> bool:
+    first_td_refs = [ref for ref in refs if is_first_td(ref.stat_type)]
+    return len(first_td_refs) > 1 and _same_game(first_td_refs)
+
+
+def _roster_skip(refs: list[LegRef], ctx: _RankContext) -> str | None:
+    """The two-team rule and the distinct-prop rule, for an unpriced venue."""
+
+    if not ctx.priced_venue and len({ref.team for ref in refs}) < 2:
+        return "same-team (two-team rule)"
+    props = [(ref.player_key, ref.stat_type) for ref in refs]
+    if len(set(props)) < ctx.slip_size:
+        return "duplicate player+stat"
+    if not ctx.priced_venue and len({ref.player_key for ref in refs}) < ctx.slip_size:
+        return "same-player multi-stat not supported"
+    return None
+
+
+def _combo_skip(combo, refs: list[LegRef], ctx: _RankContext) -> str | None:
+    """The structural rule that rejects a combo. The caller adds the names."""
+
+    if combo_over_market_cap(combo, ctx.max_legs_per_market):
+        return "market-cap"
+    if any(not ref.team for ref in refs):
+        return "no-team"
+    ticket_skip = _ticket_id_skip(combo)
+    if ticket_skip is not None:
+        return ticket_skip
+    if _same_game_first_td(refs):
+        return "same-game-first-td"
+    return _roster_skip(refs, ctx)
+
+
+def _agreed_multiplier(
+    combo, slip_value, ctx: _RankContext
+) -> tuple[float | None, str, str | None]:
+    try:
+        multiplier = american_to_decimal(int(slip_value))
+    except ValueError:
+        return None, "", "bad-odds"
+    if (
+        ctx.displayed_multiplier is not None
+        and abs(multiplier - ctx.displayed_multiplier) > 1e-9
+    ):
+        ctx.notes.append(
+            f"row slip_odds M {multiplier} overrides CLI M "
+            f"{ctx.displayed_multiplier}: {_combo_names(combo)}"
+        )
+    return multiplier, "slip_odds", None
+
+
+def _venue_multiplier(
+    combo, ctx: _RankContext
+) -> tuple[float | None, str, str | None]:
+    """A priced venue: row slip_odds, then the CLI, then the leg product."""
+
+    slip_state, slip_value = _agreeing_quotes([leg.line.slip_odds for leg in combo])
+    if slip_state == "conflict":
+        return None, "", "conflicting row slip_odds"
+    if slip_state == "partial":
+        return None, "", f"{ctx.platform}-needs-price"
+    if slip_state == "agree" and slip_value is not None:
+        return _agreed_multiplier(combo, slip_value, ctx)
+    if ctx.displayed_multiplier is not None:
+        return ctx.displayed_multiplier, "cli", None
+    try:
+        priced = (
+            _prediction_combo_multiplier(combo)
+            if ctx.prediction
+            else _sportsbook_combo_multiplier(combo)
+        )
+    except ValueError:
+        return None, "", "bad-odds"
+    if priced is None:
+        return None, "", f"{ctx.platform}-needs-price"
+    multiplier, source = priced
+    return multiplier, source, None
+
+
+def _resolve_multiplier(
+    combo, ctx: _RankContext
+) -> tuple[float | None, str, str | None]:
+    """Row multiplier, then the venue chain, then the CLI, then the table."""
+
+    row_ms = sorted(
+        {
+            leg.line.displayed_multiplier
+            for leg in combo
+            if leg.line.displayed_multiplier is not None
+        }
+    )
+    if len(row_ms) > 1:
+        return None, "", f"conflicting row slip_multiplier {row_ms}"
+    if row_ms:
+        multiplier = row_ms[0]
+        if (
+            ctx.displayed_multiplier is not None
+            and abs(multiplier - ctx.displayed_multiplier) > 1e-9
+        ):
+            ctx.notes.append(
+                f"row M {multiplier} overrides CLI M {ctx.displayed_multiplier}: "
+                f"{_combo_names(combo)}"
+            )
+        return multiplier, "row", None
+    if ctx.priced_venue:
+        return _venue_multiplier(combo, ctx)
+    if ctx.displayed_multiplier is not None:
+        return ctx.displayed_multiplier, "cli", None
+    return None, "table", None
+
+
+def _combo_correlation(combo, refs: list[LegRef], ctx: _RankContext):
+    """(requested, clean, records, max delta), or None when the pair is refused."""
+
+    try:
+        requested = correlation_matrix(
+            refs,
+            ctx.priors,
+            repair=False,
+            allow_unmodeled=ctx.allow_unmodeled_correlation,
+        )
+    except UnmodeledCorrelationError as exc:
+        ctx.notes.append(f"skip unmodeled-corr ({exc}): {_combo_names(combo)}")
+        return None
+    rho_records: list = []
+    if ctx.scores_by_game:
+        requested, rho_records = perturb_matrix(requested, refs, ctx.scores_by_game)
+    clean = nearest_correlation(requested)
+    max_corr_delta = float(np.max(np.abs(clean - requested)))
+    return requested, clean, rho_records, max_corr_delta
+
+
+def _joint_probabilities(combo, clean, ctx: _RankContext) -> tuple:
+    marginals = [
+        min(max(leg.fair_p - ctx.shade_pp, 1e-9), 1.0 - 1e-9) for leg in combo
+    ]
+    if ctx.is_flex or ctx.slip_size > 3:
+        sim = simulate_slip(marginals, clean, n_sims=ctx.n_sims, seed=ctx.seed)
+        return (
+            float(sim["p_all"]),
+            float(sim["p_all_se"]),
+            float(sim["p_naive"]),
+            float(sim["p_minus_1"]),
+            float(sim["p_minus_2"]),
+        )
+    # Power 2-3 legs: deterministic exact Gaussian joint, no MC noise.
+    return exact_joint(marginals, clean), 0.0, float(np.prod(marginals)), 0.0, 0.0
+
+
+def _combo_ev(
+    p_all: float,
+    p_all_se: float,
+    p_minus_1: float,
+    p_minus_2: float,
+    price: float,
+    table,
+    ctx: _RankContext,
+) -> tuple[float, float, float, float, list[str]]:
+    p_lo = max(p_all - p_all_se, 0.0)
+    if ctx.is_flex:
+        ev = flex_ev(p_all, p_minus_1, p_minus_2, table)
+        return ev, 0.0, ev, p_lo, ["quarter_kelly=na (flex proxy suppressed)"]
+    kelly = slip_kelly(p_all, price)
+    return power_ev(p_all, price), kelly, p_lo * price - 1.0, p_lo, []
+
+
+def _pickem_notes(combo, ctx: _RankContext) -> tuple[float, list[str]]:
+    # Payout-structure hurdle, not a de-vigged market line. The typed displayed
+    # multiplier still drives price; this only annotates it.
+    if ctx.pickem_hurdle is None:
+        ctx.pickem_hurdle = pickem_breakeven(
+            ctx.platform, ctx.mode, ctx.slip_size, profile_dir=ctx.profile_dir
+        )
+    hurdle = ctx.pickem_hurdle
+    notes = [f"pickem_breakeven={hurdle:.4f} (uniform per-leg)"]
+    geomean = math.prod(leg.fair_p for leg in combo) ** (1.0 / len(combo))
+    notes.append(
+        f"pickem_geomean_fair_p={geomean:.4f} vs pickem_breakeven={hurdle:.4f}"
+    )
+    for leg in combo:
+        notes.append(
+            f"pickem_leg {leg.line.player_name} fair_p={leg.fair_p:.4f} "
+            f"vs pickem_breakeven={hurdle:.4f}"
+        )
+    return hurdle, notes
+
+
+def _naive_price(
+    combo,
+    refs: list[LegRef],
+    ctx: _RankContext,
+    source: str,
+    unconfirmed: bool,
+    kelly: float,
+) -> tuple[str, bool, float, str | None]:
+    """Mark a product-of-leg prices source unconfirmed and suppress Kelly."""
+
+    note = None
+    if ctx.sportsbook and source == "leg_odds":
+        unconfirmed = True
+        source = "leg_odds_naive"
+        kelly = 0.0
+        if _same_game(refs):
+            note = (
+                f"naive product of leg_odds — {display_name(ctx.platform)} SGP "
+                "usually pays less; rebuild in-app and pass --displayed-odds"
+            )
+        else:
+            note = "naive product of leg_odds — confirm in-app; Kelly suppressed"
+    if ctx.prediction and source == "contract_product":
+        unconfirmed = True
+        kelly = 0.0
+        note = (
+            "contract_product — independent-binary COMBOS; correlated NFL "
+            "legs overstate EV; Kelly 0"
+        )
+    return source, unconfirmed, kelly, note
+
+
+def _combo_notes(
+    combo,
+    refs: list[LegRef],
+    ctx: _RankContext,
+    table,
+    source: str,
+    unconfirmed: bool,
+    kelly: float,
+    repaired: bool,
+    max_corr_delta: float,
+    base: list[str],
+) -> tuple[str, bool, float, list[str]]:
+    notes = base
+    if table.note:
+        notes.append(table.note)
+    if ctx.platform in PICKEM_PLATFORMS:
+        _hurdle, pickem = _pickem_notes(combo, ctx)
+        notes.extend(pickem)
+    if repaired:
+        notes.append(f"corr_repaired=yes max_delta={max_corr_delta:.4f}")
+    if unconfirmed:
+        notes.append("multiplier_unconfirmed=yes (table)")
+    source, unconfirmed, kelly, naive = _naive_price(
+        combo, refs, ctx, source, unconfirmed, kelly
+    )
+    if naive:
+        notes.append(naive)
+    if ctx.shade_pp:
+        notes.append(f"shade_pp={ctx.shade_pp:g}")
+    return source, unconfirmed, kelly, notes
+
+
+def _rank_combo(combo, ctx: _RankContext) -> EvaluatedSlip | None:
+    """One ranked slip, or None after the reject note is recorded."""
+
+    refs = _refs_for(combo)
+    skip = _combo_skip(combo, refs, ctx)
+    if skip is not None:
+        ctx.notes.append(f"skip {skip}: {_combo_names(combo)}")
+        return None
+    multiplier, source, skip = _resolve_multiplier(combo, ctx)
+    if skip is not None:
+        ctx.notes.append(f"skip {skip}: {_combo_names(combo)}")
+        return None
+    if source == "table" and any(
+        leg.line.line_type not in STANDARD_LINE_TYPES for leg in combo
+    ):
+        ctx.notes.append(f"skip alt-needs-m: {_combo_names(combo)}")
+        return None
+    if ctx.priced_venue and multiplier is not None and multiplier <= 1:
+        ctx.notes.append(f"skip bad-odds: {_combo_names(combo)}")
+        return None
+
+    table = resolve_payout(
+        ctx.platform,
+        ctx.mode,
+        ctx.slip_size,
+        displayed_multiplier=multiplier,
+        profile_dir=ctx.profile_dir,
+    )
+    price = table.all_hit
+    correlated = _combo_correlation(combo, refs, ctx)
+    if correlated is None:
+        return None
+    requested, clean, rho_records, max_corr_delta = correlated
+    p_all, p_all_se, p_naive, p_minus_1, p_minus_2 = _joint_probabilities(
+        combo, clean, ctx
+    )
+    ev, kelly, ev_lo, p_lo, base_notes = _combo_ev(
+        p_all, p_all_se, p_minus_1, p_minus_2, price, table, ctx
+    )
+    source, unconfirmed, kelly, slip_notes = _combo_notes(
+        combo,
+        refs,
+        ctx,
+        table,
+        source,
+        source == "table",
+        kelly,
+        max_corr_delta > 0.02,
+        max_corr_delta,
+        base_notes,
+    )
+    return EvaluatedSlip(
+        legs=list(combo),
+        p_joint=p_all,
+        p_naive=p_naive,
+        ev=float(ev),
+        kelly=kelly,
+        mode=ctx.mode,
+        multiplier=price,
+        platform=ctx.platform,
+        p_all_se=p_all_se,
+        p_lo=p_lo,
+        ev_lo=float(ev_lo),
+        multiplier_source=source,
+        multiplier_unconfirmed=unconfirmed,
+        shade_pp=ctx.shade_pp,
+        corr_repaired=max_corr_delta > 0.02,
+        corr_requested=requested,
+        corr_clean=clean,
+        rho_records=rho_records,
+        notes=slip_notes,
+    )
+
+
 def rank_slips(
     legs: list[EvaluatedLeg],
     platform: str,
@@ -703,13 +1201,8 @@ def rank_slips(
     sportsbook = platform in SPORTSBOOK_PLATFORMS
     prediction = platform in PREDICTION_PLATFORMS
     priced_venue = sportsbook or prediction
-    is_flex = mode.lower() in {"flex"}
     live = [leg for leg in legs if leg.warn not in EXCLUDED_WARNS]
-    if (
-        priced_venue
-        and displayed_multiplier is not None
-        and len(live) != slip_size
-    ):
+    if priced_venue and displayed_multiplier is not None and len(live) != slip_size:
         raise ValueError(
             "displayed odds / multiplier prices one ticket. "
             f"This slate has {len(live)} live legs; slip-size is {slip_size}. "
@@ -725,258 +1218,30 @@ def rank_slips(
             f"{total_combos} combinations exceed the {COMBO_BUDGET} budget; "
             "raise --max-slips or pass --allow-large-enum"
         )
-    priors = load_priors(priors_path)
-    pickem_hurdle: float | None = None
+    ctx = _RankContext(
+        platform=platform,
+        mode=mode,
+        slip_size=slip_size,
+        n_sims=n_sims,
+        seed=seed,
+        displayed_multiplier=displayed_multiplier,
+        profile_dir=profile_dir,
+        priors=load_priors(priors_path),
+        shade_pp=shade_pp,
+        allow_unmodeled_correlation=allow_unmodeled_correlation,
+        scores_by_game=scores_by_game,
+        max_legs_per_market=max_legs_per_market,
+        sportsbook=sportsbook,
+        prediction=prediction,
+        priced_venue=priced_venue,
+        is_flex=mode.lower() in {"flex"},
+        notes=notes,
+    )
     ranked: list[EvaluatedSlip] = []
     for combo in combinations(live, slip_size):
-        if combo_over_market_cap(combo, max_legs_per_market):
-            notes.append(f"skip market-cap: {_combo_names(combo)}")
-            continue
-        refs = [
-            LegRef(
-                player_key=leg.line.player_key,
-                team=leg.line.team,
-                opponent=leg.line.opponent,
-                stat_type=leg.line.stat_type,
-                side=leg.line.side,
-            )
-            for leg in combo
-        ]
-        if any(not ref.team for ref in refs):
-            notes.append(f"skip no-team: {_combo_names(combo)}")
-            continue
-        ticket_ids = {leg.line.ticket_id for leg in combo if leg.line.ticket_id}
-        if ticket_ids and any(not leg.line.ticket_id for leg in combo):
-            notes.append(f"skip mixed-ticket-id: {_combo_names(combo)}")
-            continue
-        if len(ticket_ids) > 1:
-            notes.append(f"skip mixed-ticket-id: {_combo_names(combo)}")
-            continue
-        first_td_refs = [ref for ref in refs if is_first_td(ref.stat_type)]
-        if len(first_td_refs) > 1 and _same_game(first_td_refs):
-            notes.append(f"skip same-game-first-td: {_combo_names(combo)}")
-            continue
-        if not priced_venue and len({ref.team for ref in refs}) < 2:
-            notes.append(f"skip same-team (two-team rule): {_combo_names(combo)}")
-            continue
-        props = [(ref.player_key, ref.stat_type) for ref in refs]
-        if len(set(props)) < slip_size:
-            notes.append(f"skip duplicate player+stat: {_combo_names(combo)}")
-            continue
-        if not priced_venue and len({ref.player_key for ref in refs}) < slip_size:
-            notes.append(
-                f"skip same-player multi-stat not supported: {_combo_names(combo)}"
-            )
-            continue
-
-        row_ms = sorted(
-            {
-                leg.line.displayed_multiplier
-                for leg in combo
-                if leg.line.displayed_multiplier is not None
-            }
-        )
-        if len(row_ms) > 1:
-            notes.append(
-                f"skip conflicting row slip_multiplier {row_ms}: {_combo_names(combo)}"
-            )
-            continue
-        if row_ms:
-            multiplier = row_ms[0]
-            multiplier_source = "row"
-            if (
-                displayed_multiplier is not None
-                and abs(multiplier - displayed_multiplier) > 1e-9
-            ):
-                notes.append(
-                    f"row M {multiplier} overrides CLI M {displayed_multiplier}: "
-                    f"{_combo_names(combo)}"
-                )
-        elif priced_venue:
-            slip_state, slip_value = _agreeing_quotes(
-                [leg.line.slip_odds for leg in combo]
-            )
-            if slip_state == "conflict":
-                notes.append(
-                    f"skip conflicting row slip_odds: {_combo_names(combo)}"
-                )
-                continue
-            if slip_state == "partial":
-                notes.append(f"skip {platform}-needs-price: {_combo_names(combo)}")
-                continue
-            if slip_state == "agree" and slip_value is not None:
-                try:
-                    multiplier = american_to_decimal(int(slip_value))
-                except ValueError:
-                    notes.append(f"skip bad-odds: {_combo_names(combo)}")
-                    continue
-                multiplier_source = "slip_odds"
-                if (
-                    displayed_multiplier is not None
-                    and abs(multiplier - displayed_multiplier) > 1e-9
-                ):
-                    notes.append(
-                        f"row slip_odds M {multiplier} overrides CLI M "
-                        f"{displayed_multiplier}: {_combo_names(combo)}"
-                    )
-            elif displayed_multiplier is not None:
-                multiplier = displayed_multiplier
-                multiplier_source = "cli"
-            else:
-                try:
-                    if prediction:
-                        priced = _prediction_combo_multiplier(combo)
-                    else:
-                        priced = _sportsbook_combo_multiplier(combo)
-                except ValueError:
-                    notes.append(f"skip bad-odds: {_combo_names(combo)}")
-                    continue
-                if priced is None:
-                    notes.append(
-                        f"skip {platform}-needs-price: {_combo_names(combo)}"
-                    )
-                    continue
-                multiplier, multiplier_source = priced
-        elif displayed_multiplier is not None:
-            multiplier = displayed_multiplier
-            multiplier_source = "cli"
-        else:
-            multiplier = None
-            multiplier_source = "table"
-        if multiplier_source == "table" and any(
-            leg.line.line_type not in STANDARD_LINE_TYPES for leg in combo
-        ):
-            notes.append(f"skip alt-needs-m: {_combo_names(combo)}")
-            continue
-        if priced_venue and multiplier is not None and multiplier <= 1:
-            notes.append(f"skip bad-odds: {_combo_names(combo)}")
-            continue
-
-        table = resolve_payout(
-            platform,
-            mode,
-            slip_size,
-            displayed_multiplier=multiplier,
-            profile_dir=profile_dir,
-        )
-        price = table.all_hit
-        unconfirmed = multiplier_source == "table"
-
-        try:
-            requested = correlation_matrix(
-                refs, priors, repair=False, allow_unmodeled=allow_unmodeled_correlation
-            )
-        except UnmodeledCorrelationError as exc:
-            notes.append(f"skip unmodeled-corr ({exc}): {_combo_names(combo)}")
-            continue
-        rho_records: list = []
-        if scores_by_game:
-            requested, rho_records = perturb_matrix(requested, refs, scores_by_game)
-        clean = nearest_correlation(requested)
-        max_corr_delta = float(np.max(np.abs(clean - requested)))
-        repaired = max_corr_delta > 0.02
-
-        marginals = [
-            min(max(leg.fair_p - shade_pp, 1e-9), 1.0 - 1e-9) for leg in combo
-        ]
-        if is_flex or slip_size > 3:
-            sim = simulate_slip(marginals, clean, n_sims=n_sims, seed=seed)
-            p_all = float(sim["p_all"])
-            p_all_se = float(sim["p_all_se"])
-            p_naive = float(sim["p_naive"])
-            p_minus_1 = float(sim["p_minus_1"])
-            p_minus_2 = float(sim["p_minus_2"])
-        else:
-            # Power 2-3 legs: deterministic exact Gaussian joint, no MC noise.
-            p_all = exact_joint(marginals, clean)
-            p_all_se = 0.0
-            p_naive = float(np.prod(marginals))
-            p_minus_1 = 0.0
-            p_minus_2 = 0.0
-        p_lo = max(p_all - p_all_se, 0.0)
-
-        slip_notes: list[str] = []
-        if is_flex:
-            ev = flex_ev(p_all, p_minus_1, p_minus_2, table)
-            kelly = 0.0
-            slip_notes.append("quarter_kelly=na (flex proxy suppressed)")
-            ev_lo = ev
-        else:
-            ev = power_ev(p_all, price)
-            kelly = slip_kelly(p_all, price)
-            ev_lo = p_lo * price - 1.0
-        if table.note:
-            slip_notes.append(table.note)
-        if platform in PICKEM_PLATFORMS:
-            # Payout-structure hurdle, not a de-vigged market line. The typed
-            # displayed multiplier still drives price; this only annotates it.
-            if pickem_hurdle is None:
-                pickem_hurdle = pickem_breakeven(
-                    platform, mode, slip_size, profile_dir=profile_dir
-                )
-            slip_notes.append(
-                f"pickem_breakeven={pickem_hurdle:.4f} (uniform per-leg)"
-            )
-            geomean = math.prod(leg.fair_p for leg in combo) ** (1.0 / len(combo))
-            slip_notes.append(
-                f"pickem_geomean_fair_p={geomean:.4f} "
-                f"vs pickem_breakeven={pickem_hurdle:.4f}"
-            )
-            for leg in combo:
-                slip_notes.append(
-                    f"pickem_leg {leg.line.player_name} fair_p={leg.fair_p:.4f} "
-                    f"vs pickem_breakeven={pickem_hurdle:.4f}"
-                )
-        if repaired:
-            slip_notes.append(f"corr_repaired=yes max_delta={max_corr_delta:.4f}")
-        if unconfirmed:
-            slip_notes.append("multiplier_unconfirmed=yes (table)")
-        if sportsbook and multiplier_source == "leg_odds":
-            unconfirmed = True
-            multiplier_source = "leg_odds_naive"
-            kelly = 0.0
-            if _same_game(refs):
-                slip_notes.append(
-                    f"naive product of leg_odds — {display_name(platform)} SGP "
-                    "usually pays less; rebuild in-app and pass --displayed-odds"
-                )
-            else:
-                slip_notes.append(
-                    "naive product of leg_odds — confirm in-app; Kelly suppressed"
-                )
-        if prediction and multiplier_source == "contract_product":
-            unconfirmed = True
-            kelly = 0.0
-            slip_notes.append(
-                "contract_product — independent-binary COMBOS; correlated NFL "
-                "legs overstate EV; Kelly 0"
-            )
-        if shade_pp:
-            slip_notes.append(f"shade_pp={shade_pp:g}")
-
-        ranked.append(
-            EvaluatedSlip(
-                legs=list(combo),
-                p_joint=p_all,
-                p_naive=p_naive,
-                ev=float(ev),
-                kelly=kelly,
-                mode=mode,
-                multiplier=price,
-                platform=platform,
-                p_all_se=p_all_se,
-                p_lo=p_lo,
-                ev_lo=float(ev_lo),
-                multiplier_source=multiplier_source,
-                multiplier_unconfirmed=unconfirmed,
-                shade_pp=shade_pp,
-                corr_repaired=repaired,
-                corr_requested=requested,
-                corr_clean=clean,
-                rho_records=rho_records,
-                notes=slip_notes,
-            )
-        )
+        slip = _rank_combo(combo, ctx)
+        if slip is not None:
+            ranked.append(slip)
     ranked.sort(key=lambda item: (item.multiplier_unconfirmed, -item.ev_lo, -item.ev))
     return ranked[:max_slips]
 

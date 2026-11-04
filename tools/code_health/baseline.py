@@ -46,6 +46,19 @@ COMMANDS: list[list[str]] = [
         "--no-strict",
     ],
     ["devig", "--over", "-110", "--under", "-110"],
+    [
+        "compose",
+        "--lines",
+        "examples/sunday_lines.csv",
+        "--auto",
+        "--platform",
+        "hardrock",
+        "--allow-rec-line",
+        "--n-tickets",
+        "5",
+        "--out-dir",
+        "runs/baseline",
+    ],
 ]
 
 

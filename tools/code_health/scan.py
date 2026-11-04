@@ -24,11 +24,9 @@ FUNCTION_LINES_LIMIT = 80
 DUPLICATION_RATIO = 0.85
 DUPLICATION_MIN_STATEMENTS = 12
 
-CAP_COMPLEXITY = 40
-CAP_DEAD_CODE = 60
-CAP_DUPLICATION = 30
-CAP_TEST_GAP = 40
-
+#: The checks report every finding. A quiet cap here once made a queue of 41
+#: look like the whole list, when the real count was 121. Display is capped by
+#: ``list -n`` and ``top -n`` instead.
 _IDENTIFIER = re.compile(r"^[A-Za-z_]\w*$")
 _TOKEN = re.compile(r"[A-Za-z_]\w*|\d+\.?\d*|[^\s\w]")
 _BRANCHING = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.ExceptHandler, ast.match_case)
@@ -211,7 +209,7 @@ def check_dead_code(
                 )
             )
     findings.sort(key=lambda f: -f.mechanical_score)
-    return findings[:CAP_DEAD_CODE]
+    return findings
 
 
 def check_unused_imports(modules: list[ModuleInfo]) -> list[Finding]:
@@ -341,7 +339,7 @@ def check_complexity(modules: list[ModuleInfo]) -> list[Finding]:
                     )
                 )
     findings.sort(key=lambda f: -f.mechanical_score)
-    return findings[:CAP_COMPLEXITY]
+    return findings
 
 
 def _normalised_tokens(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
@@ -393,7 +391,7 @@ def check_duplication(modules: list[ModuleInfo]) -> list[Finding]:
                 )
             )
     findings.sort(key=lambda f: -f.mechanical_score)
-    return findings[:CAP_DUPLICATION]
+    return findings
 
 
 def _test_text(tests_dir: Path) -> str:
@@ -479,7 +477,7 @@ def check_test_gaps(modules: list[ModuleInfo], tests_dir: Path) -> list[Finding]
                 )
             )
     findings.sort(key=lambda f: -f.mechanical_score)
-    return findings[:CAP_TEST_GAP]
+    return findings
 
 
 def scan(root: Path) -> list[Finding]:

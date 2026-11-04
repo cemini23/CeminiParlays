@@ -303,25 +303,6 @@ def _zero_frame(plays, pd):
     return pd.DataFrame(rows)
 
 
-def _opp_map(defense) -> dict[tuple[str, str], str]:
-    out: dict[tuple[str, str], str] = {}
-    # defense rows are from the defense's point of view. The offense is not
-    # stored. Opponent is recovered from the paired posteam on player rows
-    # below. This map stays empty on purpose when the caller passes rows
-    # that already carry ``opp``.
-    del defense
-    return out
-
-
-def _attach_opp(frame, plays_opp: dict[tuple[str, str], str]):
-    opps = []
-    for game_id, team in zip(frame["game_id"].astype(str), frame["team"].astype(str), strict=False):
-        opps.append(plays_opp.get((game_id, team), ""))
-    frame = frame.copy()
-    frame["opp"] = opps
-    return frame
-
-
 def _build_opp(off) -> dict[tuple[str, str], str]:
     """Within one game the other posteam is the opponent."""
 

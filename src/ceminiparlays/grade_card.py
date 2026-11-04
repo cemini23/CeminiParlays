@@ -336,26 +336,6 @@ def _tag_leg_statuses(group: list[dict[str, str]], results: list[str]) -> list[d
     return tagged
 
 
-def write_graded_tables(grade: CardGrade, ledger_path: Path, hold_path: Path | None = None) -> None:
-    """Write settled rows, including a ``LOST`` ticket that still has a void.
-
-    A ticket with no ``MISS`` and a ``PENDING`` or ``UNGRADED`` leg goes to
-    ``hold_path`` when that path is set. A lost ticket never goes there.
-    """
-
-    _write_table(ledger_path, grade.ledger_rows)
-    if hold_path is not None:
-        _write_table(hold_path, grade.hold_rows)
-
-
-def _write_table(path: Path, rows: list[dict[str, str]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(LEDGER_COLUMNS), lineterminator="\n", extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(rows)
-
-
 def archive_card_copies(
     card_path: Path,
     slate_date: str,

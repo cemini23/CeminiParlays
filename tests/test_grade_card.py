@@ -11,7 +11,6 @@ from ceminiparlays.grade_card import (
     grade_rows,
     main,
     plays_from_summary,
-    write_graded_tables,
 )
 from ceminiparlays.names import AliasRequiredError
 from ceminiparlays.odds import american_to_decimal
@@ -243,24 +242,6 @@ def test_format_grade_states_every_count() -> None:
 def test_format_grade_marks_an_absent_brier() -> None:
     text = format_grade(_grade(brier=None))
     assert "brier=na" in text
-
-
-def test_write_graded_tables_writes_both_tables(tmp_path) -> None:
-    blank = {column: "" for column in LEDGER_COLUMNS}
-    grade = _grade(ledger_rows=[blank], hold_rows=[blank])
-    ledger = tmp_path / "ledger.csv"
-    hold = tmp_path / "hold.csv"
-    write_graded_tables(grade, ledger, hold)
-    assert ledger.read_text(encoding="utf-8").splitlines()[0] == ",".join(LEDGER_COLUMNS)
-    assert hold.read_text(encoding="utf-8").splitlines()[0] == ",".join(LEDGER_COLUMNS)
-
-
-def test_write_graded_tables_skips_the_hold_table_when_unasked(tmp_path) -> None:
-    grade = _grade(ledger_rows=[], hold_rows=[{column: "" for column in LEDGER_COLUMNS}])
-    ledger = tmp_path / "ledger.csv"
-    write_graded_tables(grade, ledger)
-    assert ledger.exists()
-    assert not (tmp_path / "hold.csv").exists()
 
 
 def test_plays_from_summary_passes_a_play_list_through() -> None:

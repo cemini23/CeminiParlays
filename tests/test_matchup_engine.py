@@ -19,7 +19,6 @@ from ceminiparlays.matchup_math import (
     bootstrap_ci,
     bootstrap_means,
     defense_multiplier,
-    eb_mean,
     hurdle_over_prob,
     implied_count_mean,
     interaction,
@@ -272,7 +271,6 @@ def test_hurdle_half_line_is_the_zero_mass_formula() -> None:
     priced = hurdle_over_prob(lam, alpha=100.0, rate=1.0, line=0.5, p_gain=gain)
     assert priced == pytest.approx((1.0 - math.exp(-lam)) * gain)
     assert hurdle_over_prob(0.0, 1.0, 1.0, 0.5, 1.0) == 0.0
-    assert eb_mean(1, 8.0, 0.7, k=12) == pytest.approx(16.4 / 13.0)
 
 
 def test_bootstrap_means_match_a_pure_randrange_loop() -> None:

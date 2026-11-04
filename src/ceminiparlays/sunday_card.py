@@ -65,15 +65,6 @@ def _player(leg: dict) -> str:
     return norm_name(str(leg.get("player_name") or ""))
 
 
-def _leg_id(leg: dict) -> tuple[str, str, str, str]:
-    return (
-        str(leg.get("player_key") or _player(leg)),
-        str(leg.get("market") or ""),
-        str(leg.get("side") or ""),
-        str(leg.get("line") or ""),
-    )
-
-
 def kick_et(commence: str) -> str:
     """Clock time in Eastern Daylight Time for an ISO kickoff."""
 

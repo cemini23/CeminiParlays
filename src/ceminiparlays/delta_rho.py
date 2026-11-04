@@ -18,14 +18,11 @@ from typing import Any, Literal
 
 import numpy as np
 
-from ceminiparlays.copula import nearest_correlation
 from ceminiparlays.correlation import (
     LegRef,
     _opponents,
-    _pair_rho,
     _same_team,
     _side_sign,
-    load_priors,
 )
 
 Relation = Literal["same_team", "opponents"]
@@ -113,13 +110,6 @@ class PairPerturbation:
     delta_rho: float
     rho_adj: float
     regimes: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class Perturbation:
-    matrix: np.ndarray
-    records: list[PairPerturbation]
-    repaired: bool
 
 
 def game_state(row: Any, notes: list[str] | None = None) -> dict:
@@ -253,40 +243,3 @@ def perturb_matrix(
                 )
             )
     return out, records
-
-
-def adjusted_correlation(
-    legs: list[LegRef],
-    scores_by_game: dict[str, dict[str, Any]],
-    priors: dict | None = None,
-    *,
-    allow_unmodeled: bool = False,
-) -> Perturbation:
-    """Base prior matrix plus Delta_rho, projected onto the nearest correlation.
-
-    ``scores_by_game`` maps ``"AWAY@HOME"`` to one game's regime scores. A pair
-    whose game is absent keeps its base correlation, so the caller can run a
-    slate where only some games have an environment row.
-    """
-
-    loaded = priors if priors is not None else load_priors()
-    n = len(legs)
-    base = np.eye(n, dtype=float)
-    for i in range(n):
-        for j in range(i + 1, n):
-            rho = _pair_rho(legs[i], legs[j], loaded, allow_unmodeled=allow_unmodeled)
-            base[i, j] = base[j, i] = rho
-    raw, records = perturb_matrix(base, legs, scores_by_game)
-    repaired = nearest_correlation(raw)
-    return Perturbation(
-        matrix=repaired,
-        records=records,
-        repaired=not bool(np.allclose(repaired, raw)),
-    )
-
-
-def min_eigenvalue(matrix: np.ndarray) -> float:
-    """Smallest eigenvalue of the symmetric part. The PSD guard reads this."""
-
-    symmetric = (np.asarray(matrix, dtype=float) + np.asarray(matrix, dtype=float).T) / 2.0
-    return float(np.min(np.linalg.eigvalsh(symmetric)))

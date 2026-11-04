@@ -20,13 +20,7 @@ import pytest
 from ceminiparlays.ceminidfs import load_ceminidfs_handoff
 from ceminiparlays.clv import LegCLV
 from ceminiparlays.correlation import LegRef
-from ceminiparlays.delta_rho import (
-    adjusted_correlation,
-    bounded_delta,
-    game_key_for,
-    min_eigenvalue,
-    pair_delta,
-)
+from ceminiparlays.delta_rho import bounded_delta, game_key_for, pair_delta
 from ceminiparlays.jev_client import (
     JevClient,
     JevProviderError,
@@ -49,7 +43,6 @@ from ceminiparlays.proppricing import (
     consensus_fair_p_over,
     disagreement_edge_bps,
     posterior_fair,
-    price_prop,
     split_normal,
 )
 from ceminiparlays.season_ledger import (
@@ -224,59 +217,17 @@ def test_pair_delta_matches_the_regime_mechanism() -> None:
     assert delta == pytest.approx(0.135)
 
 
-def test_adjusted_correlation_records_bounded_deltas() -> None:
-    """Two legal same-team legs: the delta is applied, bounded, and auditable."""
-
-    qb = LegRef("qb1", "KC", "BUF", "pass_yds", "more")
-    wr = LegRef("wr1", "KC", "BUF", "rec_yds", "more")
-    scores = {
-        game_key_for("KC", "BUF"): {
-            "weather_ground_compression": _Score(2.0, 1.0),
-            "pressure_checkdown_funnel": _Score(2.0, 1.0),
-        }
-    }
-    perturbed = adjusted_correlation([qb, wr], scores)
-
-    assert min_eigenvalue(perturbed.matrix) >= 0.0
-    assert np.allclose(np.diag(perturbed.matrix), 1.0)
-    record = perturbed.records[0]
-    assert record.rho_base == pytest.approx(0.45), "the base prior for pass_yds/rec_yds"
-    # Two regimes fire at +0.15 each; the pair total is clipped back to +0.15.
-    assert record.delta_rho == pytest.approx(0.15)
-    assert record.rho_adj == pytest.approx(0.60)
-    assert set(record.regimes) == {"weather_ground_compression", "pressure_checkdown_funnel"}
-
-
-def test_adjusted_correlation_leaves_an_unscored_game_alone() -> None:
-    qb = LegRef("qb1", "KC", "BUF", "pass_yds", "more")
-    wr = LegRef("wr1", "KC", "BUF", "rec_yds", "more")
-    perturbed = adjusted_correlation([qb, wr], {})
-    assert perturbed.records[0].delta_rho == 0.0
-    assert perturbed.records[0].rho_adj == pytest.approx(0.45)
-
-
-def test_adjusted_correlation_inherits_the_unmodeled_refusal() -> None:
-    """A same-game pair with no prior still fails closed, exactly as base does."""
-
-    from ceminiparlays.correlation import UnmodeledCorrelationError
-
-    qb = LegRef("qb1", "KC", "BUF", "pass_yds", "more")
-    rb = LegRef("rb1", "BUF", "KC", "rush_yds", "more")
-    with pytest.raises(UnmodeledCorrelationError):
-        adjusted_correlation([qb, rb], {})
-
-
 def test_non_psd_sigma_adj_projects_to_psd() -> None:
     """A deliberately non-PSD Sigma_adj must come back with a non-negative spectrum."""
 
     from ceminiparlays.copula import nearest_correlation
 
     sigma_adj = np.array([[1.0, 0.9, 0.9], [0.9, 1.0, -0.9], [0.9, -0.9, 1.0]])
-    assert min_eigenvalue(sigma_adj) < 0.0, "the fixture must start non-PSD"
+    assert np.linalg.eigvalsh(sigma_adj).min() < 0.0, "the fixture must start non-PSD"
 
     projected = nearest_correlation(sigma_adj)
 
-    assert min_eigenvalue(projected) >= 0.0
+    assert np.linalg.eigvalsh(projected).min() >= 0.0
     assert np.allclose(np.diag(projected), 1.0)
     assert np.all(np.abs(projected) <= 1.0)
 
@@ -483,40 +434,6 @@ def test_handoff_reader_parses_the_disaggregated_columns(tmp_path) -> None:
     assert dist.has_quantiles is True
     rush = row.distribution_for("rush_yds")
     assert rush is not None and rush.has_quantiles is False
-
-
-def test_prop_price_uses_the_handoff_distribution(tmp_path) -> None:
-    handoff = load_ceminidfs_handoff(_write_handoff(tmp_path))
-    dist = handoff.rows[0].distribution_for("pass_yds")
-    quotes = [
-        BookQuote("fanduel", -110, -110),
-        BookQuote("draftkings", -108, -112),
-        BookQuote("betmgm", -105, -115),
-    ]
-    price = price_prop(
-        dist=dist,
-        line=250.5,
-        side="more",
-        quotes=quotes,
-        target_book="fanduel",
-        jev_regime_conf=0.8,
-        stat_type="pass_yds",
-    )
-    assert price is not None
-    assert price.family == "split_normal"
-    assert "fanduel" not in price.consensus_books
-    assert price.w_dfs == pytest.approx(0.35 * 0.8)
-    assert price.p_fair_posterior == pytest.approx(
-        (1.0 - price.w_dfs) * price.p_market_fair + price.w_dfs * price.p_dfs_over
-    )
-    assert price.disagreement_edge_bps == pytest.approx(
-        (price.p_dfs_over - price.p_market_fair) * 10_000.0
-    )
-
-
-def test_prop_price_returns_none_without_a_distribution() -> None:
-    quotes = [BookQuote("draftkings", -108, -112)]
-    assert price_prop(dist=None, line=250.5, side="more", quotes=quotes) is None
 
 
 # --------------------------------------------------------------------------

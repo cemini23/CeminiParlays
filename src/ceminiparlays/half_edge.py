@@ -217,18 +217,6 @@ def pick_side(mean: float, line: float) -> str | None:
     return "under"
 
 
-def typed_question(row: dict[str, object]) -> str:
-    """A question this module does not send.
-
-    Jev does not price the leg. The rate model stays in this file.
-    """
-
-    return (
-        f"Is the {row.get('stat_type')} split for {row.get('player_name')} "
-        "real after the posted vig? Answer only pass or fail."
-    )
-
-
 def _finite(value: object) -> float:
     try:
         number = float(value)  # type: ignore[arg-type]

@@ -13,11 +13,9 @@ from ceminiparlays.matchup_math import (
     POINT_SIGMA_FLOOR,
     YARD_SIGMA_FLOOR,
     Z_CLIP,
-    anchored_gamma_shape_rate,
     cell_specs,
     combine_verdict,
     fair_over_prob,
-    full_game_yard_sigma,
     gamma_shape_rate,
     half_line_share,
     hist_verdict,
@@ -27,7 +25,6 @@ from ceminiparlays.matchup_math import (
     sigma_floor,
     split_lambda,
     weibull_fit,
-    weibull_max_over_prob,
     z_score,
 )
 
@@ -75,12 +72,6 @@ def test_gamma_shape_rate_floors_the_sd_and_the_mean() -> None:
     # A zero mean and a zero sd still return a usable pair.
     tiny_shape, tiny_rate = gamma_shape_rate(0.0, 0.0)
     assert tiny_shape > 0.0 and tiny_rate > 0.0
-
-
-def test_anchored_gamma_shape_rate_widens_a_thin_sd_to_the_floor() -> None:
-    floor = full_game_yard_sigma("rush_yds", 60.0)
-    assert floor > 1.0
-    assert anchored_gamma_shape_rate("rush_yds", 60.0, 4.0, 1.0) == gamma_shape_rate(4.0, floor)
 
 
 def test_shrunk_pulls_toward_the_league_value() -> None:
@@ -137,17 +128,6 @@ def test_weibull_fit_returns_a_positive_shape_and_scale() -> None:
     assert fitted is not None
     shape, scale = fitted
     assert shape > 0.0 and scale > 0.0
-
-
-def test_weibull_max_over_prob_needs_a_usable_fit() -> None:
-    assert weibull_max_over_prob([1.0] * 5, 2.0, 2.0) is None
-    assert weibull_max_over_prob(_plays(), 2.0, 0.0) is None
-
-
-def test_weibull_max_over_prob_is_a_probability() -> None:
-    probability = weibull_max_over_prob(_plays(), 2.0, 2.0)
-    assert probability is not None
-    assert 0.0 <= probability <= 1.0
 
 
 def test_hist_verdict_reports_each_failing_gate() -> None:

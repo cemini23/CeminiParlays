@@ -20,7 +20,6 @@ from ceminiparlays.half_edge import (
     score_markets,
     select_legs,
     shrink_share,
-    typed_question,
     write_scores,
 )
 from ceminiparlays.names import fold_name
@@ -278,13 +277,6 @@ def test_sample_sd_needs_two_values() -> None:
 
 def test_sample_sd_uses_the_n_minus_one_estimate() -> None:
     assert sample_sd([1.0, 2.0, 3.0, 4.0]) == pytest.approx(1.2909944, rel=1e-6)
-
-
-def test_typed_question_names_the_player_and_the_stat() -> None:
-    text = typed_question({"stat_type": "rec_yds", "player_name": "A Back"})
-    assert "rec_yds" in text
-    assert "A Back" in text
-    assert text.endswith("pass or fail.")
 
 
 def test_read_csv_returns_the_rows(tmp_path: Path) -> None:

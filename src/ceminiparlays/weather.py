@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ceminiparlays.copula import exact_joint
 from ceminiparlays.environment import EnvRow
 
 
@@ -131,51 +130,3 @@ def apply_weather_discount(
         f"marginal {marginal:.6f} -> {adjusted:.6f}"
     )
     return WeatherDiscountResult(adjusted=adjusted, note=note)
-
-
-def sgp_from_score_marginals(
-    marginals: list[float],
-    corr_matrix: np.ndarray,
-    rows: list[EnvRow],
-    copula_type: str = "gaussian",
-) -> tuple[float, list[str]]:
-    """Compute an SGP joint probability from score marginals with optional weather discount.
-
-    For each leg, if a corresponding EnvRow is provided, apply_weather_discount is called.
-    The (possibly discounted) marginals are then passed to exact_joint.
-
-    Args:
-        marginals: List of fair probabilities for each leg (length k).
-        corr_matrix: k x k correlation matrix.
-        rows: List of EnvRow for each leg. If shorter than marginals, remaining legs
-            get no discount. If None or empty, no discounts are applied.
-        copula_type: Only "gaussian" is supported for exact_joint.
-
-    Returns:
-        Tuple of (joint_probability, list_of_notes). Notes include one per leg that
-        went through apply_weather_discount, plus any copula errors.
-    """
-    if copula_type != "gaussian":
-        raise ValueError("sgp_from_score_marginals only supports gaussian copula")
-
-    k = len(marginals)
-    if k == 0:
-        raise ValueError("need at least one marginal")
-
-    if corr_matrix.shape != (k, k):
-        raise ValueError("correlation matrix shape must match marginals")
-
-    adjusted_marginals: list[float] = []
-    notes: list[str] = []
-
-    for i, marginal in enumerate(marginals):
-        if i < len(rows) and rows[i] is not None:
-            result = apply_weather_discount(marginal, rows[i])
-            adjusted_marginals.append(result.adjusted)
-            notes.append(f"leg {i+1}: {result.note}")
-        else:
-            adjusted_marginals.append(marginal)
-            notes.append(f"leg {i+1}: no env row provided")
-
-    joint = exact_joint(adjusted_marginals, corr_matrix, copula_type=copula_type)
-    return joint, notes

@@ -64,7 +64,6 @@ from ceminiparlays.half_edge import shrink_share
 from ceminiparlays.odds import american_to_decimal, devig_two_way
 
 SHRINK_K = 8.0
-EB_K = 12.0
 # V3 quarter-share shrinkage. These are not refit after the v3 table.
 SHARE_K = 15.0
 SHARE_W0 = 0.25
@@ -224,16 +223,6 @@ def weibull_fit(yards: list[float]) -> tuple[float, float] | None:
     if shape <= 0.0 or scale <= 0.0:
         return None
     return float(shape), float(scale)
-
-
-def weibull_max_over_prob(yards: list[float], line: float, n_touches: float) -> float | None:
-    """Fit a Weibull at location 0. ``None`` when the sample is too small."""
-
-    fitted = weibull_fit(yards)
-    if fitted is None or n_touches <= 0:
-        return None
-    shape, scale = fitted
-    return tail_over_prob(shape, scale, line, n_touches, 0.0)
 
 
 def tail_over_prob(
@@ -414,18 +403,6 @@ def clip_main_line_prob(p_raw: float, p_book_fair: float) -> float:
     return min(max(banded, MAIN_LINE_P_LO), MAIN_LINE_P_HI)
 
 
-def anchored_gamma_shape_rate(
-    market: str,
-    line: float,
-    mean: float,
-    sd: float,
-) -> tuple[float, float]:
-    """Gamma shape and rate with the full-game yardage dispersion floor."""
-
-    widened = max(float(sd), full_game_yard_sigma(market, line))
-    return gamma_shape_rate(mean, widened)
-
-
 def shrunk(n: int, raw: float, league: float) -> float:
     return shrink_share(n, raw, league, SHRINK_K)
 
@@ -440,16 +417,6 @@ def slate_floor(market: str) -> int:
     if market in GAME_LEVEL_MARKETS:
         return 10
     return MIN_LEGS
-
-
-def eb_mean(n_opp: float, raw: float, league: float, k: float = EB_K) -> float:
-    """Empirical Bayes mean. ``k`` is an opportunity weight, not a fitted one."""
-
-    n_value = max(0.0, float(n_opp))
-    weight = float(k)
-    if weight < 0:
-        raise ValueError("k must be >= 0")
-    return (n_value * float(raw) + weight * float(league)) / (n_value + weight)
 
 
 def baseline_volume(n_games: float, trailing: float) -> float | None:

@@ -142,20 +142,6 @@ def disagreement_edge_bps(p_dfs_over: float, p_market_fair: float) -> float:
     return (float(p_dfs_over) - float(p_market_fair)) * BPS
 
 
-@dataclass(frozen=True)
-class PropPrice:
-    line: float
-    side: str
-    p_dfs_over: float
-    p_dfs_under: float
-    family: str
-    p_market_fair: float
-    w_dfs: float
-    p_fair_posterior: float
-    disagreement_edge_bps: float
-    consensus_books: tuple[str, ...]
-
-
 def p_dfs_over(dist: StatDistribution, line: float, stat_type: str = "") -> tuple[float, str]:
     """P(stat > line) from the handoff distribution. Returns ``(prob, family)``.
 
@@ -172,37 +158,3 @@ def p_dfs_over(dist: StatDistribution, line: float, stat_type: str = "") -> tupl
     if dist.median is not None and dist.sigma is not None:
         return p_over_line(line, dist.median, dist.sigma, stat_type=stat).fair_p_over, "symmetric"
     raise ValueError("handoff distribution has neither quantiles nor median+sigma")
-
-
-def price_prop(
-    *,
-    dist: StatDistribution | None,
-    line: float,
-    side: str,
-    quotes: list[BookQuote],
-    target_book: str | None = None,
-    jev_regime_conf: float = 0.0,
-    stat_type: str = "",
-    method: str = "power",
-) -> PropPrice | None:
-    """Price one prop. Returns ``None`` when either side cannot be built."""
-
-    consensus = consensus_fair_p_over(quotes, target_book=target_book, method=method)
-    if consensus is None:
-        return None
-    if dist is None:
-        return None
-    p_over, family = p_dfs_over(dist, line, stat_type=stat_type)
-    p_under = 1.0 - p_over
-    return PropPrice(
-        line=float(line),
-        side=side,
-        p_dfs_over=p_over,
-        p_dfs_under=p_under,
-        family=family,
-        p_market_fair=consensus.fair_p_over,
-        w_dfs=dfs_weight(jev_regime_conf),
-        p_fair_posterior=posterior_fair(consensus.fair_p_over, p_over, jev_regime_conf),
-        disagreement_edge_bps=disagreement_edge_bps(p_over, consensus.fair_p_over),
-        consensus_books=consensus.books,
-    )

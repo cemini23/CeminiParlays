@@ -418,6 +418,18 @@ def _module_is_covered(module_stem: str, stems: set[str], text: str) -> bool:
     return bool(re.search(rf"\b{re.escape(module_stem)}\b", text))
 
 
+def _is_testable(path: tuple[str, ...], classes: set[str]) -> bool:
+    """A test can name a module function or a class method, nothing deeper.
+
+    A closure lives inside another function. Only its parent can reach it, so
+    the parent is the unit of coverage.
+    """
+
+    if len(path) == 1:
+        return True
+    return len(path) == 2 and path[0] in classes
+
+
 def check_test_gaps(modules: list[ModuleInfo], tests_dir: Path) -> list[Finding]:
     """A public function or a whole module that no test names."""
 
@@ -427,10 +439,13 @@ def check_test_gaps(modules: list[ModuleInfo], tests_dir: Path) -> list[Finding]
     for info in modules:
         if tier(info.name) not in {"free", "evaluation"}:
             continue
+        classes = {node.name for node in info.tree.body if isinstance(node, ast.ClassDef)}
         public: list[tuple[tuple[str, ...], ast.FunctionDef | ast.AsyncFunctionDef]] = [
             (path, node)
             for path, node in iter_functions(info.tree)
-            if _is_public(path[-1]) and not path[-1].startswith("__")
+            if _is_public(path[-1])
+            and not path[-1].startswith("__")
+            and _is_testable(path, classes)
         ]
         if not public:
             continue

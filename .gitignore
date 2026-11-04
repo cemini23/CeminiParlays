@@ -32,6 +32,9 @@ runs/
 htmlcov/
 .ruff_cache/
 
+# Code-health queue (local state, rebuilt by `scan`)
+.code-health/
+
 # Operator line logs and ledgers (never commit live slips)
 data/slates/
 data/ledger/

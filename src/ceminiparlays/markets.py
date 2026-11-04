@@ -64,9 +64,8 @@ def canonical_stat(stat_type: str) -> str:
     guessed.
     """
 
-    token = (stat_type or "").strip()
-    folded = MARKET_ALIASES.get(token.lower())
-    return folded if folded is not None else token
+    token = (stat_type or "").strip().lower()
+    return MARKET_ALIASES.get(token, token)
 
 
 def is_two_plus_td(stat_type: str) -> bool:

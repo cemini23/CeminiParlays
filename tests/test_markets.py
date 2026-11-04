@@ -78,12 +78,8 @@ def test_canonical_stat_strips_an_unknown_token_without_guessing() -> None:
     assert canonical_stat("") == ""
 
 
-def test_canonical_stat_does_not_lower_case_an_unknown_token() -> None:
-    """The docstring promises a lower-cased token. The code does not lower-case it.
-
-    ``catalog._canonical_stat`` does lower-case. Pinned as this function behaves
-    today, because ``io.read_manual_lines`` puts the result on the pricing path
-    and a change there needs a baseline rerun.
-    """
-
-    assert canonical_stat(" Rec_Yds ") == "Rec_Yds"
+def test_canonical_stat_lower_cases_an_unknown_token() -> None:
+    # The docstring promises a lower-cased token. catalog._canonical_stat used
+    # to be a second implementation that did lower-case. There is one now.
+    assert canonical_stat(" Rec_Yds ") == "rec_yds"
+    assert canonical_stat("PASS_YDS") == "pass_yds"

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ceminiparlays.io import LineRow
-from ceminiparlays.markets import MARKET_ALIASES
+from ceminiparlays.markets import canonical_stat
 
 MONEYLINE = "moneyline"
 SPREAD = "spread"
@@ -24,8 +24,7 @@ class ThinGame:
 
 
 def _canonical_stat(stat_type: str) -> str:
-    token = (stat_type or "").strip().lower()
-    return MARKET_ALIASES.get(token, token)
+    return canonical_stat(stat_type)
 
 
 def _game_key(team: str, opponent: str) -> tuple[str, ...]:

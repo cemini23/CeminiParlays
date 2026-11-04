@@ -503,37 +503,66 @@ def _vacated_receptions(player: dict[str, str]) -> float:
     return boost * receptions / (total / games)
 
 
+def _implied_from_count(spec, anchors, commence: str, who: str) -> float | None:
+    count = anchors.get((commence, who, str(spec["count_stat"])))
+    if count is None:
+        return None
+    _gap, posted, fair = count
+    implied = implied_count_mean(posted, fair)
+    if implied is not None and implied > 0.0:
+        return implied
+    return None
+
+
+def _ypc(player: dict[str, str], spec) -> float | None:
+    """The first positive yards-per-carry field on the row."""
+
+    for field in spec["ypc"]:  # type: ignore[union-attr]
+        value = _num(player, str(field))
+        if value is not None and value > 0.0:
+            return value
+    return None
+
+
+def _implied_from_yards(
+    spec, player: dict[str, str], anchors, commence: str, who: str
+) -> float | None:
+    yards = anchors.get((commence, who, str(spec["yards_stat"])))
+    if yards is None:
+        return None
+    _gap, posted, fair = yards
+    ypc = _ypc(player, spec)
+    if ypc is None:
+        return None
+    implied_yards = implied_yards_mean(posted, fair, sigma_floor("yards", posted))
+    if implied_yards is not None and implied_yards > 0.0:
+        return implied_yards / ypc
+    return None
+
+
+def _implied_from_parquet(spec, player: dict[str, str]) -> float | None:
+    parquet_name = str(spec["parquet"] or "")
+    parquet_mean = _num(player, parquet_name) if parquet_name else None
+    parquet_games = _num(player, "parquet_games")
+    if parquet_mean is None or parquet_games is None:
+        return None
+    return baseline_volume(parquet_games, parquet_mean)
+
+
 def _book_volume(spec: dict[str, object], player: dict[str, str], line_row: dict[str, str], anchors) -> float | None:
     """Book implied mean, then parquet trailing mean, then the local mean."""
 
     who = str(line_row.get("player_key") or line_row.get("player_name") or "")
     commence = str(line_row.get("commence_time") or "")
-    count = anchors.get((commence, who, str(spec["count_stat"])))
-    if count is not None:
-        _gap, posted, fair = count
-        implied = implied_count_mean(posted, fair)
-        if implied is not None and implied > 0.0:
-            return implied
-    yards = anchors.get((commence, who, str(spec["yards_stat"])))
-    if yards is not None:
-        _gap, posted, fair = yards
-        ypc = None
-        for field in spec["ypc"]:  # type: ignore[union-attr]
-            ypc = _num(player, str(field))
-            if ypc is not None and ypc > 0.0:
-                break
-            ypc = None
-        if ypc is not None:
-            implied_yards = implied_yards_mean(posted, fair, sigma_floor("yards", posted))
-            if implied_yards is not None and implied_yards > 0.0:
-                return implied_yards / ypc
-    parquet_name = str(spec["parquet"] or "")
-    parquet_mean = _num(player, parquet_name) if parquet_name else None
-    parquet_games = _num(player, "parquet_games")
-    if parquet_mean is not None and parquet_games is not None:
-        base = baseline_volume(parquet_games, parquet_mean)
-        if base is not None:
-            return base
+    implied = _implied_from_count(spec, anchors, commence, who)
+    if implied is not None:
+        return implied
+    implied = _implied_from_yards(spec, player, anchors, commence, who)
+    if implied is not None:
+        return implied
+    implied = _implied_from_parquet(spec, player)
+    if implied is not None:
+        return implied
     trail = _num(player, str(spec["trail"]))
     games = _num(player, str(spec["games"]))
     if trail is None or games is None:

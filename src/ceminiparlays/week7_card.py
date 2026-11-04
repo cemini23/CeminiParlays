@@ -319,6 +319,35 @@ def confirmed_starters(rows: list[dict], never: set[str]) -> dict[str, str]:
     return starters
 
 
+def _window_block(leg: dict) -> str | None:
+    commence = str(leg.get("commence_time") or "")
+    if commence and not is_sunday_kick(commence):
+        return "off_window"
+    return None
+
+
+def _pass_block(
+    team: str,
+    market: str,
+    position: str,
+    leg: dict,
+    name: str,
+    starters: dict[str, str],
+) -> str | None:
+    """The Cleveland quarterback rule, then the backup-quarterback rule."""
+
+    pass_market = market.startswith("pass") or market == "interceptions"
+    if team == "CLE" and (pass_market or position == "QB"):
+        return "cle_unconfirmed"
+    if not pass_market or position not in {"", "QB"}:
+        return None
+    starter = starters.get(team, "")
+    token = _player_token(leg)
+    if not starter or (token != starter and name != norm_name(starter)):
+        return "backup_qb"
+    return None
+
+
 def gate_reason(leg: dict, never: set[str], starters: dict[str, str]) -> str | None:
     """Return a short block code, or ``None`` when the leg may enter."""
 
@@ -330,23 +359,15 @@ def gate_reason(leg: dict, never: set[str], starters: dict[str, str]) -> str | N
     game = game_for(team, opp)
     if game is None:
         return "off_slate"
-    commence = str(leg.get("commence_time") or "")
-    if commence and not is_sunday_kick(commence):
-        return "off_window"
+    window = _window_block(leg)
+    if window is not None:
+        return window
     market = str(leg.get("market") or "")
     side = str(leg.get("side") or "").lower()
     position = str(leg.get("position") or "").upper()
     if game.pass_fade and market == "pass_yds" and side == "over":
         return "wind_pass_fade"
-    pass_market = market.startswith("pass") or market == "interceptions"
-    if team == "CLE" and (pass_market or position == "QB"):
-        return "cle_unconfirmed"
-    if pass_market and position in {"", "QB"}:
-        starter = starters.get(team, "")
-        token = _player_token(leg)
-        if not starter or (token != starter and name != norm_name(starter)):
-            return "backup_qb"
-    return None
+    return _pass_block(team, market, position, leg, name, starters)
 
 
 def t90_flags(leg: dict) -> str:
@@ -681,39 +702,69 @@ def exposure_cents(card: WeekCard) -> dict[str, int]:
     return exposure
 
 
-def validate_week7(card: WeekCard, never: set[str]) -> None:
-    """Raise when the stake, the caps, a scratch, or a degenerate pair fails."""
+def _validate_bands(card: WeekCard) -> None:
+    """The stake total and the per-mode band shape."""
 
-    blocked = {norm_name(name) for name in never}
     if card.stake_cents != HARDROCK_BANKROLL_CENTS:
         raise ValueError(f"stakes sum to {card.stake_cents} cents")
     if card.mode == "A":
         counts = Counter(ticket.stake_cents for ticket in card.tickets)
-        if len(card.tickets) != 17 or counts[175] != 6 or counts[170] != 5 or counts[100] != 6:
+        if (
+            len(card.tickets) != 17
+            or counts[175] != 6
+            or counts[170] != 5
+            or counts[100] != 6
+        ):
             raise ValueError("mode A bands are not 6 x $1.75, 5 x $1.70, and 6 x $1.00")
-    elif card.mode == "B":
+        return
+    if card.mode == "B":
         if not 7 <= len(card.tickets) <= 9:
             raise ValueError("mode B needs 7 to 9 tickets")
-    else:
-        raise ValueError(f"unknown mode {card.mode}")
+        return
+    raise ValueError(f"unknown mode {card.mode}")
+
+
+def _validate_pairs(ticket: WeekTicket) -> None:
+    for left, right in combinations(ticket.legs, 2):
+        if not pair_ok(left, right):
+            raise ValueError("a degenerate pair is on the card")
+
+
+def _claim_players(ticket: WeekTicket, people: set[str]) -> None:
+    """A player may not appear on two tickets. A team total is not a player."""
+
+    for key in _stake_keys(list(ticket.legs)):
+        if key.startswith("total:"):
+            continue
+        if key in people:
+            raise ValueError("a player is on two tickets")
+        people.add(key)
+
+
+def _validate_ticket(
+    ticket: WeekTicket, mode: str, blocked: set[str], people: set[str]
+) -> None:
+    """One ticket: the caps, the scratches, the pairs, and the player reuse."""
+
+    if ticket.stake_cents <= 0 or ticket.stake_cents > HARDROCK_TICKET_CAP_CENTS:
+        raise ValueError("a ticket is outside the $4.00 cap")
+    if mode == "B" and ticket.stake_cents < 200:
+        raise ValueError("a mode B ticket is under $2.00")
+    for leg in ticket.legs:
+        if norm_name(str(leg.get("player_name") or "")) in blocked:
+            raise ValueError("a never_enter player is on the card")
+    _validate_pairs(ticket)
+    _claim_players(ticket, people)
+
+
+def validate_week7(card: WeekCard, never: set[str]) -> None:
+    """Raise when the stake, the caps, a scratch, or a degenerate pair fails."""
+
+    blocked = {norm_name(name) for name in never}
+    _validate_bands(card)
     people: set[str] = set()
     for ticket in card.tickets:
-        if ticket.stake_cents <= 0 or ticket.stake_cents > HARDROCK_TICKET_CAP_CENTS:
-            raise ValueError("a ticket is outside the $4.00 cap")
-        if card.mode == "B" and ticket.stake_cents < 200:
-            raise ValueError("a mode B ticket is under $2.00")
-        for leg in ticket.legs:
-            if norm_name(str(leg.get("player_name") or "")) in blocked:
-                raise ValueError("a never_enter player is on the card")
-        for left, right in combinations(ticket.legs, 2):
-            if not pair_ok(left, right):
-                raise ValueError("a degenerate pair is on the card")
-        for key in _stake_keys(list(ticket.legs)):
-            if key.startswith("total:"):
-                continue
-            if key in people:
-                raise ValueError("a player is on two tickets")
-            people.add(key)
+        _validate_ticket(ticket, card.mode, blocked, people)
     if any(cents > HARDROCK_GAME_CAP_CENTS for cents in exposure_cents(card).values()):
         raise ValueError("a game is over the $6.25 cap")
 

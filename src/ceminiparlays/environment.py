@@ -126,58 +126,98 @@ def fill_environment_from_book_lines(
 
     if not environment or not rows:
         return environment
+    spreads, totals = _posted_lines(rows)
+    if not spreads and not totals:
+        return environment
+    return _refresh_environment(environment, spreads, totals)
+
+
+def _posted_lines(
+    rows: Sequence[object],
+) -> tuple[dict[tuple[str, str], float], dict[tuple[str, str], float]]:
+    """Spreads and totals as posted, keyed by the team pair."""
+
     spreads: dict[tuple[str, str], float] = {}
     totals: dict[tuple[str, str], float] = {}
     for raw in rows:
-        stat = str(_field(raw, "stat_type", "market") or "").strip().lower()
-        team = normalize_team(str(_field(raw, "team") or ""))
-        opponent = normalize_team(str(_field(raw, "opponent", "opp") or ""))
-        try:
-            line = _optional_float(str(_field(raw, "line") if _field(raw, "line") != "" else ""))
-        except ValueError:
+        parsed = _posted_row(raw)
+        if parsed is None:
             continue
-        if not team or not opponent or line is None:
-            continue
+        stat, team, opponent, line = parsed
         pair = (team, opponent)
         if stat == "spread":
             spreads.setdefault(pair, line)
         elif stat in {"total", "totals", "game_total"}:
             totals.setdefault(pair, line)
             totals.setdefault((opponent, team), line)
-    if not spreads and not totals:
-        return environment
+    return spreads, totals
+
+
+def _posted_row(
+    raw: object,
+) -> tuple[str, str, str, float] | None:
+    """``(stat, team, opponent, line)``, or None when the row cannot be read."""
+
+    stat = str(_field(raw, "stat_type", "market") or "").strip().lower()
+    team = normalize_team(str(_field(raw, "team") or ""))
+    opponent = normalize_team(str(_field(raw, "opponent", "opp") or ""))
+    raw_line = _field(raw, "line")
+    try:
+        line = _optional_float(str(raw_line) if raw_line != "" else "")
+    except ValueError:
+        return None
+    if not team or not opponent or line is None:
+        return None
+    return stat, team, opponent, line
+
+
+def _filled_row(
+    row: EnvRow,
+    spreads: dict[tuple[str, str], float],
+    totals: dict[tuple[str, str], float],
+) -> EnvRow:
+    """The row with a blank spread or implied total filled, when the book posted it."""
+
+    pair = (normalize_team(row.team), normalize_team(row.opponent))
+    spread = row.spread if row.spread is not None else spreads.get(pair)
+    implied = row.implied_total
+    total = totals.get(pair)
+    if implied is None and spread is not None and total is not None:
+        implied = (float(total) - float(spread)) / 2.0
+    if spread == row.spread and implied == row.implied_total:
+        return row
+    return EnvRow(
+        game_id=row.game_id,
+        team=row.team,
+        opponent=row.opponent,
+        implied_total=implied,
+        spread=spread,
+        roof=row.roof,
+        weather_exposed=row.weather_exposed,
+        wind_mph=row.wind_mph,
+        precip_pop=row.precip_pop,
+        first_td=row.first_td,
+    )
+
+
+def _refresh_environment(
+    environment: Environment,
+    spreads: dict[tuple[str, str], float],
+    totals: dict[tuple[str, str], float],
+) -> Environment:
     updated = dict(environment)
-
-    def _filled(row: EnvRow) -> EnvRow:
-        pair = (normalize_team(row.team), normalize_team(row.opponent))
-        spread = row.spread if row.spread is not None else spreads.get(pair)
-        implied = row.implied_total
-        total = totals.get(pair)
-        if implied is None and spread is not None and total is not None:
-            implied = (float(total) - float(spread)) / 2.0
-        if spread == row.spread and implied == row.implied_total:
-            return row
-        return EnvRow(
-            game_id=row.game_id,
-            team=row.team,
-            opponent=row.opponent,
-            implied_total=implied,
-            spread=spread,
-            roof=row.roof,
-            weather_exposed=row.weather_exposed,
-            wind_mph=row.wind_mph,
-            precip_pop=row.precip_pop,
-            first_td=row.first_td,
-        )
-
     for key, row in list(environment.items()):
         if isinstance(key, tuple) and len(key) == 2 and key[0] and key[1]:
-            updated[key] = _filled(row)
+            updated[key] = _filled_row(row, spreads, totals)
     for key, row in list(environment.items()):
         if isinstance(key, tuple) and len(key) == 2 and key[1] == "":
-            updated[key] = updated.get((row.team, row.opponent), _filled(row))
+            updated[key] = updated.get(
+                (row.team, row.opponent), _filled_row(row, spreads, totals)
+            )
         elif isinstance(key, str):
-            updated[key] = updated.get((row.team, row.opponent), _filled(row))
+            updated[key] = updated.get(
+                (row.team, row.opponent), _filled_row(row, spreads, totals)
+            )
     return updated
 
 

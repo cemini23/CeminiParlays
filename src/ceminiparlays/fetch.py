@@ -453,10 +453,15 @@ def rows_from_events(
         home = team_code(str(event.get("home_team") or ""))
         away = team_code(str(event.get("away_team") or ""))
         commence_time = str(event.get("commence_time") or "").strip()
-        bookmakers = select_bookmakers(list(event.get("bookmakers") or []))
-        for book in bookmakers:
-            book_key = str(book.get("key") or "")
-            platform = BOOKMAKER_TO_PLATFORM.get(book_key)
+        event_ctx = {
+            "home": home,
+            "away": away,
+            "slate_id": slate_id,
+            "captured_at": captured_at,
+            "commence_time": commence_time,
+        }
+        for book in select_bookmakers(list(event.get("bookmakers") or [])):
+            platform = BOOKMAKER_TO_PLATFORM.get(str(book.get("key") or ""))
             if platform is None:
                 continue
             if platform_filter is not None and platform not in platform_filter:
@@ -469,87 +474,86 @@ def rows_from_events(
                         unknown_markets.add(market_key)
                         notes.append(f"no-odds-api-market:{market_key}")
                     continue
-                outcomes = [item for item in (market.get("outcomes") or []) if isinstance(item, dict)]
-                if stat == "moneyline":
-                    rows.extend(
-                        _h2h_rows(
-                            outcomes,
-                            home=home,
-                            away=away,
-                            slate_id=slate_id,
-                            platform=platform,
-                            captured_at=captured_at,
-                            commence_time=commence_time,
-                        )
+                outcomes = [
+                    item
+                    for item in (market.get("outcomes") or [])
+                    if isinstance(item, dict)
+                ]
+                rows.extend(
+                    _rows_for_market(
+                        stat,
+                        outcomes,
+                        {**event_ctx, "platform": platform},
+                        roster=roster,
+                        notes=notes,
+                        team_by_key=team_by_key,
                     )
-                    continue
-                if stat == "spread":
-                    rows.extend(
-                        _spread_rows(
-                            outcomes,
-                            home=home,
-                            away=away,
-                            slate_id=slate_id,
-                            platform=platform,
-                            captured_at=captured_at,
-                            commence_time=commence_time,
-                        )
-                    )
-                    continue
-                if stat in {"total", "total_q3"}:
-                    rows.extend(
-                        _total_rows(
-                            outcomes,
-                            home=home,
-                            away=away,
-                            slate_id=slate_id,
-                            platform=platform,
-                            captured_at=captured_at,
-                            commence_time=commence_time,
-                            stat_type=stat,
-                        )
-                    )
-                    continue
-                if is_td_market(stat):
-                    rows.extend(
-                        _td_rows(
-                            outcomes,
-                            stat=stat,
-                            home=home,
-                            away=away,
-                            slate_id=slate_id,
-                            platform=platform,
-                            captured_at=captured_at,
-                            commence_time=commence_time,
-                            roster=roster,
-                            notes=notes,
-                        )
-                    )
-                    continue
-                for player_name, point, over_price, under_price in _pair_two_way(outcomes):
-                    resolved = _team_opp(player_name, home, away, roster, team_by_key)
-                    if resolved is None:
-                        notes.append(f"roster-event-mismatch:{player_name}")
-                        continue
-                    player_key, team, opp = resolved
-                    row = _blank_row(
-                        slate_id=slate_id,
-                        platform=platform,
-                        player_name=player_name,
-                        player_key=player_key,
-                        team=team,
-                        opp=opp,
-                        stat_type=stat,
-                        captured_at=captured_at,
-                        commence_time=commence_time,
-                    )
-                    row["line"] = point
-                    row["book_over"] = over_price
-                    row["book_under"] = under_price
-                    if stat.endswith(("_q1", "_q2", "_q3", "_q4")):
-                        row["line_type"] = "quarter"
-                    rows.append(row)
+                )
     _stamp_reference(rows, reference_book)
+    return rows
+
+
+def _rows_for_market(
+    stat: str,
+    outcomes: list[dict],
+    ctx: dict[str, str],
+    *,
+    roster: Roster | None,
+    notes: list[str],
+    team_by_key: dict[str, str] | None,
+) -> list[dict[str, object]]:
+    """Dispatch one market onto its row builder."""
+
+    if stat == "moneyline":
+        return _h2h_rows(outcomes, **ctx)
+    if stat == "spread":
+        return _spread_rows(outcomes, **ctx)
+    if stat in {"total", "total_q3"}:
+        return _total_rows(outcomes, **ctx, stat_type=stat)
+    if is_td_market(stat):
+        return _td_rows(outcomes, stat=stat, **ctx, roster=roster, notes=notes)
+    return _prop_rows(
+        stat, outcomes, ctx, roster=roster, notes=notes, team_by_key=team_by_key
+    )
+
+
+def _prop_rows(
+    stat: str,
+    outcomes: list[dict],
+    ctx: dict[str, str],
+    *,
+    roster: Roster | None,
+    notes: list[str],
+    team_by_key: dict[str, str] | None,
+) -> list[dict[str, object]]:
+    """One player prop row per paired two-way outcome."""
+
+    rows: list[dict[str, object]] = []
+    for player_name, point, over_price, under_price in _pair_two_way(outcomes):
+        resolved = _team_opp(
+            player_name, ctx["home"], ctx["away"], roster, team_by_key
+        )
+        if resolved is None:
+            notes.append(f"roster-event-mismatch:{player_name}")
+            continue
+        player_key, team, opp = resolved
+        row = _blank_row(
+            slate_id=ctx["slate_id"],
+            platform=ctx["platform"],
+            player_name=player_name,
+            player_key=player_key,
+            team=team,
+            opp=opp,
+            stat_type=stat,
+            captured_at=ctx["captured_at"],
+            commence_time=ctx["commence_time"],
+        )
+        row["line"] = point
+        row["book_over"] = over_price
+        row["book_under"] = under_price
+        if stat.endswith(("_q1", "_q2", "_q3", "_q4")):
+            row["line_type"] = "quarter"
+        rows.append(row)
     return rows
 
 

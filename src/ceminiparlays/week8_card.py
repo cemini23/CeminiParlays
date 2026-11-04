@@ -1048,6 +1048,27 @@ def build_pools(
     }
 
 
+def _targets_per_game(leg: dict) -> float:
+    return float(leg.get("targets_per_game") or 0.0)
+
+
+def _qualifying_spread(leg: dict) -> float | None:
+    """The spread, when it clears the -4.5 bar. Otherwise None."""
+
+    spread = finite(leg.get("spread"))
+    if spread is None or spread < -4.5:
+        return None
+    return spread
+
+
+def _reception_q4_leg(side: str, spread: float | None, leg: dict) -> bool:
+    if side == "under":
+        return True
+    if side == "over":
+        return spread is not None and _targets_per_game(leg) >= 1.0
+    return False
+
+
 def _tier1_leg(leg: dict) -> bool:
     if str(leg.get("position") or "") != "RB":
         return False
@@ -1057,15 +1078,11 @@ def _tier1_leg(leg: dict) -> bool:
         return False
     market = str(leg.get("market") or "")
     side = str(leg.get("side") or "")
-    spread = finite(leg.get("spread"))
+    spread = _qualifying_spread(leg)
     if market == "receptions_q4" and abs(float(leg["line"]) - 0.5) <= 1e-9:
-        if side == "under":
-            return True
-        if side == "over" and spread is not None and spread >= -4.5:
-            return float(leg.get("targets_per_game") or 0.0) >= 1.0
-        return False
-    if market == "rec_yds_q4" and side == "over" and spread is not None and spread >= -4.5:
-        return float(leg.get("targets_per_game") or 0.0) >= 1.0
+        return _reception_q4_leg(side, spread, leg)
+    if market == "rec_yds_q4" and side == "over" and spread is not None:
+        return _targets_per_game(leg) >= 1.0
     return False
 
 
@@ -1087,16 +1104,21 @@ def game_exposure(tickets: list[CardTicket]) -> dict[str, int]:
     return totals
 
 
-def verify_card(tickets: list[CardTicket], never: set[str]) -> list[str]:
+def _stake_problems(tickets: list[CardTicket]) -> list[str]:
     problems: list[str] = []
-    if stake_cents(tickets) != BANKROLL_CENTS:
-        problems.append(f"stake cents {stake_cents(tickets)} != {BANKROLL_CENTS}")
+    total = stake_cents(tickets)
+    if total != BANKROLL_CENTS:
+        problems.append(f"stake cents {total} != {BANKROLL_CENTS}")
     if any(ticket.stake_cents > TICKET_CAP_CENTS for ticket in tickets):
         problems.append("a ticket is over the $1.75 cap")
     for label, cents in game_exposure(tickets).items():
         if cents > GAME_CAP_CENTS:
             problems.append(f"{label} exposure {cents} cents is over the game cap")
-    legs = [leg for ticket in tickets for leg in ticket.legs]
+    return problems
+
+
+def _leg_problems(legs: list[dict], never: set[str]) -> list[str]:
+    problems: list[str] = []
     if has_quarter_pair(legs):
         problems.append("a same-player receptions_qX and rec_yds_qX pair is on the card")
     for leg in legs:
@@ -1107,6 +1129,11 @@ def verify_card(tickets: list[CardTicket], never: set[str]) -> list[str]:
             prob = float(leg["model_p"])
             if prob < 0.18 or prob > 0.78:
                 problems.append(f"full-game probability {prob} is outside [0.18, 0.78]")
+    return problems
+
+
+def _ticket_problems(tickets: list[CardTicket]) -> list[str]:
+    problems: list[str] = []
     for ticket in tickets:
         if ticket.tier == "2":
             for leg in ticket.legs:
@@ -1114,12 +1141,24 @@ def verify_card(tickets: list[CardTicket], never: set[str]) -> list[str]:
                     problems.append(f"tier 2 probability {leg['model_p']} is above 0.78")
         if ticket.tax_ev <= 0.0:
             problems.append(f"{ticket.ticket_id} EV is not positive")
+    return problems
+
+
+def _split_problems(tickets: list[CardTicket]) -> list[str]:
+    problems: list[str] = []
     single_cents = sum(ticket.stake_cents for ticket in tickets if len(ticket.legs) == 1)
     parlay_cents = sum(ticket.stake_cents for ticket in tickets if len(ticket.legs) > 1)
     if single_cents < SINGLES_FLOOR_CENTS:
-        problems.append(f"singles {single_cents} cents are under the {SINGLES_FLOOR_CENTS} floor")
+        problems.append(
+            f"singles {single_cents} cents are under the {SINGLES_FLOOR_CENTS} floor"
+        )
     if parlay_cents > PARLAY_CAP_CENTS:
         problems.append(f"parlays {parlay_cents} cents are over the {PARLAY_CAP_CENTS} cap")
+    return problems
+
+
+def _duplicate_problems(tickets: list[CardTicket]) -> list[str]:
+    problems: list[str] = []
     seen_multi: set[tuple[str, str, str, float]] = set()
     for ticket in tickets:
         if len(ticket.legs) < 2:
@@ -1129,6 +1168,17 @@ def verify_card(tickets: list[CardTicket], never: set[str]) -> list[str]:
             if ident in seen_multi:
                 problems.append(f"duplicate multi-leg prop {ident[0]} {ident[1]} {ident[2]}")
             seen_multi.add(ident)
+    return problems
+
+
+def verify_card(tickets: list[CardTicket], never: set[str]) -> list[str]:
+    problems: list[str] = []
+    problems.extend(_stake_problems(tickets))
+    legs = [leg for ticket in tickets for leg in ticket.legs]
+    problems.extend(_leg_problems(legs, never))
+    problems.extend(_ticket_problems(tickets))
+    problems.extend(_split_problems(tickets))
+    problems.extend(_duplicate_problems(tickets))
     return problems
 
 

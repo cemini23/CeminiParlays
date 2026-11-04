@@ -169,6 +169,69 @@ def _distribution_prob(line: LineRow, dist: DistRow) -> FairResult:
     )
 
 
+def _checked_probability(value: float, label: str) -> float:
+    if not 0.0 < value < 1.0:
+        raise ValueError(f"{label} must be between 0 and 1, got {value}")
+    return value
+
+
+def _refuse_market_only(line: LineRow, require_model: bool, reason: str) -> None:
+    if require_model:
+        raise ModelRequiredError(f"{reason} for {line.player_key}/{line.stat_type}")
+
+
+def _from_ref_book(
+    line: LineRow, method: DevigMethod, require_model: bool
+) -> tuple[float, str] | None:
+    """An independent sharp book. Not market-only, so never refused."""
+
+    if line.ref_book_over is None or line.ref_book_under is None:
+        return None
+    result = devig_two_way(line.ref_book_over, line.ref_book_under, method=method)
+    return _side_probability_of(result.p_over, result.p_under, line.side), "ref_devig"
+
+
+def _from_own_book(
+    line: LineRow, method: DevigMethod, require_model: bool
+) -> tuple[float, str] | None:
+    if line.book_over is None or line.book_under is None:
+        return None
+    _refuse_market_only(line, require_model, "same-book marginal refused")
+    result = devig_two_way(line.book_over, line.book_under, method=method)
+    return _side_probability_of(result.p_over, result.p_under, line.side), "book_devig"
+
+
+def _from_leg_odds(
+    line: LineRow, method: DevigMethod, require_model: bool
+) -> tuple[float, str] | None:
+    if not is_td_market(line.stat_type) or line.leg_odds is None:
+        return None
+    _refuse_market_only(line, require_model, "market-only marginal refused")
+    implied = american_to_implied(int(line.leg_odds))
+    if line.side in LESS_SIDES:
+        implied = 1.0 - implied
+    elif line.side not in MORE_SIDES:
+        raise ValueError(f"unknown side: {line.side}")
+    return implied, "leg_odds_implied"
+
+
+def _from_contract_price(
+    line: LineRow, method: DevigMethod, require_model: bool
+) -> tuple[float, str] | None:
+    if line.contract_price is None:
+        return None
+    _refuse_market_only(line, require_model, "market-only marginal refused")
+    implied = _checked_probability(line.contract_price, "contract_price")
+    if line.side in LESS_SIDES:
+        implied = 1.0 - implied
+    return implied, "contract_price"
+
+
+#: The market-only chain, in precedence order. Each step returns None when the
+#: line carries none of its prices.
+_MARKET_STEPS = (_from_ref_book, _from_own_book, _from_leg_odds, _from_contract_price)
+
+
 def fair_for_line(
     line: LineRow,
     dist: DistRow | None,
@@ -194,9 +257,7 @@ def fair_for_line(
     """
 
     if line.fair_p is not None:
-        if not 0.0 < line.fair_p < 1.0:
-            raise ValueError(f"fair_p must be between 0 and 1, got {line.fair_p}")
-        return line.fair_p, "fair_p", None
+        return _checked_probability(line.fair_p, "fair_p"), "fair_p", None
     if is_two_plus_td(line.stat_type) and dist is None:
         raise KeyError(
             f"two_plus_td needs a typed fair_p or a count distribution "
@@ -206,51 +267,12 @@ def fair_for_line(
         fair = _distribution_prob(line, dist)
         return side_probability(fair, line.side), "distribution", fair
     if line.ref_p is not None:
-        if not 0.0 < line.ref_p < 1.0:
-            raise ValueError(f"ref_p must be between 0 and 1, got {line.ref_p}")
-        return line.ref_p, "ref_p", None
-    if line.ref_book_over is not None and line.ref_book_under is not None:
-        result = devig_two_way(line.ref_book_over, line.ref_book_under, method=method)
-        return (
-            _side_probability_of(result.p_over, result.p_under, line.side),
-            "ref_devig",
-            None,
-        )
-    if line.book_over is not None and line.book_under is not None:
-        if require_model:
-            raise ModelRequiredError(
-                f"same-book marginal refused for {line.player_key}/{line.stat_type}"
-            )
-        result = devig_two_way(line.book_over, line.book_under, method=method)
-        return (
-            _side_probability_of(result.p_over, result.p_under, line.side),
-            "book_devig",
-            None,
-        )
-    if is_td_market(line.stat_type) and line.leg_odds is not None:
-        if require_model:
-            raise ModelRequiredError(
-                f"market-only marginal refused for {line.player_key}/{line.stat_type}"
-            )
-        implied = american_to_implied(int(line.leg_odds))
-        if line.side in LESS_SIDES:
-            implied = 1.0 - implied
-        elif line.side not in MORE_SIDES:
-            raise ValueError(f"unknown side: {line.side}")
-        return implied, "leg_odds_implied", None
-    if line.contract_price is not None:
-        if require_model:
-            raise ModelRequiredError(
-                f"market-only marginal refused for {line.player_key}/{line.stat_type}"
-            )
-        if not 0.0 < line.contract_price < 1.0:
-            raise ValueError(
-                f"contract_price must be between 0 and 1, got {line.contract_price}"
-            )
-        implied = line.contract_price
-        if line.side in LESS_SIDES:
-            implied = 1.0 - implied
-        return implied, "contract_price", None
+        return _checked_probability(line.ref_p, "ref_p"), "ref_p", None
+    for step in _MARKET_STEPS:
+        found = step(line, method, require_model)
+        if found is not None:
+            probability, source = found
+            return probability, source, None
     raise KeyError(
         f"no distribution for {line.player_key}/{line.stat_type} and no book odds"
     )

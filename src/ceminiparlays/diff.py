@@ -67,6 +67,27 @@ def read_ticket_table(path: Path) -> dict[str, dict[str, str]]:
     return rows
 
 
+def _field_diffs(
+    ticket_id: str,
+    left: dict[str, str],
+    right: dict[str, str],
+) -> list[str]:
+    """One line per field that differs, ``sides`` last."""
+
+    lines: list[str] = []
+    for field in COMPARE_FIELDS:
+        a = (left.get(field) or "").strip()
+        b = (right.get(field) or "").strip()
+        if a != b:
+            lines.append(f"ticket {ticket_id} {field}: card={a} booked={b}")
+    if "sides" in left and "sides" in right:
+        a = (left.get("sides") or "").strip()
+        b = (right.get("sides") or "").strip()
+        if a != b:
+            lines.append(f"ticket {ticket_id} sides: card={a} booked={b}")
+    return lines
+
+
 def diff_ticket_lines(
     card: dict[str, dict[str, str]],
     booked: dict[str, dict[str, str]],
@@ -83,16 +104,7 @@ def diff_ticket_lines(
         if right is None:
             lines.append(f"ticket {ticket_id}: card only")
             continue
-        for field in COMPARE_FIELDS:
-            a = (left.get(field) or "").strip()
-            b = (right.get(field) or "").strip()
-            if a != b:
-                lines.append(f"ticket {ticket_id} {field}: card={a} booked={b}")
-        if "sides" in left and "sides" in right:
-            a = (left.get("sides") or "").strip()
-            b = (right.get("sides") or "").strip()
-            if a != b:
-                lines.append(f"ticket {ticket_id} sides: card={a} booked={b}")
+        lines.extend(_field_diffs(ticket_id, left, right))
     return lines
 
 

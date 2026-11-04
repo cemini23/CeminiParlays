@@ -691,6 +691,126 @@ def _actual_hit(side: str, actual_raw: str, line: object, stat_type: str) -> flo
     return 0.0
 
 
+#: Ledger cells that carry a per-leg CLV.
+_CLV_CELLS = (
+    "sides",
+    "lines",
+    "player_key",
+    "market",
+    "actuals",
+    "bet_over",
+    "bet_under",
+    "close_over",
+    "close_under",
+    "close_lines",
+)
+
+
+def _typed_or_snapshot(value, fallback):
+    """A typed cell wins. The closing snapshot fills a blank cell."""
+
+    return fallback if value is None else value
+
+
+def _leg_prices(index: int, cells: dict[str, list[str]], close) -> tuple:
+    """Bet and close prices for one leg, with the snapshot filling the blanks."""
+
+    bet_line = _cell_float(cells["lines"], index)
+    close_line = _cell_float(cells["close_lines"], index)
+    over_close = _cell_int(cells["close_over"], index)
+    under_close = _cell_int(cells["close_under"], index)
+    if close is not None:
+        over_close = _typed_or_snapshot(over_close, close.over)
+        under_close = _typed_or_snapshot(under_close, close.under)
+        close_line = _typed_or_snapshot(close_line, close.line)
+    return (
+        _cell_int(cells["bet_over"], index),
+        _cell_int(cells["bet_under"], index),
+        over_close,
+        under_close,
+        bet_line,
+        close_line,
+    )
+
+
+def _attach_handoff(
+    leg: dict[str, object],
+    index: int,
+    cells: dict[str, list[str]],
+    handoff_index: dict | None,
+    side: str,
+    stat: str,
+    bet_line: float | None,
+    close_implied: float | None,
+) -> None:
+    """Score the handoff forecast against the close, when both are present."""
+
+    if not handoff_index or close_implied is None or bet_line is None:
+        return
+    dist = handoff_index.get((leg["player_key"], stat))
+    actuals = cells["actuals"]
+    lines = cells["lines"]
+    hit = _actual_hit(
+        side,
+        actuals[index] if index < len(actuals) else "",
+        lines[index] if index < len(lines) else "",
+        stat,
+    )
+    if dist is None or hit is None:
+        return
+    try:
+        p_dfs, _family = p_dfs_over(dist, bet_line, stat_type=stat)
+    except (ValueError, TypeError):
+        return
+    leg["p_dfs_over"] = p_dfs
+    leg["actual_hit"] = hit
+    leg["dfs_vs_close_brier_delta"] = (p_dfs - hit) ** 2 - (close_implied - hit) ** 2
+
+
+def _clv_leg(
+    index: int,
+    side: str,
+    stat: str,
+    player_key: str,
+    cells: dict[str, list[str]],
+    close,
+    method: str,
+    handoff_index: dict | None,
+) -> dict[str, object]:
+    over_bet, under_bet, over_close, under_close, bet_line, close_line = _leg_prices(
+        index, cells, close
+    )
+    bet_implied = side_implied(side, over_bet, under_bet, method=method)
+    close_implied = side_implied(side, over_close, under_close, method=method)
+    clv_pp = (
+        close_implied - bet_implied
+        if bet_implied is not None and close_implied is not None
+        else None
+    )
+    clv_move = (
+        line_clv(side, bet_line, close_line)
+        if bet_line is not None and close_line is not None
+        else None
+    )
+    leg: dict[str, object] = {
+        "player_key": player_key,
+        "stat_type": stat,
+        "side": side,
+        "bet_line": bet_line,
+        "close_line": close_line,
+        "bet_implied_p": bet_implied,
+        "close_implied_p": close_implied,
+        "clv_pp": clv_pp,
+        "clv_line": clv_move,
+        "leg_clv_bps": None if clv_pp is None else clv_pp * BPS,
+        "p_dfs_over": None,
+        "actual_hit": None,
+        "dfs_vs_close_brier_delta": None,
+    }
+    _attach_handoff(leg, index, cells, handoff_index, side, stat, bet_line, close_implied)
+    return leg
+
+
 def _row_clv(
     raw: dict[str, str],
     closes: dict | None,
@@ -710,90 +830,28 @@ def _row_clv(
     handoff's forecast against the closing consensus on the realized result.
     """
 
-    sides = _cells(raw, "sides")
-    lines = _cells(raw, "lines")
-    keys = _cells(raw, "player_key")
-    stats = [canonical_ledger_market(part) for part in _cells(raw, "market")]
-    actuals = _cells(raw, "actuals")
-    bet_over = _cells(raw, "bet_over")
-    bet_under = _cells(raw, "bet_under")
-    close_over = _cells(raw, "close_over")
-    close_under = _cells(raw, "close_under")
-    close_lines = _cells(raw, "close_lines")
-
+    cells = {key: _cells(raw, key) for key in _CLV_CELLS}
+    stats = [canonical_ledger_market(part) for part in cells["market"]]
     legs: list[dict[str, object]] = []
     values: list[float] = []
-    for index, side in enumerate(sides):
+    for index, side in enumerate(cells["sides"]):
         stat = stats[index] if index < len(stats) else ""
-        player_key = keys[index] if index < len(keys) else ""
-        close = None
-        if closes is not None and player_key and stat:
-            close = closes.get((platform, player_key, stat, side.lower()))
-        over_bet = _cell_int(bet_over, index)
-        under_bet = _cell_int(bet_under, index)
-        over_close = _cell_int(close_over, index)
-        under_close = _cell_int(close_under, index)
-        if close is not None:
-            if over_close is None:
-                over_close = close.over
-            if under_close is None:
-                under_close = close.under
-        bet_line = _cell_float(lines, index)
-        close_line = _cell_float(close_lines, index)
-        if close_line is None and close is not None:
-            close_line = close.line
-
-        bet_implied = side_implied(side, over_bet, under_bet, method=method)
-        close_implied = side_implied(side, over_close, under_close, method=method)
-        clv_pp = (
-            close_implied - bet_implied
-            if bet_implied is not None and close_implied is not None
-            else None
+        player_key = cells["player_key"][index] if index < len(cells["player_key"]) else ""
+        close = _closing_row(closes, platform, player_key, stat, side)
+        leg = _clv_leg(
+            index, side, stat, player_key, cells, close, method, handoff_index
         )
-        clv_move = (
-            line_clv(side, bet_line, close_line)
-            if bet_line is not None and close_line is not None
-            else None
-        )
-        if clv_pp is not None:
-            values.append(clv_pp)
-        leg: dict[str, object] = {
-            "player_key": player_key,
-            "stat_type": stat,
-            "side": side,
-            "bet_line": bet_line,
-            "close_line": close_line,
-            "bet_implied_p": bet_implied,
-            "close_implied_p": close_implied,
-            "clv_pp": clv_pp,
-            "clv_line": clv_move,
-            "leg_clv_bps": None if clv_pp is None else clv_pp * BPS,
-            "p_dfs_over": None,
-            "actual_hit": None,
-            "dfs_vs_close_brier_delta": None,
-        }
-        if handoff_index and close_implied is not None and bet_line is not None:
-            dist = handoff_index.get((player_key, stat))
-            hit = _actual_hit(
-                side,
-                actuals[index] if index < len(actuals) else "",
-                lines[index] if index < len(lines) else "",
-                stat,
-            )
-            if dist is not None and hit is not None:
-                try:
-                    p_dfs, _family = p_dfs_over(dist, bet_line, stat_type=stat)
-                except (ValueError, TypeError):
-                    p_dfs = None
-                if p_dfs is not None:
-                    leg["p_dfs_over"] = p_dfs
-                    leg["actual_hit"] = hit
-                    leg["dfs_vs_close_brier_delta"] = (p_dfs - hit) ** 2 - (
-                        close_implied - hit
-                    ) ** 2
+        if leg["clv_pp"] is not None:
+            values.append(leg["clv_pp"])  # type: ignore[arg-type]
         legs.append(leg)
     mean = sum(values) / len(values) if values else 0.0
     return {"legs": legs, "mean_pp": mean, "n": len(values)}
+
+
+def _closing_row(closes: dict | None, platform: str, player_key: str, stat: str, side: str):
+    if closes is None or not player_key or not stat:
+        return None
+    return closes.get((platform, player_key, stat, side.lower()))
 
 
 def grade_ledger(

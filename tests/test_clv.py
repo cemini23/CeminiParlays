@@ -5,9 +5,19 @@ import math
 import statistics
 from pathlib import Path
 
+import pytest
+
 from ceminiparlays.cli import main
 from ceminiparlays.closings import line_clv, read_prop_closes, side_implied
-from ceminiparlays.clv import clv_report, student_t_sf, summarize
+from ceminiparlays.clv import (
+    clv_report,
+    collect_legs,
+    format_clv_report,
+    legs_from_row,
+    student_t_sf,
+    summarize,
+    write_clv_json,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 LEDGER_HEADER = (
@@ -303,3 +313,71 @@ def test_clv_summarize_of_no_legs_is_stable() -> None:
     assert report["n_legs"] == 0
     assert report["p_value"] == 0.5
     assert report["clv_basis"] == "same_book"
+
+
+def test_legs_from_row_returns_only_legs_that_carry_a_clv() -> None:
+    raw = {
+        "platform": "hardrock",
+        "sides": "more|more",
+        "lines": "250.5|50.5",
+        "market": "pass_yds|rec_yds",
+        "clv_pp": "0.02|",
+        "clv_line": "2.0|",
+    }
+    legs = legs_from_row(raw)
+    assert len(legs) == 1
+    assert legs[0].stat_type == "pass_yds"
+    assert legs[0].side == "more"
+    assert legs[0].clv_pp == 0.02
+    assert legs[0].clv_line == 2.0
+    assert legs[0].basis == "same_book"
+
+
+def test_legs_from_row_calls_a_different_closing_book_a_reference() -> None:
+    raw = {
+        "platform": "hardrock",
+        "sides": "more",
+        "lines": "250.5",
+        "market": "pass_yds",
+        "clv_pp": "0.02",
+        "close_platform": "pinnacle",
+    }
+    legs = legs_from_row(raw)
+    assert legs[0].basis == "reference"
+
+
+def test_collect_legs_reads_every_ledger(tmp_path: Path) -> None:
+    first = _clv_cells(str(tmp_path / "a.csv"), [0.02])
+    second = _clv_cells(str(tmp_path / "b.csv"), [0.04, 0.06])
+    assert len(collect_legs([first, second])) == 3
+
+
+def test_collect_legs_names_a_missing_ledger(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="Ledger not found"):
+        collect_legs([tmp_path / "absent.csv"])
+
+
+def test_format_clv_report_prints_the_leg_count_and_the_mean(tmp_path: Path) -> None:
+    report = clv_report([_clv_cells(str(tmp_path / "x.csv"), [0.02, 0.04])])
+    text = format_clv_report(report)
+    assert text.splitlines()[0] == "CLV report — 2 legs with CLV (target 100)"
+    assert "mean +3.00pp" in text
+
+
+def test_format_clv_report_prints_each_verdict(tmp_path: Path) -> None:
+    prove = clv_report([_clv_cells(str(tmp_path / "p.csv"), [0.01, 0.03] * 50)])
+    assert "VERDICT: PROVE" in format_clv_report(prove)
+
+    kill = clv_report([_clv_cells(str(tmp_path / "k.csv"), [-0.01, -0.03] * 50)])
+    assert "VERDICT: KILL" in format_clv_report(kill)
+
+    keep = clv_report([_clv_cells(str(tmp_path / "c.csv"), [0.01] * 20)])
+    keep_text = format_clv_report(keep)
+    assert "VERDICT: KEEP COLLECTING" in keep_text
+    assert "80 legs to the 100-leg gate" in keep_text
+
+
+def test_write_clv_json_creates_the_parent_directory(tmp_path: Path) -> None:
+    path = tmp_path / "nested" / "clv.json"
+    write_clv_json({"n_legs": 2}, path)
+    assert json.loads(path.read_text(encoding="utf-8")) == {"n_legs": 2}

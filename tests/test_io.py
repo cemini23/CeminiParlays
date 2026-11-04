@@ -1,8 +1,15 @@
+import csv
 from pathlib import Path
 
 import pytest
 
-from ceminiparlays.io import is_flagged, is_scratched, read_games, read_manual_lines
+from ceminiparlays.io import (
+    is_flagged,
+    is_scratched,
+    read_games,
+    read_manual_lines,
+    write_csv,
+)
 from ceminiparlays.payouts import breakeven_per_leg, resolve_payout
 from ceminiparlays.slips import evaluate_legs
 
@@ -159,3 +166,18 @@ def test_read_games(tmp_path: Path) -> None:
     assert len(games) == 1
     assert games[0].game_id == "CHI@CAR"
     assert games[0].away_itt == 25.25
+
+
+def test_write_csv_creates_missing_parents_and_writes_the_rows(tmp_path: Path) -> None:
+    path = tmp_path / "nested" / "rows.csv"
+    write_csv(path, [{"a": "1", "b": "x"}], ["a", "b"])
+    with path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows == [{"a": "1", "b": "x"}]
+    assert path.read_text(encoding="utf-8").startswith("a,b")
+
+
+def test_write_csv_writes_the_header_when_there_are_no_rows(tmp_path: Path) -> None:
+    path = tmp_path / "empty.csv"
+    write_csv(path, [], ["a", "b"])
+    assert path.read_text(encoding="utf-8").strip() == "a,b"

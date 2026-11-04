@@ -3,9 +3,14 @@ from pathlib import Path
 from ceminiparlays.compose import (
     compose_tickets,
     concentration_warnings,
+    drop_unavailable_first_td,
     estimate_multiplier,
+    first_td_available,
+    multi_leg_duplicates,
     player_stat_ticket_counts,
+    ticket_rows,
 )
+from ceminiparlays.environment import EnvRow, normalize_team
 from ceminiparlays.environment import read_environment
 from ceminiparlays.io import LineRow, read_manual_lines
 from ceminiparlays.slips import EvaluatedLeg, evaluate_legs
@@ -487,3 +492,100 @@ def test_estimate_multiplier_has_no_fair_naive_fallback() -> None:
     a = _leg("A", "KC", "BUF", book_over=None, book_under=None, fair_p=0.5)
     b = _leg("B", "DAL", "PHI", book_over=None, book_under=None, fair_p=0.5)
     assert estimate_multiplier([a, b]) == (None, "none", False)
+
+
+def _barred_env() -> dict:
+    return {
+        (normalize_team("KC"), normalize_team("BUF")): EnvRow(
+            game_id="",
+            team="KC",
+            opponent="BUF",
+            implied_total=None,
+            spread=None,
+            roof="",
+            weather_exposed=False,
+            wind_mph=None,
+            precip_pop=None,
+            first_td="no",
+        )
+    }
+
+
+def test_first_td_available_is_true_for_a_non_td_market() -> None:
+    assert first_td_available(None, _leg("A", "KC", "BUF", stat="rec_yds")) is True
+
+
+def test_first_td_available_is_true_without_an_environment_row() -> None:
+    assert first_td_available(None, _leg("A", "KC", "BUF", stat="first_td")) is True
+
+
+def test_first_td_available_reads_an_explicit_none() -> None:
+    assert first_td_available(_barred_env(), _leg("A", "KC", "BUF", stat="first_td")) is False
+    assert first_td_available(_barred_env(), _leg("A", "KC", "BUF", stat="rec_yds")) is True
+
+
+def test_drop_unavailable_first_td_keeps_the_order() -> None:
+    kept_line = _leg("A", "KC", "BUF", stat="rec_yds")
+    barred = _leg("B", "KC", "BUF", stat="first_td")
+    other = _leg("C", "DAL", "PHI", stat="rec_yds")
+    assert drop_unavailable_first_td([kept_line, barred, other], _barred_env()) == [
+        kept_line,
+        other,
+    ]
+
+
+def test_multi_leg_duplicates_names_the_two_tickets() -> None:
+    tickets = [
+        [_leg("A", "KC", "BUF"), _leg("B", "DAL", "PHI")],
+        [_leg("A", "KC", "BUF"), _leg("C", "SF", "SEA", stat="rec_yds")],
+    ]
+    found = multi_leg_duplicates(tickets)
+    assert len(found) == 1
+    assert "ticket 1 and ticket 2" in found[0]
+
+
+def test_multi_leg_duplicates_ignores_a_single_leg_ticket() -> None:
+    tickets = [
+        [_leg("A", "KC", "BUF")],
+        [_leg("A", "KC", "BUF"), _leg("B", "DAL", "PHI")],
+    ]
+    assert multi_leg_duplicates(tickets) == []
+
+
+def test_select_disjoint_retries_when_the_best_combo_hides_a_fuller_pack() -> None:
+    """The inner ``pack`` retries from a later start when a greedy pass is short."""
+
+    from ceminiparlays.compose import _select_disjoint
+
+    a = _leg("A", "KC", "BUF")
+    b = _leg("B", "DAL", "PHI")
+    c = _leg("C", "SF", "SEA", stat="rec_yds")
+    d = _leg("D", "NYJ", "MIA", stat="rush_yds")
+    scored = [
+        ((3.0, 0.0, 0.0), 2.0, (a, b)),
+        ((2.0, 0.0, 0.0), 2.0, (a, c)),
+        ((1.0, 0.0, 0.0), 2.0, (b, d)),
+    ]
+    assert _select_disjoint(scored, 2, set()) == [(a, c), (b, d)]
+
+
+def test_select_disjoint_skips_a_blocked_leg() -> None:
+    from ceminiparlays.compose import _leg_key, _select_disjoint
+
+    a = _leg("A", "KC", "BUF")
+    b = _leg("B", "DAL", "PHI")
+    assert _select_disjoint([((1.0, 0.0, 0.0), 2.0, (a, b))], 1, {_leg_key(a)}) == []
+
+
+def test_ticket_rows_maps_every_leg_field() -> None:
+    rows = ticket_rows([_leg("A", "KC", "BUF")], "T1", "hardrock")
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["ticket_id"] == "T1"
+    assert row["platform"] == "hardrock"
+    assert row["player_name"] == "A"
+    assert row["team"] == "KC"
+    assert row["opp"] == "BUF"
+    assert row["stat_type"] == "pass_yds"
+    assert row["book_over"] == -110
+    assert row["slip_odds"] == ""

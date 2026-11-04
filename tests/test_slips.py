@@ -8,10 +8,15 @@ from ceminiparlays import slips as slips_module
 from ceminiparlays.io import LineRow, read_distributions, read_manual_lines
 from ceminiparlays.payouts import breakeven_per_leg, pickem_breakeven, resolve_payout
 from ceminiparlays.slips import (
+    EvaluatedSlip,
+    ModelRequiredError,
     evaluate_legs,
+    fair_for_line,
     filter_slips_by_odds,
+    rank_slip_sizes,
     rank_slips,
     slip_as_row,
+    slip_clears_odds,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -848,3 +853,80 @@ def test_fresh_line_survives_the_age_check() -> None:
         allow_high_receiving=True, now=now, max_line_age_minutes=60.0,
     )
     assert len(live) == 1
+
+
+def _slip(*, multiplier: float = 3.0, ev: float = 0.1) -> EvaluatedSlip:
+    return EvaluatedSlip(
+        legs=[],
+        p_joint=0.5,
+        p_naive=0.5,
+        ev=ev,
+        kelly=0.0,
+        mode="power",
+        multiplier=multiplier,
+        platform="underdog",
+    )
+
+
+def test_fair_for_line_prefers_a_typed_fair_p() -> None:
+    leg = _line("A", "KC", "BUF")
+    leg.fair_p = 0.62
+    assert fair_for_line(leg, None) == (0.62, "fair_p", None)
+
+
+def test_fair_for_line_de_vigs_the_same_book_as_a_last_resort() -> None:
+    prob, source, fair = fair_for_line(_line("A", "KC", "BUF"), None)
+    assert source == "book_devig"
+    assert prob == pytest.approx(0.5, abs=1e-6)
+    assert fair is None
+
+
+def test_fair_for_line_refuses_a_same_book_marginal_when_a_model_is_required() -> None:
+    with pytest.raises(ModelRequiredError):
+        fair_for_line(_line("A", "KC", "BUF"), None, require_model=True)
+
+
+def test_fair_for_line_prices_a_td_leg_from_its_own_odds() -> None:
+    leg = _line(
+        "A", "KC", "BUF", stat="anytime_td", book_over=None, book_under=None, leg_odds=-200
+    )
+    prob, source, _ = fair_for_line(leg, None)
+    assert source == "leg_odds_implied"
+    assert prob == pytest.approx(2 / 3, abs=1e-3)
+
+
+def test_slip_clears_odds_keeps_a_line_inside_the_window() -> None:
+    slip = _slip(multiplier=3.0)
+    assert slip_clears_odds(slip) is True
+    assert slip_clears_odds(slip, min_odds=100, max_odds=900) is True
+
+
+def test_slip_clears_odds_rejects_a_line_below_the_min() -> None:
+    assert slip_clears_odds(_slip(multiplier=2.0), min_odds=500) is False
+
+
+def test_slip_clears_odds_rejects_a_line_above_the_max() -> None:
+    assert slip_clears_odds(_slip(multiplier=2.0), max_odds=-110) is False
+
+
+def test_rank_slip_sizes_ranks_each_size_and_notes_the_filter_drop(monkeypatch) -> None:
+    sizes_seen: list[int] = []
+
+    def fake_rank_slips(legs, **kwargs):
+        sizes_seen.append(kwargs["slip_size"])
+        return [_slip(multiplier=2.0)]
+
+    monkeypatch.setattr(slips_module, "rank_slips", fake_rank_slips)
+    notes: list[str] = []
+    ranked = rank_slip_sizes([], "underdog", "power", [2, 3], min_odds=500, notes=notes)
+    assert sizes_seen == [2, 3]
+    assert ranked == []
+    assert notes and "odds-filter dropped 2" in notes[0]
+
+
+def test_rank_slip_sizes_returns_every_kept_slip(monkeypatch) -> None:
+    monkeypatch.setattr(
+        slips_module, "rank_slips", lambda legs, **kwargs: [_slip(multiplier=3.0, ev=0.2)]
+    )
+    ranked = rank_slip_sizes([], "underdog", "power", [2, 3], max_slips=10)
+    assert len(ranked) == 2

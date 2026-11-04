@@ -3,14 +3,25 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
 from ceminiparlays.half_edge import (
+    EV_FIELDS,
     SHARE_FIELDS,
+    MarketScore,
+    _ShareIndex,
+    build_shares,
+    format_report,
     is_real_split,
     normal_over_prob,
     pick_side,
+    read_csv,
+    sample_sd,
     score_markets,
     select_legs,
     shrink_share,
+    typed_question,
+    write_scores,
 )
 from ceminiparlays.names import fold_name
 
@@ -244,3 +255,75 @@ def test_too_few_legs_and_a_flat_share_fail() -> None:
     assert dropped["no_split"] == 3
     # The normal helper stays finite at the posted line.
     assert 0.5 < normal_over_prob(100.0, 140.0, 50.0) < 0.9
+
+
+def _score() -> MarketScore:
+    return MarketScore(
+        market="rec_yds",
+        n_legs=3,
+        mean_ev=0.05,
+        ci_low=0.01,
+        ci_high=0.09,
+        cluster_ci_low=0.0,
+        cluster_ci_high=0.1,
+        verdict="pass",
+        reason="ok",
+    )
+
+
+def test_sample_sd_needs_two_values() -> None:
+    assert sample_sd([]) is None
+    assert sample_sd([1.0]) is None
+
+
+def test_sample_sd_uses_the_n_minus_one_estimate() -> None:
+    assert sample_sd([1.0, 2.0, 3.0, 4.0]) == pytest.approx(1.2909944, rel=1e-6)
+
+
+def test_typed_question_names_the_player_and_the_stat() -> None:
+    text = typed_question({"stat_type": "rec_yds", "player_name": "A Back"})
+    assert "rec_yds" in text
+    assert "A Back" in text
+    assert text.endswith("pass or fail.")
+
+
+def test_read_csv_returns_the_rows(tmp_path: Path) -> None:
+    path = tmp_path / "rows.csv"
+    path.write_text("a,b\n1,2\n", encoding="utf-8")
+    assert read_csv(path) == [{"a": "1", "b": "2"}]
+
+
+def test_market_score_as_row_keys_every_ev_field() -> None:
+    row = _score().as_row()
+    assert list(row) == EV_FIELDS
+    assert row["market"] == "rec_yds"
+    assert row["n_legs"] == "3"
+
+
+def test_write_scores_writes_the_ev_header(tmp_path: Path) -> None:
+    path = tmp_path / "nested" / "scores.csv"
+    write_scores(path, [])
+    assert path.read_text(encoding="utf-8").strip() == ",".join(EV_FIELDS)
+
+
+def test_format_report_leads_with_the_drop_counts() -> None:
+    dropped = {
+        "unmatched": 0,
+        "no_split": 0,
+        "no_full_line": 0,
+        "tie": 0,
+        "no_price": 0,
+    }
+    lines = format_report([_score()], dropped, _ShareIndex([])).splitlines()
+    assert lines[0] == "ngs_player_rows=0"
+    assert lines[1] == "ngs_attached=0"
+    assert lines[2] == "dropped_unmatched=0"
+    assert lines[6] == "dropped_no_price=0"
+    assert lines[7] == ",".join(EV_FIELDS)
+    assert lines[8].startswith("rec_yds,3,")
+
+
+def test_build_shares_names_a_missing_pbp_file(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
+    with pytest.raises(ValueError, match="pbp file is missing"):
+        build_shares([tmp_path / "absent.parquet"], [], [], tmp_path / "shares.csv")

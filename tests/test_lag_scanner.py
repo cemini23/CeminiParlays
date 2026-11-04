@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from ceminiparlays.lag_scanner import main
+from ceminiparlays.lag_scanner import main, main_rows
 
 HEADER = "stat_type,player_key,line,book_over,book_under,commence_time\n"
 PRICE = "-110,-110"
@@ -96,3 +96,34 @@ def test_following_derivative_flags_nothing(tmp_path: Path) -> None:
     assert main(["--prev-capture", str(prev), "--curr-capture", str(curr), "--out", str(out), "--legs", str(legs)]) == 0
 
     assert _report_rows(out) == []
+
+
+def _row(line: str, over: str = "-110", under: str = "-110", line_type: str = "") -> dict:
+    row = {
+        "commence_time": COMMENCE,
+        "player_key": PLAYER,
+        "stat_type": "rec_yds",
+        "line": line,
+        "book_over": over,
+        "book_under": under,
+    }
+    if line_type:
+        row["line_type"] = line_type
+    return row
+
+
+def test_main_rows_keeps_the_tightest_two_way_line() -> None:
+    rows = [_row("50.5"), _row("52.5", "-150", "130"), _row("48.5", "", "-110")]
+    mains = main_rows(rows)
+    assert len(mains) == 1
+    assert mains[(COMMENCE, PLAYER, "rec_yds")]["line"] == "50.5"
+
+
+def test_main_rows_drops_a_row_without_both_prices() -> None:
+    assert main_rows([_row("50.5", over="")]) == {}
+
+
+def test_main_rows_honours_a_line_type_column() -> None:
+    rows = [_row("50.5", line_type="alternate"), _row("52.5", line_type="standard")]
+    mains = main_rows(rows)
+    assert mains[(COMMENCE, PLAYER, "rec_yds")]["line"] == "52.5"

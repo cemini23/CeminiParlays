@@ -10,6 +10,7 @@ import pytest
 
 from ceminiparlays.hardrock_book import _base_stat
 from ceminiparlays.markets import parse_markets
+from ceminiparlays.matchup_scanner import jev_route_status
 from ceminiparlays.matchup_features import _prior_frame
 from ceminiparlays.compose import joint_ticket
 from ceminiparlays.matchup_math import (
@@ -390,3 +391,8 @@ def test_score_board_is_byte_identical(tmp_path: Path) -> None:
     assert text.startswith("qualified=0")
     assert "promoted=none" in text
     assert "jev=not_called" in text
+
+
+def test_jev_route_status_stays_offline_and_fail_closed() -> None:
+    assert jev_route_status(False) == "not_called"
+    assert jev_route_status(True) == "fail_closed"

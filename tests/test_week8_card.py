@@ -1,12 +1,33 @@
 """Week 8 card rules. Live Hard Rock prices stay out of this file."""
 
+import pytest
+
 from ceminiparlays.week8_card import (
     BANKROLL_CENTS,
+    GAME_CAP_CENTS,
     PARLAY_CAP_CENTS,
     SINGLES_FLOOR_CENTS,
+    TICKET_CAP_CENTS,
+    CardTicket,
     _checkdown_inputs,
+    add_exposure,
+    american_int,
+    american_text,
+    build_from_files,
+    build_pools,
+    clip_printed_side,
+    exposure_ok,
     favored_catch_under,
+    frame_rows,
+    game_exposure,
+    game_key,
+    has_quarter_pair,
+    kick_label,
+    load_pbp_plays,
+    mean_of,
     price_period_yards,
+    product_ev,
+    read_lines,
     render_markdown,
     select_card,
     stake_cents,
@@ -381,3 +402,136 @@ def test_one_prop_cannot_sit_on_two_sgp_tickets():
         ticket for ticket in placed if any(leg["player_key"] == "hooper" for leg in ticket.legs)
     ]
     assert len(hooper_tickets) == 1
+
+
+class _Frame:
+    """The one method ``frame_rows`` asks of a DataFrame."""
+
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+
+    def to_dict(self, orient: str) -> list[dict]:
+        assert orient == "records"
+        return list(self.rows)
+
+
+def test_american_int_reads_a_valid_price() -> None:
+    assert american_int(-110) == -110
+    assert american_int("+150") == 150
+    assert american_int(150.7) == 150
+
+
+def test_american_int_refuses_a_bad_price() -> None:
+    assert american_int(0) is None
+    assert american_int(-50) is None
+    assert american_int("x") is None
+    assert american_int(None) is None
+
+
+def test_american_text_signs_a_positive_price() -> None:
+    assert american_text(150) == "+150"
+    assert american_text(-110) == "-110"
+
+
+def test_kick_label_names_a_sunday_window() -> None:
+    assert kick_label("2026-11-01T18:00:00Z") == "1:00 PM ET"
+    assert kick_label("2026-01-01T00:00:00Z") == ""
+
+
+def test_game_key_is_the_unordered_team_pair() -> None:
+    assert game_key(_leg()) == frozenset({"BUF", "BAL"})
+
+
+def test_mean_of_averages_the_finite_values() -> None:
+    assert mean_of([{"a": 1}, {"a": 3}, {"a": "x"}], "a") == 2.0
+    assert mean_of([], "a") is None
+
+
+def test_frame_rows_clears_a_nan_and_keeps_a_null() -> None:
+    rows = frame_rows(_Frame([{"a": 1.0, "b": float("nan"), "c": None}]))
+    assert rows == [{"a": 1.0, "b": None, "c": None}]
+
+
+def test_clip_printed_side_drops_a_leg_with_no_edge() -> None:
+    assert clip_printed_side(0.40, 0.40, -110) is None
+
+
+def test_clip_printed_side_returns_the_clip_and_the_ev() -> None:
+    clipped, ev = clip_printed_side(0.62, 0.55, -110)
+    assert clipped == 0.62
+    assert ev > 0.0
+
+
+def test_product_ev_multiplies_the_independent_product() -> None:
+    ev, decimal = product_ev(
+        [{"model_p": 0.6, "price": -110}, {"model_p": 0.5, "price": 100}]
+    )
+    assert decimal == pytest.approx(3.8181818, rel=1e-6)
+    assert ev == pytest.approx(0.1454545, rel=1e-6)
+
+
+def test_has_quarter_pair_flags_a_redundant_pair() -> None:
+    receptions = _leg(market="receptions_q4")
+    rec_yards = _leg(market="rec_yds_q4")
+    other_player = _leg(player_key="player_b", market="rec_yds")
+    assert has_quarter_pair([receptions, rec_yards]) is True
+    assert has_quarter_pair([receptions, other_player]) is False
+    assert has_quarter_pair([]) is False
+
+
+def test_exposure_ok_respects_the_ticket_cap() -> None:
+    assert exposure_ok({}, [_leg()], 100) is True
+    assert exposure_ok({}, [_leg()], TICKET_CAP_CENTS + 1) is False
+
+
+def test_exposure_ok_respects_the_game_cap() -> None:
+    key = frozenset({"BUF", "BAL"})
+    assert exposure_ok({key: GAME_CAP_CENTS - 100}, [_leg()], 100) is True
+    assert exposure_ok({key: GAME_CAP_CENTS}, [_leg()], 100) is False
+
+
+def test_add_exposure_charges_each_game_once() -> None:
+    exposure: dict[frozenset[str], int] = {}
+    add_exposure(exposure, [_leg(), _leg(player_key="player_b")], 300)
+    assert exposure == {frozenset({"BUF", "BAL"}): 300}
+
+
+def test_game_exposure_counts_a_ticket_once_per_game() -> None:
+    ticket = CardTicket(
+        ticket_id="1",
+        tier="1",
+        legs=(_leg(), _leg(player_key="player_b")),
+        stake_cents=300,
+        tax_ev=0.2,
+        note="none",
+    )
+    assert game_exposure([ticket]) == {"BAL @ BUF": 300}
+
+
+def test_read_lines_reads_the_csv(tmp_path) -> None:
+    path = tmp_path / "lines.csv"
+    path.write_text("a,b\n1,2\n", encoding="utf-8")
+    assert read_lines(path) == [{"a": "1", "b": "2"}]
+
+
+def test_load_pbp_plays_without_a_file_is_empty(tmp_path) -> None:
+    assert load_pbp_plays(None) == []
+    assert load_pbp_plays(tmp_path / "absent.parquet") == []
+
+
+def test_build_pools_on_an_empty_cache_returns_empty_pools() -> None:
+    cache = {
+        "player_telemetry_pit.parquet": _Frame([]),
+        "defense_counterpart_pit.parquet": _Frame([]),
+        "game_context_pit.parquet": _Frame([]),
+    }
+    pools = build_pools([], cache, set())
+    assert pools["tier1"] == []
+    assert pools["tier2"] == []
+    assert pools["sgps"] == []
+    assert pools["boost"] == []
+
+
+def test_build_from_files_names_a_missing_lines_file(tmp_path) -> None:
+    with pytest.raises(FileNotFoundError, match="lines file is missing"):
+        build_from_files(lines_path=tmp_path / "absent.csv")

@@ -1,7 +1,12 @@
 import numpy as np
 import pytest
 
-from ceminiparlays.copula import exact_joint, nearest_correlation, simulate_slip
+from ceminiparlays.copula import (
+    exact_joint,
+    nearest_correlation,
+    nearest_psd,
+    simulate_slip,
+)
 from ceminiparlays.payouts import power_ev
 
 
@@ -42,3 +47,24 @@ def test_mc_reports_standard_error() -> None:
     sim = simulate_slip([0.5, 0.5], np.eye(2), n_sims=1000, seed=3)
     p = sim["p_all"]
     assert sim["p_all_se"] == pytest.approx((p * (1 - p) / 1000) ** 0.5, rel=1e-9)
+
+
+def test_nearest_psd_lifts_a_negative_eigenvalue_to_the_floor() -> None:
+    result = nearest_psd(np.array([[1.0, 0.9], [0.9, -1.0]]))
+    assert np.allclose(result, result.T)
+    assert np.linalg.eigvalsh(result).min() > 0.0
+
+
+def test_nearest_psd_leaves_a_psd_matrix_unchanged() -> None:
+    matrix = np.array([[1.0, 0.2], [0.2, 1.0]])
+    assert np.allclose(nearest_psd(matrix), matrix)
+
+
+def test_nearest_psd_symmetrises_an_asymmetric_matrix() -> None:
+    result = nearest_psd(np.array([[1.0, 0.4], [0.0, 1.0]]))
+    assert np.allclose(result, result.T)
+
+
+def test_nearest_psd_rejects_a_non_square_matrix() -> None:
+    with pytest.raises(ValueError, match="square"):
+        nearest_psd(np.zeros((2, 3)))

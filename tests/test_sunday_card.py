@@ -1,14 +1,22 @@
 """Stake and exclude checks for the $15 research card."""
 
+import pytest
+
 from ceminiparlays.sunday_card import (
     BANKROLL_CENTS,
     GAME_CAP_CENTS,
     REPORT_OUT,
+    build_sunday_card,
+    game_key,
     kick_et,
+    leg_text,
     norm_name,
     pass_over_blocked,
     qualifying_legs,
+    render_table,
     select_anchors,
+    select_lottos,
+    select_sgps,
     validate_card,
     SundayCard,
     CardTicket,
@@ -129,3 +137,99 @@ def test_validate_card_accepts_fifteen_dollars_and_rejects_a_scratch() -> None:
         assert "never_enter" in str(exc)
     else:
         raise AssertionError("a scratch must fail the card")
+
+
+def _other(**kwargs):
+    base = {
+        "player_name": "A Player",
+        "player_key": "a_player",
+        "team": "SF",
+        "opp": "SEA",
+    }
+    base.update(kwargs)
+    return _leg(**base)
+
+
+def _priced(**kwargs):
+    base = {
+        "legs": [_leg(), _other()],
+        "tax_adjusted_sgp_ev": "0.20",
+        "n_legs": 2,
+        "sgp_tax_applied": True,
+    }
+    base.update(kwargs)
+    return base
+
+
+def test_game_key_is_the_unordered_team_pair() -> None:
+    assert game_key(_leg()) == frozenset({"LAC", "KC"})
+    assert game_key(_leg(team="KC", opp="LAC")) == frozenset({"LAC", "KC"})
+
+
+def test_leg_text_states_the_side_line_and_price() -> None:
+    assert leg_text(_leg()) == "Justin Herbert rush_yds_q4 over 2.5 (-110)"
+
+
+def test_select_sgps_keeps_one_taxed_ticket() -> None:
+    row = _priced()
+    assert select_sgps([row], used_players=set(), exposure={}, wait=set(), count=3) == [row]
+
+
+def test_select_sgps_skips_an_untaxed_row() -> None:
+    row = _priced(sgp_tax_applied=False)
+    assert select_sgps([row], used_players=set(), exposure={}, wait=set()) == []
+
+
+def test_select_sgps_skips_a_row_below_the_minimum_ev() -> None:
+    row = _priced(tax_adjusted_sgp_ev="0.01")
+    assert select_sgps([row], used_players=set(), exposure={}, wait=set()) == []
+
+
+def test_select_sgps_skips_a_player_already_on_the_card() -> None:
+    row = _priced()
+    used = {norm_name("Justin Herbert")}
+    assert select_sgps([row], used_players=used, exposure={}, wait=set()) == []
+
+
+def test_select_lottos_builds_a_cross_game_three_leg() -> None:
+    legs = [
+        _leg(),
+        _other(player_name="B Player", player_key="b_player"),
+        _other(player_name="C Player", player_key="c_player", team="DAL", opp="PHI"),
+    ]
+    chosen = select_lottos(legs, used_players=set(), exposure={}, wait=set(), count=3)
+    assert len(chosen) == 1
+    assert len(chosen[0]) == 3
+
+
+def test_select_lottos_refuses_three_legs_from_two_games() -> None:
+    legs = [
+        _leg(),
+        _other(player_name="B Player", player_key="b_player", team="LAC", opp="KC"),
+        _other(player_name="C Player", player_key="c_player"),
+    ]
+    assert select_lottos(legs, used_players=set(), exposure={}, wait=set()) == []
+
+
+def test_build_sunday_card_refuses_a_thin_slate() -> None:
+    with pytest.raises(ValueError, match="six daytime anchors"):
+        build_sunday_card(
+            [],
+            [],
+            never_enter=set(),
+            wait=set(),
+            blocked_pass_games=set(),
+            game_label=lambda leg: "",
+            note_for=lambda legs, kind: "",
+        )
+
+
+def test_render_table_writes_one_row_per_ticket() -> None:
+    ticket = CardTicket(
+        1, "1", "LAC@KC", "4:25 PM ET", [_leg()], "-110", 0.8, 0.2, 100, "none", "single"
+    )
+    lines = render_table(SundayCard(mode="A", tickets=[ticket])).splitlines()
+    assert lines[0].startswith("| Ticket | Tier |")
+    assert lines[2].startswith("| 1 | 1 | LAC@KC, 4:25 PM ET |")
+    assert "$1.00" in lines[2]
+    assert "20.0%" in lines[2]

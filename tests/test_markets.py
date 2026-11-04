@@ -7,6 +7,7 @@ from ceminiparlays.markets import (
     LEGAL_MARKETS,
     TD_STATS,
     YARDS_STATS,
+    canonical_stat,
     is_first_td,
     is_td_market,
     is_two_plus_td,
@@ -64,3 +65,25 @@ def test_two_plus_td_is_a_legal_count_market() -> None:
     assert parse_markets("two_plus_td") == ["two_plus_td"]
     assert is_two_plus_td("two_plus_td") is True
     assert is_two_plus_td("pass_tds") is False
+
+
+def test_canonical_stat_folds_a_known_alias() -> None:
+    assert canonical_stat("pass_td") == "pass_tds"
+    assert canonical_stat("TOTALS") == "total"
+    assert canonical_stat("h2h") == "moneyline"
+
+
+def test_canonical_stat_strips_an_unknown_token_without_guessing() -> None:
+    assert canonical_stat("  rec_yds  ") == "rec_yds"
+    assert canonical_stat("") == ""
+
+
+def test_canonical_stat_does_not_lower_case_an_unknown_token() -> None:
+    """The docstring promises a lower-cased token. The code does not lower-case it.
+
+    ``catalog._canonical_stat`` does lower-case. Pinned as this function behaves
+    today, because ``io.read_manual_lines`` puts the result on the pricing path
+    and a change there needs a baseline rerun.
+    """
+
+    assert canonical_stat(" Rec_Yds ") == "Rec_Yds"

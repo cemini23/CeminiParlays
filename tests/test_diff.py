@@ -4,7 +4,13 @@ from pathlib import Path
 import pytest
 
 from ceminiparlays.cli import main
-from ceminiparlays.diff import ACCEPTED, BOOKED_WINS, diff_ticket_lines, read_ticket_table
+from ceminiparlays.diff import (
+    ACCEPTED,
+    BOOKED_WINS,
+    diff_ticket_lines,
+    read_ticket_table,
+    write_booked_ledger,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 CARD = ROOT / "examples" / "card_ticket_c.csv"
@@ -185,3 +191,24 @@ def test_read_ticket_table_accepts_card_json(tmp_path) -> None:
     assert rows["compose-001"]["lines"] == "250.5 | 62.5"
     assert rows["compose-001"]["sides"] == "more | less"
     assert rows["compose-001"]["multiplier"] == "3.5"
+
+
+def test_write_booked_ledger_writes_the_union_of_keys(tmp_path: Path) -> None:
+    path = tmp_path / "nested" / "booked.csv"
+    write_booked_ledger(
+        path,
+        {
+            "B": {"ticket_id": "B", "stake": "10"},
+            "A": {"ticket_id": "A", "stake": "5", "lines": "50.5"},
+        },
+    )
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "ticket_id,stake,lines"
+    assert lines[1].startswith("A,")
+    assert lines[2].startswith("B,")
+
+
+def test_write_booked_ledger_writes_a_ticket_id_header_when_empty(tmp_path: Path) -> None:
+    path = tmp_path / "empty.csv"
+    write_booked_ledger(path, {})
+    assert path.read_text(encoding="utf-8").strip() == "ticket_id"

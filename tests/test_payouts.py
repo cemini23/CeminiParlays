@@ -3,7 +3,10 @@ from math import isclose, sqrt
 import pytest
 
 from ceminiparlays.payouts import (
+    PayoutTable,
     breakeven_per_leg,
+    display_name,
+    flex_ev,
     implied_slip_win,
     normalize_platform,
     pickem_breakeven,
@@ -188,3 +191,25 @@ def test_pickem_breakeven_flex_five_solves_published_tiers() -> None:
         - 1.0
     )
     assert abs(ev) < 1e-12
+
+
+def test_display_name_uses_the_book_spelling() -> None:
+    assert display_name("hardrock") == "Hard Rock"
+    assert display_name("betmgm") == "BetMGM"
+    assert display_name("HARDROCK") == "Hard Rock"
+
+
+def test_display_name_falls_back_to_title_case() -> None:
+    assert display_name("new book") == "New Book"
+
+
+def test_flex_ev_weights_each_payout_rung() -> None:
+    table = PayoutTable(
+        platform="p", mode="flex", legs=3, all_hit=3.0, minus_1=1.0, minus_2=0.0
+    )
+    assert flex_ev(0.5, 0.3, 0.2, table) == 0.8
+
+
+def test_flex_ev_is_minus_one_when_nothing_hits() -> None:
+    table = PayoutTable(platform="p", mode="flex", legs=3, all_hit=3.0)
+    assert flex_ev(0.0, 0.0, 0.0, table) == -1.0

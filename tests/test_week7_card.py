@@ -11,15 +11,24 @@ from ceminiparlays.week7_card import (
     PlayView,
     WeekCard,
     WeekTicket,
+    _BY_TEAMS,
+    build_from_lines,
+    candidate_plays,
     card_from_plays,
     confirmed_starters,
+    exposure_cents,
     funnel_lines,
+    game_for,
     gate_reason,
     is_sunday_kick,
     load_never,
     main,
+    market_stem,
     pair_ok,
     price_scheme_line,
+    render_blocked,
+    render_card,
+    same_game_slips,
     t90_flags,
     validate_week7,
     write_ledger,
@@ -395,3 +404,79 @@ def test_missing_board_writes_the_block_and_skips_the_ledger(tmp_path) -> None:
     assert "CF_WAF_A_CR_DFD7" in text
     assert "No ledger was written" in text
     assert not ledger.exists()
+
+
+def _ticket(**kwargs: object) -> WeekTicket:
+    base: dict = {
+        "ticket_id": "1",
+        "tier": "1",
+        "pool": "single",
+        "game_label": "GB @ DET",
+        "kick_et": "4:25 PM ET",
+        "game_id": "2026_07_GB_DET",
+        "legs": (_leg(),),
+        "book_price": "-110",
+        "model_p": 0.62,
+        "tax_ev": 0.2,
+        "stake_cents": 300,
+        "note": "none",
+    }
+    base.update(kwargs)
+    return WeekTicket(**base)
+
+
+def test_market_stem_drops_a_quarter_suffix() -> None:
+    assert market_stem("receptions_q4") == "receptions"
+    assert market_stem("Rec_Yds_Q3") == "rec_yds"
+    assert market_stem("pass_yds") == "pass_yds"
+
+
+def test_game_for_returns_none_outside_the_slate() -> None:
+    assert game_for("ZZ", "YY") is None
+
+
+def test_game_for_finds_a_slated_game() -> None:
+    first, second = sorted(next(iter(_BY_TEAMS)))
+    window = game_for(first, second)
+    assert window is not None
+    assert window.game_id
+
+
+def test_exposure_cents_charges_the_full_stake_to_the_game() -> None:
+    card = WeekCard(mode="A", tickets=(_ticket(),))
+    assert exposure_cents(card) == {"2026_07_GB_DET": 300}
+
+
+def test_exposure_cents_sums_two_tickets_on_one_game() -> None:
+    card = WeekCard(mode="A", tickets=(_ticket(), _ticket(ticket_id="2")))
+    assert exposure_cents(card) == {"2026_07_GB_DET": 600}
+
+
+def test_render_blocked_states_the_reason() -> None:
+    text = render_blocked("no card today")
+    assert text.splitlines()[6] == "no card today"
+    assert "Do not submit a bet." in text
+
+
+def test_render_card_names_the_exposure_and_the_cap() -> None:
+    text = render_card(WeekCard(mode="A", tickets=(_ticket(),)))
+    assert text.splitlines()[0] == "# Week 7 Sunday Hard Rock card, 2026-10-25"
+    assert "The highest game exposure is $3.00" in text
+    assert "| GB @ DET | $3.00 |" in text
+
+
+def test_candidate_plays_with_no_legs_is_empty() -> None:
+    assert candidate_plays([], [], never=set(), starters={}) == ([], {})
+
+
+def test_same_game_slips_with_no_legs_is_empty() -> None:
+    assert same_game_slips([]) == []
+
+
+def test_build_from_lines_names_a_missing_scratch_file(tmp_path) -> None:
+    with pytest.raises(ValueError, match="scratch file is missing"):
+        build_from_lines(
+            tmp_path / "lines.csv",
+            scratches_path=tmp_path / "absent.csv",
+            cache_dir=tmp_path / "cache",
+        )

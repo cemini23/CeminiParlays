@@ -2,7 +2,17 @@
 
 import pytest
 
-from ceminiparlays.grade_card import LEDGER_COLUMNS, archive_card_copies, grade_rows, main
+from ceminiparlays.grade_card import (
+    LEDGER_COLUMNS,
+    CardGrade,
+    actual_stat,
+    archive_card_copies,
+    format_grade,
+    grade_rows,
+    main,
+    plays_from_summary,
+    write_graded_tables,
+)
 from ceminiparlays.names import AliasRequiredError
 from ceminiparlays.odds import american_to_decimal
 
@@ -208,3 +218,98 @@ def test_archive_copies_the_markdown(tmp_path) -> None:
 def test_cli_requires_one_source() -> None:
     assert main(["ledger.csv"]) == 2
     assert main(["ledger.csv", "--pbp", "a.parquet", "--summary", "b.json"]) == 2
+
+
+def _grade(**overrides) -> CardGrade:
+    base = {
+        "tickets": 3,
+        "settled_tickets": 2,
+        "stake": 10.0,
+        "profit": 2.5,
+        "roi": 0.25,
+        "brier": 0.1234567,
+    }
+    base.update(overrides)
+    return CardGrade(**base)
+
+
+def test_format_grade_states_every_count() -> None:
+    text = format_grade(_grade())
+    assert text.startswith("tickets=3 settled=2 stake=10.00 profit=2.50")
+    assert "roi=25.0%" in text
+    assert "brier=0.123457" in text
+
+
+def test_format_grade_marks_an_absent_brier() -> None:
+    text = format_grade(_grade(brier=None))
+    assert "brier=na" in text
+
+
+def test_write_graded_tables_writes_both_tables(tmp_path) -> None:
+    blank = {column: "" for column in LEDGER_COLUMNS}
+    grade = _grade(ledger_rows=[blank], hold_rows=[blank])
+    ledger = tmp_path / "ledger.csv"
+    hold = tmp_path / "hold.csv"
+    write_graded_tables(grade, ledger, hold)
+    assert ledger.read_text(encoding="utf-8").splitlines()[0] == ",".join(LEDGER_COLUMNS)
+    assert hold.read_text(encoding="utf-8").splitlines()[0] == ",".join(LEDGER_COLUMNS)
+
+
+def test_write_graded_tables_skips_the_hold_table_when_unasked(tmp_path) -> None:
+    grade = _grade(ledger_rows=[], hold_rows=[{column: "" for column in LEDGER_COLUMNS}])
+    ledger = tmp_path / "ledger.csv"
+    write_graded_tables(grade, ledger)
+    assert ledger.exists()
+    assert not (tmp_path / "hold.csv").exists()
+
+
+def test_plays_from_summary_passes_a_play_list_through() -> None:
+    plays = plays_from_summary({"status": "STATUS_FINAL", "plays": [{"qtr": 4}]})
+    assert plays == [{"qtr": 4, "status": "STATUS_FINAL"}]
+
+
+def test_plays_from_summary_builds_a_player_row() -> None:
+    plays = plays_from_summary(
+        {
+            "players": [
+                {
+                    "game_id": "g",
+                    "qtr": 4,
+                    "team": "DET",
+                    "opp": "GB",
+                    "gsis_id": "00-1",
+                    "player_name": "A Back",
+                    "position": "RB",
+                    "receptions": 2,
+                }
+            ]
+        }
+    )
+    play = plays[0]
+    assert play["qtr"] == 4
+    assert play["receiver_player_id"] == "00-1"
+    assert play["complete_pass"] == 2
+    assert play["rusher_player_name"] == "A Back"
+    assert play["defteam"] == "GB"
+
+
+def test_plays_from_summary_leaves_a_blank_quarter_as_none() -> None:
+    plays = plays_from_summary({"players": [{"qtr": ""}]})
+    assert plays[0]["qtr"] is None
+
+
+def test_actual_stat_sums_the_matching_plays() -> None:
+    play = {
+        "qtr": 4,
+        "posteam": "DET",
+        "defteam": "GB",
+        "receiver_player_id": "00-1",
+        "complete_pass": 2,
+        "status": "",
+    }
+    leg = {"market": "receptions_q4", "team": "DET", "opp": "GB", "gsis_id": "00-1"}
+    assert actual_stat([play], leg) == 2.0
+
+
+def test_actual_stat_returns_none_for_an_unknown_market() -> None:
+    assert actual_stat([], {"market": "not_a_market"}) is None

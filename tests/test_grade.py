@@ -3,7 +3,15 @@ from pathlib import Path
 
 import pytest
 
-from ceminiparlays.grade import OPTIONAL_LEDGER_COLUMNS, grade_ledger, write_grade
+from ceminiparlays.grade import (
+    OPTIONAL_LEDGER_COLUMNS,
+    canonical_ledger_market,
+    grade_ledger,
+    leg_status_labels,
+    ticket_is_held,
+    ticket_is_lost,
+    write_grade,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -613,3 +621,41 @@ def test_blank_stake_fails_closed(tmp_path) -> None:
     )
     with pytest.raises(ValueError, match="blank stake"):
         grade_ledger(path)
+
+
+def test_canonical_ledger_market_folds_a_phrase() -> None:
+    assert canonical_ledger_market("2+ TD") == "two_plus_td"
+    assert canonical_ledger_market("  Passing TDs ") == "pass_tds"
+    assert canonical_ledger_market("unknown market") == "unknown market"
+
+
+def test_leg_status_labels_reads_an_explicit_token_before_a_number() -> None:
+    labels = leg_status_labels(
+        {"sides": "more|more", "actuals": "hit|win", "lines": "50.5|50.5", "market": "rec_yds"}
+    )
+    assert labels == ["HIT", "HIT"]
+
+
+def test_leg_status_labels_calls_a_blank_actual_ungraded() -> None:
+    labels = leg_status_labels(
+        {
+            "sides": "more|more",
+            "actuals": "300|",
+            "lines": "250.5|50.5",
+            "market": "pass_yds|rec_yds",
+        }
+    )
+    assert labels[0] == "HIT"
+    assert labels[1] == "UNGRADED"
+
+
+def test_ticket_is_lost_on_a_single_miss() -> None:
+    assert ticket_is_lost(["HIT", "MISS", "VOID"]) is True
+    assert ticket_is_lost(["HIT", "VOID"]) is False
+
+
+def test_ticket_is_held_only_while_a_leg_is_open() -> None:
+    assert ticket_is_held(["HIT", "PENDING"]) is True
+    assert ticket_is_held(["HIT", "UNGRADED"]) is True
+    assert ticket_is_held(["MISS", "PENDING"]) is False
+    assert ticket_is_held(["HIT", "VOID"]) is False

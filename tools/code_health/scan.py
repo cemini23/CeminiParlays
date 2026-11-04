@@ -417,15 +417,18 @@ def _module_is_covered(module_stem: str, stems: set[str], text: str) -> bool:
 
 
 def _is_testable(path: tuple[str, ...], classes: set[str]) -> bool:
-    """A test can name a module function or a class method, nothing deeper.
+    """A test can name a module function or a public class method.
 
     A closure lives inside another function. Only its parent can reach it, so
-    the parent is the unit of coverage.
+    the parent is the unit of coverage. A method on a private class is internal
+    too: the class is what the module exposes.
     """
 
     if len(path) == 1:
         return True
-    return len(path) == 2 and path[0] in classes
+    if len(path) != 2 or path[0] not in classes:
+        return False
+    return not path[0].startswith("_")
 
 
 def check_test_gaps(modules: list[ModuleInfo], tests_dir: Path) -> list[Finding]:

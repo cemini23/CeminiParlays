@@ -854,6 +854,544 @@ def _closing_row(closes: dict | None, platform: str, player_key: str, stat: str,
     return closes.get((platform, player_key, stat, side.lower()))
 
 
+@dataclass
+class _LedgerEnv:
+    """The files and indexes one grade run reads."""
+
+    window: dict | None
+    card_ids: set[str] | None
+    closes: dict | None
+    handoff_index: dict
+    default_platform: str | None
+    profile_dir: Path | None
+
+
+@dataclass
+class _Row:
+    """One settled ledger row, once the refusals and the hold are behind it."""
+
+    stake: float
+    hit_count: int
+    miss_count: int
+    void_count: int
+    labels: list[str]
+    effective_n_legs: int
+    ticket_id: str
+    stake_kind: str
+    off_card: bool
+
+
+def _row_identity(raw: dict[str, str]) -> tuple[bool, bool, str, int | None, int]:
+    """(id_refuse, clipped, id_label, visible N-Bet, captured legs)."""
+
+    raw_ticket_id = (raw.get("ticket_id") or "").strip()
+    id_refuse, clipped, id_label = _classify_ticket_id(
+        raw_ticket_id,
+        raw.get("ticket_id_clipped") or "",
+    )
+    return id_refuse, clipped, id_label, _visible_n_bet(raw), _count_captured_legs(raw)
+
+
+def _refusal_reasons(
+    id_refuse: bool, n_bet_count: int | None, captured_legs: int
+) -> list[str]:
+    reasons: list[str] = []
+    if n_bet_count is not None and captured_legs != n_bet_count:
+        reasons.append("n_bet")
+    if id_refuse:
+        reasons.append("ticket_id")
+    return reasons
+
+
+def _pipe_cells(raw: dict[str, str], key: str) -> list[str]:
+    return [part.strip() for part in raw.get(key, "").split("|") if part.strip()]
+
+
+def _player_cells(raw: dict[str, str]) -> list[str]:
+    """The player_name column, or the legs column when that one is blank."""
+
+    players = _pipe_cells(raw, "player_name")
+    if not players and raw.get("legs"):
+        return _pipe_cells(raw, "legs")
+    return players
+
+
+def _record_partial(
+    raw: dict[str, str],
+    id_label: str,
+    clipped: bool,
+    n_bet_count: int | None,
+    captured_legs: int,
+    reasons: list[str],
+    off_card: bool,
+) -> tuple[str, dict[str, object]]:
+    """The refusal note and the partial-ticket record."""
+
+    status = id_label if id_label.startswith("PARTIAL") else "PARTIAL"
+    note = f"{status}: capture incomplete"
+    if "n_bet" in reasons:
+        note += f" — captured legs {captured_legs} != N-Bet {n_bet_count}"
+    if clipped:
+        note += " — ticket_id clipped"
+    return note, {
+        "status": status,
+        "ticket_id": id_label,
+        "clipped": clipped,
+        "visible_n_bet": n_bet_count,
+        "captured_legs": captured_legs,
+        "stake": (raw.get("stake") or "").strip(),
+        "reasons": reasons,
+        "off_card": off_card,
+    }
+
+
+def _payout_for(
+    raw: dict[str, str],
+    row_index: int,
+    labels: list[str],
+    hit_count: int,
+    miss_count: int,
+    void_count: int,
+    effective_n_legs: int,
+    mode: str,
+    displayed: float | None,
+    platform: str,
+    profile_dir: Path | None,
+) -> float:
+    """The payout multiplier for a settled ticket."""
+
+    sportsbook = platform in SPORTSBOOK_PLATFORMS
+    open_leg = any(label in {"PENDING", "UNGRADED"} for label in labels)
+    row_label = raw.get("legs") or raw.get("slip_id") or f"row {row_index}"
+    # A miss settles before a void or a still-open leg can hold the ticket. A
+    # numeric pick'em push stays on ``_void_payout``.
+    if ticket_is_lost(labels) and (sportsbook or open_leg):
+        return 0.0
+    if void_count:
+        return _void_payout(
+            platform,
+            mode,
+            effective_n_legs,
+            void_count,
+            hit_count,
+            miss_count,
+            displayed,
+            profile_dir,
+            row_label=str(row_label),
+        )
+    if sportsbook and miss_count > 0:
+        return 0.0
+    table = resolve_payout(
+        platform,
+        mode,
+        effective_n_legs,
+        displayed_multiplier=displayed,
+        profile_dir=profile_dir,
+    )
+    return table.multiplier_for_hits(hit_count)
+
+
+def _paid_row(
+    stake: float, stake_kind: str, paid_value: float, miss_count: int
+) -> tuple[float, float, float, float]:
+    """(pnl, cash, bonus in, bonus out) when the ledger states what was paid."""
+
+    net = paid_value - stake
+    if stake_kind == "bonus":
+        return net, 0.0, stake, paid_value
+    if stake_kind in NO_SWEAT_KINDS and miss_count > 0:
+        # A lost No Sweat ticket keeps the cash loss. The book return is a bonus.
+        return -stake, -stake, 0.0, paid_value
+    return net, net, 0.0, 0.0
+
+
+def _settled_row(
+    raw: dict[str, str],
+    row_index: int,
+    stake: float,
+    stake_kind: str,
+    labels: list[str],
+    hit_count: int,
+    miss_count: int,
+    void_count: int,
+    effective_n_legs: int,
+    mode: str,
+    displayed: float | None,
+    platform: str,
+    profile_dir: Path | None,
+) -> tuple[float, float, float, float]:
+    """(pnl, cash, bonus in, bonus out) when the ledger is settled from prices."""
+
+    payout = _payout_for(
+        raw,
+        row_index,
+        labels,
+        hit_count,
+        miss_count,
+        void_count,
+        effective_n_legs,
+        mode,
+        displayed,
+        platform,
+        profile_dir,
+    )
+    net = stake * (payout - 1.0)
+    boosted = _parse_paid(raw.get("displayed_boosted_payout"))
+    full_win = (
+        miss_count == 0
+        and void_count == 0
+        and hit_count == effective_n_legs
+        and effective_n_legs > 0
+    )
+    if boosted is not None and boosted > 0.0 and full_win:
+        net = boosted - stake
+        payout = (boosted / stake) if stake else 0.0
+    if stake_kind == "bonus":
+        return net, 0.0, stake, stake * payout
+    if stake_kind in NO_SWEAT_KINDS and miss_count > 0:
+        # A lost ticket keeps the cash loss. A hit uses the cash net.
+        return net, -stake, 0.0, 0.0
+    return net, net, 0.0, 0.0
+
+
+@dataclass
+class _LedgerState:
+    """Every accumulator ``grade_ledger`` writes, and the steps that write them."""
+
+    slips: int = 0
+    hits: int = 0
+    stake_total: float = 0.0
+    pnl: float = 0.0
+    cash_pnl: float = 0.0
+    bonus_in: float = 0.0
+    bonus_out: float = 0.0
+    bonus_stake: float = 0.0
+    ticket_ids: list[str] = field(default_factory=list)
+    markets: list[str] = field(default_factory=list)
+    stake_kinds: list[str] = field(default_factory=list)
+    slate_ids: list[str] = field(default_factory=list)
+    review_flags: list[str] = field(default_factory=list)
+    book_actuals: list[str] = field(default_factory=list)
+    official_actuals: list[str] = field(default_factory=list)
+    partial_tickets: list[dict[str, object]] = field(default_factory=list)
+    hold_tickets: list[str] = field(default_factory=list)
+    on_card_pnl: float = 0.0
+    off_card_pnl: float = 0.0
+    on_card_cash_pnl: float = 0.0
+    off_card_cash_pnl: float = 0.0
+    on_card_bonus_in: float = 0.0
+    off_card_bonus_in: float = 0.0
+    on_card_bonus_out: float = 0.0
+    off_card_bonus_out: float = 0.0
+    off_card_tickets: list[str] = field(default_factory=list)
+    injury_alerts: list[str] = field(default_factory=list)
+    replay_reversals: list[str] = field(default_factory=list)
+    stat_deltas: list[str] = field(default_factory=list)
+    clv_by_ticket: list[dict[str, object]] = field(default_factory=list)
+    clv_total: float = 0.0
+    clv_count: int = 0
+    brier_pairs: list[dict[str, float]] = field(default_factory=list)
+    promo_terms: list[str] = field(default_factory=list)
+    promo_value: float = 0.0
+    promo_confirmed: bool = True
+
+    def add_row(
+        self, raw: dict[str, str], row_index: int, env: _LedgerEnv
+    ) -> None:
+        """One ledger row. A refusal or a hold ends the row early."""
+
+        row = self._open_row(raw, row_index, env)
+        if row is None:
+            return
+        self._close_row(raw, row_index, env, row)
+
+    def _open_row(
+        self, raw: dict[str, str], row_index: int, env: _LedgerEnv
+    ) -> _Row | None:
+        """The refusals and the hold. None means the row is already recorded."""
+
+        id_refuse, clipped, id_label, n_bet_count, captured_legs = _row_identity(raw)
+        off_card = _row_off_card(raw, env.window, env.card_ids)
+        reasons = _refusal_reasons(id_refuse, n_bet_count, captured_legs)
+        if reasons:
+            # Refuse finalize. Keep the typed stake text. Do not fill a blank
+            # stake, a missing leg, or the cut-off digits.
+            note, record = _record_partial(
+                raw, id_label, clipped, n_bet_count, captured_legs, reasons, off_card
+            )
+            self.review_flags.append(note)
+            self.partial_tickets.append(record)
+            return None
+
+        stake_text = (raw.get("stake") or "").strip()
+        if not stake_text:
+            raise ValueError(
+                f"{id_label or 'row ' + str(row_index)}: blank stake; "
+                "type the stake or remove the row"
+            )
+        # Width check lives in ``_leg_outcomes``. A short actuals cell still
+        # raises. It is not an open leg.
+        hit_count, miss_count, void_count = _leg_outcomes(raw)
+        labels = leg_status_labels(raw)
+        if ticket_is_held(labels):
+            # A ticket with no miss and an open leg is not a loss and not a
+            # win. Keep it off the settled stake.
+            hold_label = id_label or f"row {row_index}"
+            if hold_label not in self.hold_tickets:
+                self.hold_tickets.append(hold_label)
+            return None
+        return _Row(
+            stake=float(stake_text),
+            hit_count=hit_count,
+            miss_count=miss_count,
+            void_count=void_count,
+            labels=labels,
+            effective_n_legs=n_bet_count if n_bet_count is not None else captured_legs,
+            ticket_id=id_label,
+            stake_kind=(raw.get("stake_kind") or "").strip().lower(),
+            off_card=off_card,
+        )
+
+    def _close_row(
+        self,
+        raw: dict[str, str],
+        row_index: int,
+        env: _LedgerEnv,
+        row: _Row,
+    ) -> None:
+        """A settled row: the claims, the CLV, the notes, and the money."""
+
+        self._claim_ticket(row.stake, row.stake_kind, row.ticket_id, raw)
+        platform = normalize_platform(
+            (raw.get("platform") or "").strip() or env.default_platform or "underdog"
+        )
+        self._record_clv(raw, row.ticket_id, row_index, platform, env)
+        self._record_promo(raw)
+        mode = raw.get("mode") or "standard"
+        displayed = _parse_multiplier(raw.get("multiplier"))
+        paid_value = _parse_paid(raw.get("paid"))
+        self._record_actuals(raw)
+        if row.hit_count == row.effective_n_legs:
+            self.hits += 1
+        self._record_reviews(raw)
+        self._record_notes(raw)
+        self.slips += 1
+        if paid_value is not None:
+            amounts = _paid_row(
+                row.stake, row.stake_kind, paid_value, row.miss_count
+            )
+        else:
+            amounts = _settled_row(
+                raw,
+                row_index,
+                row.stake,
+                row.stake_kind,
+                row.labels,
+                row.hit_count,
+                row.miss_count,
+                row.void_count,
+                row.effective_n_legs,
+                mode,
+                displayed,
+                platform,
+                env.profile_dir,
+            )
+        self._post_pnl(amounts, row.off_card, row.ticket_id, row_index)
+
+    def _claim_ticket(
+        self, stake: float, stake_kind: str, ticket_id: str, raw: dict[str, str]
+    ) -> None:
+        self.stake_total += stake
+        if stake_kind:
+            if stake_kind not in self.stake_kinds:
+                self.stake_kinds.append(stake_kind)
+            if stake_kind == "bonus":
+                self.bonus_stake += stake
+        if ticket_id and ticket_id not in self.ticket_ids:
+            self.ticket_ids.append(ticket_id)
+        self._claim_labels(raw)
+
+    def _claim_labels(self, raw: dict[str, str]) -> None:
+        market = (raw.get("market") or "").strip()
+        if market:
+            canonical_market = _canonical_market_cell(market)
+            if canonical_market and canonical_market not in self.markets:
+                self.markets.append(canonical_market)
+        slate_id = (raw.get("slate_id") or "").strip()
+        if slate_id and slate_id not in self.slate_ids:
+            self.slate_ids.append(slate_id)
+
+    def _record_clv(
+        self,
+        raw: dict[str, str],
+        ticket_id: str,
+        row_index: int,
+        platform: str,
+        env: _LedgerEnv,
+    ) -> None:
+        clv = _row_clv(raw, env.closes, platform, handoff_index=env.handoff_index)
+        if clv["n"]:
+            self.clv_by_ticket.append(
+                {"ticket_id": ticket_id or f"row {row_index}", **clv}
+            )
+            self.clv_total += float(clv["mean_pp"]) * int(clv["n"])
+            self.clv_count += int(clv["n"])
+        for leg in clv["legs"]:
+            delta = leg.get("dfs_vs_close_brier_delta")
+            if delta is None:
+                continue
+            self.brier_pairs.append(
+                {
+                    "p_dfs_over": float(leg["p_dfs_over"]),
+                    "close_fair_prob": float(leg["close_implied_p"]),
+                    "actual_hit": float(leg["actual_hit"]),
+                }
+            )
+
+    def _record_promo(self, raw: dict[str, str]) -> None:
+        promo_terms_raw = (raw.get("promo_terms") or "").strip()
+        if promo_terms_raw and promo_terms_raw not in self.promo_terms:
+            self.promo_terms.append(promo_terms_raw)
+        promo_row = _parse_paid(raw.get("promo_value"))
+        if promo_row is not None:
+            self.promo_value += promo_row
+        if promo_terms_raw and not _flag_true(raw.get("promo_settled") or ""):
+            self.promo_confirmed = False
+            promo_flag = (
+                f"PROMO_UNCONFIRMED: {promo_terms_raw} — record the settled "
+                "result before you count the bonus"
+            )
+            if promo_flag not in self.review_flags:
+                self.review_flags.append(promo_flag)
+
+    def _record_actuals(self, raw: dict[str, str]) -> None:
+        book_actual_raw = (raw.get("book_actual") or "").strip()
+        official_actual_raw = (raw.get("official_actual") or "").strip()
+        if book_actual_raw:
+            self.book_actuals.append(book_actual_raw)
+        if official_actual_raw:
+            self.official_actuals.append(official_actual_raw)
+        if (
+            book_actual_raw
+            and official_actual_raw
+            and book_actual_raw != official_actual_raw
+        ):
+            self.stat_deltas.append(
+                f"STAT_DELTA: book_actual={book_actual_raw} "
+                f"official_actual={official_actual_raw}"
+            )
+
+    def _record_reviews(self, raw: dict[str, str]) -> None:
+        market = (raw.get("market") or "").strip()
+        sides = [part.lower() for part in _pipe_cells(raw, "sides")]
+        actual_parts = _pipe_cells(raw, "actuals")
+        line_parts = _pipe_cells(raw, "lines")
+        markets_per_leg = _pipe_cells(raw, "market")
+        players_per_leg = _player_cells(raw)
+        for index, (_side, actual_raw, line_raw) in enumerate(
+            zip(sides, actual_parts, line_parts, strict=True)
+        ):
+            if _EXPLICIT_LEG_STATUS.get(actual_raw.strip().lower()) and not _looks_numeric(
+                actual_raw
+            ):
+                continue
+            actual = _parse_leg_token(actual_raw)
+            line = _parse_leg_token(line_raw)
+            player = (
+                players_per_leg[index]
+                if index < len(players_per_leg)
+                else f"leg {index + 1}"
+            )
+            raw_stat = markets_per_leg[index] if index < len(markets_per_leg) else market
+            stat_type = canonical_ledger_market(raw_stat)
+            yards_review = _check_yards_review(line, actual, player, stat_type)
+            if yards_review:
+                self.review_flags.append(yards_review)
+            first_td_review = _check_first_td_review(player, stat_type)
+            if first_td_review:
+                self.review_flags.append(first_td_review)
+
+    def _record_notes(self, raw: dict[str, str]) -> None:
+        for alert in _injury_alerts(raw):
+            if alert not in self.injury_alerts:
+                self.injury_alerts.append(alert)
+        for note in _replay_notes(raw):
+            if note not in self.replay_reversals:
+                self.replay_reversals.append(note)
+
+    def _post_pnl(
+        self,
+        amounts: tuple[float, float, float, float],
+        off_card: bool,
+        ticket_id: str,
+        row_index: int,
+    ) -> None:
+        row_pnl, row_cash, row_bonus_in, row_bonus_out = amounts
+        self.pnl += row_pnl
+        self.cash_pnl += row_cash
+        self.bonus_in += row_bonus_in
+        self.bonus_out += row_bonus_out
+        if off_card:
+            self.off_card_pnl += row_pnl
+            self.off_card_cash_pnl += row_cash
+            self.off_card_bonus_in += row_bonus_in
+            self.off_card_bonus_out += row_bonus_out
+            label = ticket_id or f"row {row_index}"
+            if label not in self.off_card_tickets:
+                self.off_card_tickets.append(label)
+            return
+        self.on_card_pnl += row_pnl
+        self.on_card_cash_pnl += row_cash
+        self.on_card_bonus_in += row_bonus_in
+        self.on_card_bonus_out += row_bonus_out
+
+    def summary(self) -> GradeSummary:
+        hit_rate = self.hits / self.slips if self.slips else 0.0
+        roi = self.pnl / self.stake_total if self.stake_total else 0.0
+        return GradeSummary(
+            n_slips=self.slips,
+            hits=self.hits,
+            hit_rate=hit_rate,
+            stake=self.stake_total,
+            pnl=self.pnl,
+            roi=roi,
+            bonus_stake=self.bonus_stake,
+            ticket_ids=self.ticket_ids,
+            markets=self.markets,
+            stake_kinds=self.stake_kinds,
+            slate_ids=self.slate_ids,
+            cash_pnl=self.cash_pnl,
+            bonus_in=self.bonus_in,
+            bonus_out=self.bonus_out,
+            review_flags=self.review_flags,
+            hard_rock_rule_note=_hard_rock_injury_rule_note(),
+            book_actuals=self.book_actuals,
+            official_actuals=self.official_actuals,
+            partial_tickets=self.partial_tickets,
+            on_card_pnl=self.on_card_pnl,
+            off_card_pnl=self.off_card_pnl,
+            on_card_cash_pnl=self.on_card_cash_pnl,
+            off_card_cash_pnl=self.off_card_cash_pnl,
+            on_card_bonus_in=self.on_card_bonus_in,
+            off_card_bonus_in=self.off_card_bonus_in,
+            on_card_bonus_out=self.on_card_bonus_out,
+            off_card_bonus_out=self.off_card_bonus_out,
+            off_card_tickets=self.off_card_tickets,
+            injury_alerts=self.injury_alerts,
+            stay_live_rule=STAY_LIVE_RULE,
+            replay_reversals=self.replay_reversals,
+            stat_deltas=self.stat_deltas,
+            clv_by_ticket=self.clv_by_ticket,
+            clv_mean_pp=(self.clv_total / self.clv_count if self.clv_count else 0.0),
+            brier_pairs=self.brier_pairs,
+            promo_terms=self.promo_terms,
+            promo_value=self.promo_value,
+            promo_confirmed=self.promo_confirmed,
+            net_pnl=self.cash_pnl + self.promo_value,
+            hold_tickets=self.hold_tickets,
+        )
+
+
 def grade_ledger(
     path: Path,
     profile_dir: Path | None = None,
@@ -863,354 +1401,19 @@ def grade_ledger(
     closings_path: Path | None = None,
     handoff: object | None = None,
 ) -> GradeSummary:
-    slips = 0
-    hits = 0
-    stake_total = 0.0
-    pnl = 0.0
-    cash_pnl = 0.0
-    bonus_in = 0.0
-    bonus_out = 0.0
-    bonus_stake = 0.0
-    ticket_ids: list[str] = []
-    markets: list[str] = []
-    stake_kinds: list[str] = []
-    slate_ids: list[str] = []
-    review_flags: list[str] = []
-    book_actuals: list[str] = []
-    official_actuals: list[str] = []
-    partial_tickets: list[dict[str, object]] = []
-    hold_tickets: list[str] = []
-    on_card_pnl = 0.0
-    off_card_pnl = 0.0
-    on_card_cash_pnl = 0.0
-    off_card_cash_pnl = 0.0
-    on_card_bonus_in = 0.0
-    off_card_bonus_in = 0.0
-    on_card_bonus_out = 0.0
-    off_card_bonus_out = 0.0
-    off_card_tickets: list[str] = []
-    injury_alerts: list[str] = []
-    replay_reversals: list[str] = []
-    stat_deltas: list[str] = []
-    clv_by_ticket: list[dict[str, object]] = []
-    clv_total = 0.0
-    clv_count = 0
-    brier_pairs: list[dict[str, float]] = []
-    promo_terms: list[str] = []
-    promo_value = 0.0
-    promo_confirmed = True
-    window = _window_index(games_path) if games_path is not None else None
-    card_ids = _card_ticket_ids(card_path) if card_path is not None else None
-    closes = read_prop_closes(closings_path) if closings_path is not None else None
-    handoff_index = distribution_index(handoff)
+    env = _LedgerEnv(
+        window=_window_index(games_path) if games_path is not None else None,
+        card_ids=_card_ticket_ids(card_path) if card_path is not None else None,
+        closes=read_prop_closes(closings_path) if closings_path is not None else None,
+        handoff_index=distribution_index(handoff),
+        default_platform=default_platform,
+        profile_dir=profile_dir,
+    )
+    state = _LedgerState()
     with path.open(newline="", encoding="utf-8") as handle:
         for row_index, raw in enumerate(csv.DictReader(handle), start=2):
-            stake_kind = (raw.get("stake_kind") or "").strip().lower()
-            raw_ticket_id = (raw.get("ticket_id") or "").strip()
-            market = (raw.get("market") or "").strip()
-            slate_id = (raw.get("slate_id") or "").strip()
-            n_bet_count = _visible_n_bet(raw)
-            captured_legs = _count_captured_legs(raw)
-            id_refuse, clipped, id_label = _classify_ticket_id(
-                raw_ticket_id,
-                raw.get("ticket_id_clipped") or "",
-            )
-            off_card = _row_off_card(raw, window, card_ids)
-            reasons: list[str] = []
-            if n_bet_count is not None and captured_legs != n_bet_count:
-                reasons.append("n_bet")
-            if id_refuse:
-                reasons.append("ticket_id")
-            if reasons:
-                # Refuse finalize. Keep the typed stake text. Do not fill a
-                # blank stake, a missing leg, or the cut-off digits.
-                status = id_label if id_label.startswith("PARTIAL") else "PARTIAL"
-                if not status:
-                    status = "PARTIAL"
-                note = f"{status}: capture incomplete"
-                if "n_bet" in reasons:
-                    note += f" — captured legs {captured_legs} != N-Bet {n_bet_count}"
-                if clipped:
-                    note += " — ticket_id clipped"
-                review_flags.append(note)
-                partial_tickets.append(
-                    {
-                        "status": status,
-                        "ticket_id": id_label,
-                        "clipped": clipped,
-                        "visible_n_bet": n_bet_count,
-                        "captured_legs": captured_legs,
-                        "stake": (raw.get("stake") or "").strip(),
-                        "reasons": reasons,
-                        "off_card": off_card,
-                    }
-                )
-                continue
-
-            stake_text = (raw.get("stake") or "").strip()
-            if not stake_text:
-                raise ValueError(
-                    f"{id_label or 'row ' + str(row_index)}: blank stake; "
-                    "type the stake or remove the row"
-                )
-            stake = float(stake_text)
-            # Width check lives in ``_leg_outcomes``. A short actuals cell
-            # still raises. It is not an open leg.
-            hit_count, miss_count, void_count = _leg_outcomes(raw)
-            labels = leg_status_labels(raw)
-            if ticket_is_held(labels):
-                # A ticket with no miss and an open leg is not a loss and not
-                # a win. Keep it off the settled stake.
-                hold_label = id_label or f"row {row_index}"
-                if hold_label not in hold_tickets:
-                    hold_tickets.append(hold_label)
-                continue
-            ticket_id = id_label
-            stake_total += stake
-            if stake_kind:
-                if stake_kind not in stake_kinds:
-                    stake_kinds.append(stake_kind)
-                if stake_kind == "bonus":
-                    bonus_stake += stake
-            
-            if ticket_id and ticket_id not in ticket_ids:
-                ticket_ids.append(ticket_id)
-            if market:
-                canonical_market = _canonical_market_cell(market)
-                if canonical_market and canonical_market not in markets:
-                    markets.append(canonical_market)
-            if slate_id and slate_id not in slate_ids:
-                slate_ids.append(slate_id)
-            
-            raw_platform = (raw.get("platform") or "").strip()
-            platform = normalize_platform(
-                raw_platform or default_platform or "underdog"
-            )
-
-            clv = _row_clv(raw, closes, platform, handoff_index=handoff_index)
-            if clv["n"]:
-                clv_by_ticket.append(
-                    {"ticket_id": ticket_id or f"row {row_index}", **clv}
-                )
-                clv_total += float(clv["mean_pp"]) * int(clv["n"])
-                clv_count += int(clv["n"])
-            for leg in clv["legs"]:
-                delta = leg.get("dfs_vs_close_brier_delta")
-                if delta is None:
-                    continue
-                brier_pairs.append(
-                    {
-                        "p_dfs_over": float(leg["p_dfs_over"]),
-                        "close_fair_prob": float(leg["close_implied_p"]),
-                        "actual_hit": float(leg["actual_hit"]),
-                    }
-                )
-            promo_terms_raw = (raw.get("promo_terms") or "").strip()
-            if promo_terms_raw and promo_terms_raw not in promo_terms:
-                promo_terms.append(promo_terms_raw)
-            promo_row = _parse_paid(raw.get("promo_value"))
-            if promo_row is not None:
-                promo_value += promo_row
-            if promo_terms_raw and not _flag_true(raw.get("promo_settled") or ""):
-                promo_confirmed = False
-                promo_flag = (
-                    f"PROMO_UNCONFIRMED: {promo_terms_raw} — record the settled "
-                    "result before you count the bonus"
-                )
-                if promo_flag not in review_flags:
-                    review_flags.append(promo_flag)
-
-            mode = raw.get("mode") or "standard"
-            displayed = _parse_multiplier(raw.get("multiplier"))
-            paid_value = _parse_paid(raw.get("paid"))
-            
-            book_actual_raw = (raw.get("book_actual") or "").strip()
-            official_actual_raw = (raw.get("official_actual") or "").strip()
-            if book_actual_raw:
-                book_actuals.append(book_actual_raw)
-            if official_actual_raw:
-                official_actuals.append(official_actual_raw)
-            if book_actual_raw and official_actual_raw and book_actual_raw != official_actual_raw:
-                stat_deltas.append(
-                    f"STAT_DELTA: book_actual={book_actual_raw} "
-                    f"official_actual={official_actual_raw}"
-                )
-            
-            effective_n_legs = n_bet_count if n_bet_count is not None else captured_legs
-            if hit_count == effective_n_legs:
-                hits += 1
-            
-            # Check for review flags on each leg
-            sides = [part.strip().lower() for part in raw.get("sides", "").split("|") if part.strip()]
-            actual_parts = [part.strip() for part in raw.get("actuals", "").split("|") if part.strip()]
-            line_parts = [part.strip() for part in raw.get("lines", "").split("|") if part.strip()]
-            markets_per_leg = [part.strip() for part in raw.get("market", "").split("|") if part.strip()]
-            players_per_leg = [part.strip() for part in raw.get("player_name", "").split("|") if part.strip()]
-            
-            # If no player_name column, try to infer from legs column
-            if not players_per_leg and raw.get("legs"):
-                players_per_leg = [p.strip() for p in raw.get("legs", "").split("|") if p.strip()]
-            
-            for i, (side, actual_raw, line_raw) in enumerate(zip(sides, actual_parts, line_parts, strict=True)):
-                if _EXPLICIT_LEG_STATUS.get(actual_raw.strip().lower()) and not _looks_numeric(actual_raw):
-                    continue
-                actual = _parse_leg_token(actual_raw)
-                line = _parse_leg_token(line_raw)
-                player = players_per_leg[i] if i < len(players_per_leg) else f"leg {i+1}"
-                raw_stat = markets_per_leg[i] if i < len(markets_per_leg) else market
-                stat_type = canonical_ledger_market(raw_stat)
-                
-                # ±2 yards review
-                yards_review = _check_yards_review(line, actual, player, stat_type)
-                if yards_review:
-                    review_flags.append(yards_review)
-                
-                # first_td review
-                first_td_review = _check_first_td_review(player, stat_type)
-                if first_td_review:
-                    review_flags.append(first_td_review)
-
-            for alert in _injury_alerts(raw):
-                if alert not in injury_alerts:
-                    injury_alerts.append(alert)
-            for note in _replay_notes(raw):
-                if note not in replay_reversals:
-                    replay_reversals.append(note)
-
-            slips += 1
-            row_pnl = 0.0
-            row_cash = 0.0
-            row_bonus_in = 0.0
-            row_bonus_out = 0.0
-            if paid_value is not None:
-                net = paid_value - stake
-                if stake_kind == "bonus":
-                    row_pnl += net
-                    row_bonus_in += stake
-                    row_bonus_out += paid_value
-                elif stake_kind in NO_SWEAT_KINDS and miss_count > 0:
-                    # A lost No Sweat ticket keeps the cash loss. The book
-                    # return is a bonus. A winning No Sweat ticket stays cash.
-                    row_pnl -= stake
-                    row_cash -= stake
-                    row_bonus_out += paid_value
-                else:
-                    row_pnl += net
-                    row_cash += net
-            else:
-                sportsbook = platform in SPORTSBOOK_PLATFORMS
-                row_label = raw.get("legs") or raw.get("slip_id") or f"row {row_index}"
-                open_leg = any(label in {"PENDING", "UNGRADED"} for label in labels)
-                # A miss settles before a void or a still-open leg can hold
-                # the ticket. A numeric pick'em push stays on ``_void_payout``.
-                if ticket_is_lost(labels) and (sportsbook or open_leg):
-                    payout = 0.0
-                elif void_count:
-                    payout = _void_payout(
-                        platform,
-                        mode,
-                        effective_n_legs,
-                        void_count,
-                        hit_count,
-                        miss_count,
-                        displayed,
-                        profile_dir,
-                        row_label=str(row_label),
-                    )
-                elif sportsbook and miss_count > 0:
-                    payout = 0.0
-                else:
-                    table = resolve_payout(
-                        platform,
-                        mode,
-                        effective_n_legs,
-                        displayed_multiplier=displayed,
-                        profile_dir=profile_dir,
-                    )
-                    payout = table.multiplier_for_hits(hit_count)
-                net = stake * (payout - 1.0)
-                boosted = _parse_paid(raw.get("displayed_boosted_payout"))
-                full_win = (
-                    miss_count == 0
-                    and void_count == 0
-                    and hit_count == effective_n_legs
-                    and effective_n_legs > 0
-                )
-                if boosted is not None and boosted > 0.0 and full_win:
-                    net = boosted - stake
-                    payout = (boosted / stake) if stake else 0.0
-                row_pnl += net
-                if stake_kind == "bonus":
-                    row_bonus_in += stake
-                    row_bonus_out += stake * payout
-                elif stake_kind in NO_SWEAT_KINDS and miss_count > 0:
-                    # A lost ticket keeps the cash loss. A hit uses the cash net.
-                    row_cash -= stake
-                else:
-                    row_cash += net
-            pnl += row_pnl
-            cash_pnl += row_cash
-            bonus_in += row_bonus_in
-            bonus_out += row_bonus_out
-            if off_card:
-                off_card_pnl += row_pnl
-                off_card_cash_pnl += row_cash
-                off_card_bonus_in += row_bonus_in
-                off_card_bonus_out += row_bonus_out
-                label = ticket_id or f"row {row_index}"
-                if label not in off_card_tickets:
-                    off_card_tickets.append(label)
-            else:
-                on_card_pnl += row_pnl
-                on_card_cash_pnl += row_cash
-                on_card_bonus_in += row_bonus_in
-                on_card_bonus_out += row_bonus_out
-    
-    hit_rate = hits / slips if slips else 0.0
-    roi = pnl / stake_total if stake_total else 0.0
-    hard_rock_note = _hard_rock_injury_rule_note()
-    return GradeSummary(
-        n_slips=slips,
-        hits=hits,
-        hit_rate=hit_rate,
-        stake=stake_total,
-        pnl=pnl,
-        roi=roi,
-        bonus_stake=bonus_stake,
-        ticket_ids=ticket_ids,
-        markets=markets,
-        stake_kinds=stake_kinds,
-        slate_ids=slate_ids,
-        cash_pnl=cash_pnl,
-        bonus_in=bonus_in,
-        bonus_out=bonus_out,
-        review_flags=review_flags,
-        hard_rock_rule_note=hard_rock_note,
-        book_actuals=book_actuals,
-        official_actuals=official_actuals,
-        partial_tickets=partial_tickets,
-        on_card_pnl=on_card_pnl,
-        off_card_pnl=off_card_pnl,
-        on_card_cash_pnl=on_card_cash_pnl,
-        off_card_cash_pnl=off_card_cash_pnl,
-        on_card_bonus_in=on_card_bonus_in,
-        off_card_bonus_in=off_card_bonus_in,
-        on_card_bonus_out=on_card_bonus_out,
-        off_card_bonus_out=off_card_bonus_out,
-        off_card_tickets=off_card_tickets,
-        injury_alerts=injury_alerts,
-        stay_live_rule=STAY_LIVE_RULE,
-        replay_reversals=replay_reversals,
-        stat_deltas=stat_deltas,
-        clv_by_ticket=clv_by_ticket,
-        clv_mean_pp=(clv_total / clv_count if clv_count else 0.0),
-        brier_pairs=brier_pairs,
-        promo_terms=promo_terms,
-        promo_value=promo_value,
-        promo_confirmed=promo_confirmed,
-        net_pnl=cash_pnl + promo_value,
-        hold_tickets=hold_tickets,
-    )
+            state.add_row(raw, row_index, env)
+    return state.summary()
 
 
 def export_settled_and_hold(

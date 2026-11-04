@@ -461,35 +461,66 @@ def rows_from_events(
             "commence_time": commence_time,
         }
         for book in select_bookmakers(list(event.get("bookmakers") or [])):
-            platform = BOOKMAKER_TO_PLATFORM.get(str(book.get("key") or ""))
-            if platform is None:
-                continue
-            if platform_filter is not None and platform not in platform_filter:
-                continue
-            for market in book.get("markets") or []:
-                market_key = str(market.get("key") or "")
-                stat = MARKET_TO_STAT.get(market_key)
-                if stat is None:
-                    if market_key and market_key not in unknown_markets:
-                        unknown_markets.add(market_key)
-                        notes.append(f"no-odds-api-market:{market_key}")
-                    continue
-                outcomes = [
-                    item
-                    for item in (market.get("outcomes") or [])
-                    if isinstance(item, dict)
-                ]
-                rows.extend(
-                    _rows_for_market(
-                        stat,
-                        outcomes,
-                        {**event_ctx, "platform": platform},
-                        roster=roster,
-                        notes=notes,
-                        team_by_key=team_by_key,
-                    )
+            rows.extend(
+                _rows_from_book(
+                    book,
+                    event_ctx,
+                    platform_filter=platform_filter,
+                    roster=roster,
+                    notes=notes,
+                    team_by_key=team_by_key,
+                    unknown_markets=unknown_markets,
                 )
+            )
     _stamp_reference(rows, reference_book)
+    return rows
+
+
+def _note_unknown_market(
+    market: dict, unknown_markets: set[str], notes: list[str]
+) -> None:
+    market_key = str(market.get("key") or "")
+    if market_key and market_key not in unknown_markets:
+        unknown_markets.add(market_key)
+        notes.append(f"no-odds-api-market:{market_key}")
+
+
+def _rows_from_book(
+    book: dict,
+    event_ctx: dict[str, str],
+    *,
+    platform_filter: set[str] | None,
+    roster: Roster | None,
+    notes: list[str],
+    team_by_key: dict[str, str] | None,
+    unknown_markets: set[str],
+) -> list[dict[str, object]]:
+    """Every row one bookmaker posts for an event."""
+
+    platform = BOOKMAKER_TO_PLATFORM.get(str(book.get("key") or ""))
+    if platform is None:
+        return []
+    if platform_filter is not None and platform not in platform_filter:
+        return []
+    rows: list[dict[str, object]] = []
+    for market in book.get("markets") or []:
+        stat = MARKET_TO_STAT.get(str(market.get("key") or ""))
+        if stat is None:
+            _note_unknown_market(market, unknown_markets, notes)
+            continue
+        outcomes = [
+            item for item in (market.get("outcomes") or []) if isinstance(item, dict)
+        ]
+        rows.extend(
+            _rows_for_market(
+                stat,
+                outcomes,
+                {**event_ctx, "platform": platform},
+                roster=roster,
+                notes=notes,
+                team_by_key=team_by_key,
+            )
+        )
     return rows
 
 

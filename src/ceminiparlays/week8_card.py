@@ -471,19 +471,22 @@ def _best_boost(
     return best
 
 
-def select_card(
-    tier1: list[dict],
-    tier2: list[dict],
-    sgps: list[dict],
-    boost_pool: list[dict],
-) -> tuple[list[CardTicket], list[str]]:
-    """Fill 4 + 2 + 3 tickets. A negative-EV leg never enters."""
+def _single_ticket(ticket_id: str, tier: str, leg: dict, cents: int) -> CardTicket:
+    joint_p, book_p = _single_probs(leg)
+    return _make_ticket(
+        ticket_id,
+        tier,
+        (leg,),
+        cents,
+        float(leg["ev"]),
+        str(leg.get("note") or "none"),
+        joint_p,
+        book_p,
+    )
 
-    chosen: list[CardTicket] = []
-    card_legs: list[dict] = []
-    exposure: dict[frozenset[str], int] = {}
-    short: list[str] = []
-    players: set[str] = set()
+
+def _tier1_legs(tier1: list[dict]) -> tuple[list[dict], list[dict]]:
+    """The reception unders, then the overs, each best EV first."""
 
     unders = [
         leg
@@ -493,59 +496,89 @@ def select_card(
     overs = [leg for leg in tier1 if leg.get("side") == "over"]
     unders.sort(key=_ev_key)
     overs.sort(key=_ev_key)
-    index = 1
-    if unders:
-        placed = False
-        for leg in unders:
-            if str(leg.get("player_key") or "") in players:
-                continue
-            joint_p, book_p = _single_probs(leg)
-            ticket = _make_ticket(
-                f"HR8-Q4-{index}",
-                "1",
-                (leg,),
-                TIER1_CENTS,
-                float(leg["ev"]),
-                str(leg.get("note") or "none"),
-                joint_p,
-                book_p,
-            )
-            if _place(chosen, card_legs, exposure, ticket):
-                players.add(str(leg.get("player_key") or ""))
-                index += 1
-                placed = True
-                break
-        if not placed:
-            short.append("tier 1 under did not fit")
+    return unders, overs
+
+
+def _place_one_under(
+    unders: list[dict],
+    chosen: list[CardTicket],
+    card_legs: list[dict],
+    exposure: dict[frozenset[str], int],
+    players: set[str],
+    index: int,
+) -> tuple[int, bool]:
+    """At most one reception under enters, and only for a new player."""
+
+    for leg in unders:
+        if str(leg.get("player_key") or "") in players:
+            continue
+        ticket = _single_ticket(f"HR8-Q4-{index}", "1", leg, TIER1_CENTS)
+        if _place(chosen, card_legs, exposure, ticket):
+            players.add(str(leg.get("player_key") or ""))
+            return index + 1, True
+    return index, False
+
+
+def _place_overs(
+    overs: list[dict],
+    chosen: list[CardTicket],
+    card_legs: list[dict],
+    exposure: dict[frozenset[str], int],
+    players: set[str],
+    index: int,
+) -> int:
     for leg in overs:
         if index > TIER1_COUNT:
             break
         key = str(leg.get("player_key") or "")
         if not key or key in players:
             continue
-        joint_p, book_p = _single_probs(leg)
-        ticket = _make_ticket(
-            f"HR8-Q4-{index}",
-            "1",
-            (leg,),
-            TIER1_CENTS,
-            float(leg["ev"]),
-            str(leg.get("note") or "none"),
-            joint_p,
-            book_p,
-        )
+        ticket = _single_ticket(f"HR8-Q4-{index}", "1", leg, TIER1_CENTS)
         if _place(chosen, card_legs, exposure, ticket):
             players.add(key)
             index += 1
+    return index
+
+
+def _place_tier1(
+    chosen: list[CardTicket],
+    card_legs: list[dict],
+    exposure: dict[frozenset[str], int],
+    tier1: list[dict],
+) -> list[str]:
+    short: list[str] = []
+    players: set[str] = set()
+    unders, overs = _tier1_legs(tier1)
+    index = 1
+    if unders:
+        index, placed = _place_one_under(
+            unders, chosen, card_legs, exposure, players, index
+        )
+        if not placed:
+            short.append("tier 1 under did not fit")
+    index = _place_overs(overs, chosen, card_legs, exposure, players, index)
     tier1_n = sum(1 for ticket in chosen if ticket.tier == "1")
     if tier1_n < TIER1_COUNT:
         short.append(f"tier 1 short: {tier1_n} of {TIER1_COUNT}")
+    return short
 
-    singles = {
+
+def _single_identities(chosen: list[CardTicket]) -> set[tuple[str, str]]:
+    return {
         (str(leg.get("player_key") or ""), str(leg.get("market") or ""))
         for ticket in chosen
         for leg in ticket.legs
     }
+
+
+def _place_tier2(
+    chosen: list[CardTicket],
+    card_legs: list[dict],
+    exposure: dict[frozenset[str], int],
+    tier2: list[dict],
+) -> list[str]:
+    short: list[str] = []
+    singles = _single_identities(chosen)
     core = 1
     for leg in sorted(tier2, key=_ev_key):
         if core > TIER2_COUNT:
@@ -555,24 +588,39 @@ def select_card(
             continue
         if float(leg.get("model_p") or 0.0) > 0.78:
             continue
-        joint_p, book_p = _single_probs(leg)
-        ticket = _make_ticket(
-            f"HR8-CORE-{core}",
-            "2",
-            (leg,),
-            TIER2_CENTS,
-            float(leg["ev"]),
-            str(leg.get("note") or "none"),
-            joint_p,
-            book_p,
-        )
+        ticket = _single_ticket(f"HR8-CORE-{core}", "2", leg, TIER2_CENTS)
         if _place(chosen, card_legs, exposure, ticket):
             singles.add(identity)
             core += 1
     tier2_n = sum(1 for ticket in chosen if ticket.tier == "2")
     if tier2_n < TIER2_COUNT:
         short.append(f"tier 2 short: {tier2_n} of {TIER2_COUNT}")
+    return short
 
+
+def _sgp_note(raw: dict, legs: list[dict]) -> str:
+    note = (
+        "SGP tax applied"
+        if raw.get("sgp_tax_applied")
+        else "naive product; pair rho at or under 0.15"
+    )
+    extra = [
+        str(leg.get("note") or "")
+        for leg in legs
+        if str(leg.get("note") or "") not in {"", "none"}
+    ]
+    if extra:
+        note = "; ".join([note, *extra])
+    return note
+
+
+def _place_sgps(
+    chosen: list[CardTicket],
+    card_legs: list[dict],
+    exposure: dict[frozenset[str], int],
+    sgps: list[dict],
+) -> tuple[list[str], set[tuple[str, str, str, float]]]:
+    short: list[str] = []
     sgp_n = 1
     seen_sets: set[tuple] = set()
     used_multi: set[tuple[str, str, str, float]] = set()
@@ -594,33 +642,72 @@ def select_card(
         identity = tuple(sorted((item[0], item[1]) for item in idents))
         if identity in seen_sets:
             continue
-        note = "SGP tax applied" if raw.get("sgp_tax_applied") else "naive product; pair rho at or under 0.15"
-        extra = [str(leg.get("note") or "") for leg in legs if str(leg.get("note") or "") not in {"", "none"}]
-        if extra:
-            note = "; ".join([note, *extra])
         joint_p, book_p = _sgp_probs(raw, legs)
-        ticket = _make_ticket(f"HR8-SGP-{sgp_n}", "3", legs, SLIP_CENTS, tax_ev, note, joint_p, book_p)
+        ticket = _make_ticket(
+            f"HR8-SGP-{sgp_n}",
+            "3",
+            legs,
+            SLIP_CENTS,
+            tax_ev,
+            _sgp_note(raw, legs),
+            joint_p,
+            book_p,
+        )
         if _place(chosen, card_legs, exposure, ticket):
             seen_sets.add(identity)
             used_multi.update(idents)
             sgp_n += 1
-    placed_sgp = sum(1 for ticket in chosen if ticket.ticket_id.startswith("HR8-SGP-"))
-    if placed_sgp < SGP_COUNT:
-        short.append(f"tier 3 SGP short: {placed_sgp} of {SGP_COUNT}")
+    placed = sum(1 for ticket in chosen if ticket.ticket_id.startswith("HR8-SGP-"))
+    if placed < SGP_COUNT:
+        short.append(f"tier 3 SGP short: {placed} of {SGP_COUNT}")
+    return short, used_multi
 
+
+def _place_boost(
+    chosen: list[CardTicket],
+    card_legs: list[dict],
+    exposure: dict[frozenset[str], int],
+    boost_pool: list[dict],
+    used_multi: set[tuple[str, str, str, float]],
+) -> list[str]:
     combo = _best_boost(boost_pool, card_legs, exposure, used_multi)
     if combo is None:
-        short.append("tier 3 boost combo short")
-    else:
-        ev, _decimal = product_ev(combo)
-        note = "designed for the profit-boost token; displayed payout left blank"
-        extra = [str(leg.get("note") or "") for leg in combo if str(leg.get("note") or "") not in {"", "none"}]
-        if extra:
-            note = "; ".join([note, *dict.fromkeys(extra)])
-        joint_p, book_p = _boost_probs(combo)
-        ticket = _make_ticket("HR8-BOOST-1", "3", combo, SLIP_CENTS, ev, note, joint_p, book_p)
-        if not _place(chosen, card_legs, exposure, ticket):
-            short.append("tier 3 boost combo short")
+        return ["tier 3 boost combo short"]
+    ev, _decimal = product_ev(combo)
+    note = "designed for the profit-boost token; displayed payout left blank"
+    extra = [
+        str(leg.get("note") or "")
+        for leg in combo
+        if str(leg.get("note") or "") not in {"", "none"}
+    ]
+    if extra:
+        note = "; ".join([note, *dict.fromkeys(extra)])
+    joint_p, book_p = _boost_probs(combo)
+    ticket = _make_ticket(
+        "HR8-BOOST-1", "3", combo, SLIP_CENTS, ev, note, joint_p, book_p
+    )
+    if not _place(chosen, card_legs, exposure, ticket):
+        return ["tier 3 boost combo short"]
+    return []
+
+
+def select_card(
+    tier1: list[dict],
+    tier2: list[dict],
+    sgps: list[dict],
+    boost_pool: list[dict],
+) -> tuple[list[CardTicket], list[str]]:
+    """Fill 4 + 2 + 3 tickets. A negative-EV leg never enters."""
+
+    chosen: list[CardTicket] = []
+    card_legs: list[dict] = []
+    exposure: dict[frozenset[str], int] = {}
+    short: list[str] = []
+    short.extend(_place_tier1(chosen, card_legs, exposure, tier1))
+    short.extend(_place_tier2(chosen, card_legs, exposure, tier2))
+    sgp_short, used_multi = _place_sgps(chosen, card_legs, exposure, sgps)
+    short.extend(sgp_short)
+    short.extend(_place_boost(chosen, card_legs, exposure, boost_pool, used_multi))
     return chosen, short
 
 

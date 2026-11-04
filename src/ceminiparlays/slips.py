@@ -1166,6 +1166,34 @@ def _rank_combo(combo, ctx: _RankContext) -> EvaluatedSlip | None:
     )
 
 
+def _rank_scope_ok(
+    live: list[EvaluatedLeg],
+    slip_size: int,
+    priced_venue: bool,
+    displayed_multiplier: float | None,
+    allow_large_enum: bool,
+) -> bool:
+    """Raise on an impossible request. False means there is nothing to rank."""
+
+    if priced_venue and displayed_multiplier is not None and len(live) != slip_size:
+        raise ValueError(
+            "displayed odds / multiplier prices one ticket. "
+            f"This slate has {len(live)} live legs; slip-size is {slip_size}. "
+            "Filter the CSV to those legs (see examples/hardrock_ticket.csv), "
+            "pass --legs matching the ticket, or type the same slip_odds on "
+            "every combo leg. A shared ticket_id does not relax this."
+        )
+    if len(live) < slip_size or slip_size < 1:
+        return False
+    total_combos = comb(len(live), slip_size)
+    if total_combos > COMBO_BUDGET and not allow_large_enum:
+        raise ValueError(
+            f"{total_combos} combinations exceed the {COMBO_BUDGET} budget; "
+            "raise --max-slips or pass --allow-large-enum"
+        )
+    return True
+
+
 def rank_slips(
     legs: list[EvaluatedLeg],
     platform: str,
@@ -1202,22 +1230,10 @@ def rank_slips(
     prediction = platform in PREDICTION_PLATFORMS
     priced_venue = sportsbook or prediction
     live = [leg for leg in legs if leg.warn not in EXCLUDED_WARNS]
-    if priced_venue and displayed_multiplier is not None and len(live) != slip_size:
-        raise ValueError(
-            "displayed odds / multiplier prices one ticket. "
-            f"This slate has {len(live)} live legs; slip-size is {slip_size}. "
-            "Filter the CSV to those legs (see examples/hardrock_ticket.csv), "
-            "pass --legs matching the ticket, or type the same slip_odds on "
-            "every combo leg. A shared ticket_id does not relax this."
-        )
-    if len(live) < slip_size or slip_size < 1:
+    if not _rank_scope_ok(
+        live, slip_size, priced_venue, displayed_multiplier, allow_large_enum
+    ):
         return []
-    total_combos = comb(len(live), slip_size)
-    if total_combos > COMBO_BUDGET and not allow_large_enum:
-        raise ValueError(
-            f"{total_combos} combinations exceed the {COMBO_BUDGET} budget; "
-            "raise --max-slips or pass --allow-large-enum"
-        )
     ctx = _RankContext(
         platform=platform,
         mode=mode,

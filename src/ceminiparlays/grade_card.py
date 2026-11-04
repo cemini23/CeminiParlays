@@ -418,6 +418,33 @@ def _held(results: list[str]) -> bool:
     )
 
 
+def _grade_ticket_legs(
+    ordered: list[dict[str, str]], plays: list[dict], ticket_id: str
+) -> tuple[list[str], list[LegGrade], list[float]]:
+    """The results, the leg grades, and the Brier terms for one ticket."""
+
+    results: list[str] = []
+    leg_grades: list[LegGrade] = []
+    brier_terms: list[float] = []
+    for row in ordered:
+        result, actual, model_p = _grade_leg_row(row, plays)
+        results.append(result)
+        leg_grades.append(
+            LegGrade(
+                ticket_id,
+                int(float(row.get("leg_num") or 0)),
+                str(row.get("market") or ""),
+                result,
+                actual,
+                0.0 if model_p is None else model_p,
+            )
+        )
+        if result in {"win", "loss"}:
+            outcome = 1.0 if result == "win" else 0.0
+            brier_terms.append(((model_p or 0.0) - outcome) ** 2)
+    return results, leg_grades, brier_terms
+
+
 def grade_rows(rows: list[dict[str, str]], plays: list[dict]) -> CardGrade:
     """Grade ledger rows. ``plays`` are nflverse-shaped dicts or summary rows."""
 
@@ -433,23 +460,11 @@ def grade_rows(rows: list[dict[str, str]], plays: list[dict]) -> CardGrade:
     brier_terms: list[float] = []
     for ticket_id, group in groups.items():
         ordered = sorted(group, key=lambda row: int(float(row.get("leg_num") or 1)))
-        results: list[str] = []
-        for row in ordered:
-            result, actual, model_p = _grade_leg_row(row, plays)
-            results.append(result)
-            leg_grades.append(
-                LegGrade(
-                    ticket_id,
-                    int(float(row.get("leg_num") or 0)),
-                    str(row.get("market") or ""),
-                    result,
-                    actual,
-                    0.0 if model_p is None else model_p,
-                )
-            )
-            if result in {"win", "loss"}:
-                outcome = 1.0 if result == "win" else 0.0
-                brier_terms.append(((model_p or 0.0) - outcome) ** 2)
+        results, ticket_legs, ticket_brier = _grade_ticket_legs(
+            ordered, plays, ticket_id
+        )
+        leg_grades.extend(ticket_legs)
+        brier_terms.extend(ticket_brier)
         ticket_result, ticket_profit = _ticket_profit(ordered, results)
         tagged = _tag_leg_statuses(ordered, results)
         if _held(results):

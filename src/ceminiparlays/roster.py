@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import csv
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
 from ceminiparlays.io import LineRow
-from ceminiparlays.names import alias_fold_keys
+from ceminiparlays.names import alias_fold_keys, fold_name
 from ceminiparlays.resources import read_config_text
 
 TEAM_ALIASES = {
@@ -119,6 +120,106 @@ def lookup_player(line: LineRow, roster: Roster) -> RosterPlayer | None:
         if key and key in roster.players:
             return roster.players[key]
     return None
+
+
+def _assignment_index(assignments: Mapping[str, str]) -> dict[str, str]:
+    """Map a name, a folded name, and a player key onto one club code."""
+
+    index: dict[str, str] = {}
+    for raw_key, raw_team in assignments.items():
+        team = normalize_team(str(raw_team))
+        key = str(raw_key or "").strip()
+        if not team or not key:
+            continue
+        index[key.lower()] = team
+        folded = fold_name(key)
+        if folded:
+            index[folded] = team
+    return index
+
+
+def _assigned_team(player: RosterPlayer, index: dict[str, str]) -> str | None:
+    candidates = (
+        player.player_key,
+        player.player_key.lower(),
+        fold_name(player.player_key),
+        player.name,
+        player.name.lower(),
+        fold_name(player.name),
+    )
+    for key in candidates:
+        if key and key in index:
+            return index[key]
+        if key and key.lower() in index:
+            return index[key.lower()]
+    return None
+
+
+def apply_active_teams(roster: Roster, assignments: Mapping[str, str]) -> Roster:
+    """Return a roster whose current-week club overrides the static file.
+
+    ``assignments`` come from a handoff, a salary file, or telemetry. A name
+    that is not on the roster stays unknown. The static JSON file is not
+    rewritten. The same object is returned when no club changes.
+    """
+
+    index = _assignment_index(assignments)
+    if not index:
+        return roster
+    players = dict(roster.players)
+    changed = False
+    for key, player in roster.players.items():
+        team = _assigned_team(player, index)
+        if team is None or team == player.team:
+            continue
+        players[key] = RosterPlayer(
+            player_key=player.player_key,
+            name=player.name,
+            team=team,
+        )
+        changed = True
+    if not changed:
+        return roster
+    return Roster(
+        season=roster.season,
+        retrieved=roster.retrieved,
+        players=players,
+        aliases=dict(roster.aliases),
+    )
+
+
+def active_teams_from_csv(path: Path | None) -> dict[str, str]:
+    """Read ``player`` and ``team`` from a handoff or salary CSV.
+
+    A missing file returns ``{}``. Accepted name columns are ``player``,
+    ``player_name``, ``name``, and ``player_key``. Accepted club columns are
+    ``team``, ``recent_team``, and ``club``.
+    """
+
+    if path is None:
+        return {}
+    resolved = Path(path)
+    if not resolved.is_file():
+        return {}
+    out: dict[str, str] = {}
+    with resolved.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for raw in reader:
+            name = ""
+            for key in ("player", "player_name", "name", "player_key"):
+                text = str(raw.get(key) or "").strip()
+                if text:
+                    name = text
+                    break
+            team = ""
+            for key in ("team", "recent_team", "club"):
+                text = str(raw.get(key) or "").strip()
+                if text:
+                    team = text
+                    break
+            if name and team:
+                out[name] = normalize_team(team)
+    return out
 
 
 def roster_mismatch(line: LineRow, roster: Roster) -> str | None:

@@ -27,6 +27,10 @@ _COLLINEAR_FAMILIES = frozenset({"receptions", "rec_yds"})
 #: Book SGP tax for a naive leg product. Locked before the ranked table.
 SGP_TAX_RHO = 0.15
 SGP_TAX_WEIGHT = 0.55
+#: One player prop may sit on at most this many tickets, singles included.
+MAX_TICKETS_PER_PROP = 2
+#: A quarter prop may not take more than this share of card stake or unit weight.
+QUARTER_STAKE_SHARE = 0.30
 
 
 def first_td_available(environment: Environment | None, leg: EvaluatedLeg) -> bool:
@@ -64,6 +68,58 @@ def _leg_key(leg: EvaluatedLeg) -> tuple[str, str, str]:
         leg.line.stat_type,
         leg.line.side,
     )
+
+
+def _is_quarter_stat(stat: str) -> bool:
+    text = str(stat or "")
+    return text.endswith(("_q1", "_q2", "_q3", "_q4"))
+
+
+def _within_card_caps(
+    prop_counts: dict[tuple[str, str, str], int],
+    quarter_units: dict[tuple[str, str, str], float],
+    combo: tuple[EvaluatedLeg, ...] | list[EvaluatedLeg],
+    n_tickets: int,
+) -> bool:
+    """False when the combo would put a prop on a third ticket or past 30%.
+
+    The first ticket that carries a quarter prop is always allowed. A later
+    ticket is allowed only when the prop stays at or under 30% of the
+    requested card. Each ticket has unit weight 1. Dollar stakes use the
+    same share on the week card.
+    """
+
+    pending: dict[tuple[str, str, str], float] = {}
+    for leg in combo:
+        key = _leg_key(leg)
+        if prop_counts.get(key, 0) + 1 > MAX_TICKETS_PER_PROP:
+            return False
+        if _is_quarter_stat(leg.line.stat_type):
+            pending[key] = pending.get(key, 0.0) + 1.0
+    total = float(n_tickets)
+    for key, add in pending.items():
+        current = quarter_units.get(key, 0.0)
+        if current <= 0.0 or total <= 0.0:
+            continue
+        if (current + add) / total > QUARTER_STAKE_SHARE + 1e-12:
+            return False
+    return True
+
+
+def _note_card_caps(
+    prop_counts: dict[tuple[str, str, str], int],
+    quarter_units: dict[tuple[str, str, str], float],
+    combo: tuple[EvaluatedLeg, ...] | list[EvaluatedLeg],
+) -> None:
+    seen: set[tuple[str, str, str]] = set()
+    for leg in combo:
+        key = _leg_key(leg)
+        if key in seen:
+            continue
+        seen.add(key)
+        prop_counts[key] = prop_counts.get(key, 0) + 1
+        if _is_quarter_stat(leg.line.stat_type):
+            quarter_units[key] = quarter_units.get(key, 0.0) + 1.0
 
 
 def _side_price(leg: EvaluatedLeg) -> int | None:
@@ -375,6 +431,8 @@ def compose_tickets(
     chosen: set[frozenset[tuple[str, str, str]]] = set()
     multi_keys: set[tuple[str, str, str]] = set()
     single_keys: set[tuple[str, str, str]] = set()
+    prop_counts: dict[tuple[str, str, str], int] = {}
+    quarter_units: dict[tuple[str, str, str], float] = {}
     for size in sizes:
         if len(tickets) >= n_tickets:
             break
@@ -385,6 +443,7 @@ def compose_tickets(
         )
         # Multi-leg keys are banned across every size. A 1-leg ticket may
         # share a key with one multi-leg ticket, not with another single.
+        # The card cap is still two tickets for one prop, and 30% for a quarter prop.
         room = n_tickets - len(tickets)
         blocked = single_keys if size <= 1 else multi_keys
         for combo in _select_disjoint(scored, room, blocked):
@@ -392,8 +451,11 @@ def compose_tickets(
             signature = frozenset(keys)
             if signature in chosen:
                 continue
+            if not _within_card_caps(prop_counts, quarter_units, combo, n_tickets):
+                continue
             tickets.append(list(combo))
             chosen.add(signature)
+            _note_card_caps(prop_counts, quarter_units, combo)
             if size <= 1:
                 single_keys |= keys
             else:

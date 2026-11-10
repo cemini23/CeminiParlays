@@ -45,8 +45,7 @@ def test_write_outputs_leaves_a_missing_cell_blank(tmp_path: Path) -> None:
     assert row == "m" + "," * (len(HISTORY_HEADER.split(",")) - 1)
 
 
-def test_run_calibration_returns_the_table_and_the_rho_document(tmp_path: Path) -> None:
+def test_run_calibration_without_a_cache_fails_closed(tmp_path: Path) -> None:
     pytest.importorskip("pandas")
-    table, rho = run_calibration(cache=tmp_path)
-    assert isinstance(table, list)
-    assert isinstance(rho, dict)
+    with pytest.raises(ValueError, match="no prior pbp seasons were on disk"):
+        run_calibration(cache=tmp_path)

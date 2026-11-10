@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ceminiparlays.roster import normalize_team
+
 DEFAULT_DIR = Path("/Users/claudiobarone/Projects/CeminiDFS/data/shared_cache/2026_w06")
 REQUIRED = (
     "player_telemetry_pit.parquet",
@@ -127,6 +129,9 @@ def overlay_pit(
             boost = _finite(source.get("vacated_target_boost"))
             if boost is not None:
                 row["vacated_target_boost"] = boost
+        team = _club_text(source)
+        if team:
+            row["team"] = team
     by_team: dict[str, dict] = {}
     if defense_frame is not None:
         for record in defense_frame.to_dict("records"):
@@ -164,3 +169,55 @@ def overlay_pit(
                 if holding is not None:
                     row["referee_holding_z"] = holding
     return copied_players, copied_teams
+
+
+def _club_text(record: dict) -> str:
+    """Current club from ``team``, ``recent_team``, or ``club``. Blank stays blank."""
+
+    for key in ("team", "recent_team", "club"):
+        if key not in record:
+            continue
+        raw = record.get(key)
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if not text or text.lower() in {"nan", "none", "nat"}:
+            continue
+        return normalize_team(text)
+    return ""
+
+
+def _frame_records(frame: object) -> list[dict]:
+    if frame is None:
+        return []
+    to_dict = getattr(frame, "to_dict", None)
+    if callable(to_dict):
+        return [dict(row) for row in to_dict("records")]
+    if isinstance(frame, list):
+        return [dict(row) for row in frame if isinstance(row, dict)]
+    return []
+
+
+def active_teams_from_frames(frames: dict) -> dict[str, str]:
+    """Current clubs from ``player_telemetry_pit.parquet``.
+
+    A row with no club is skipped. The static roster file is not rewritten.
+    Keys are the player name and, when present, the player id.
+    """
+
+    frame = (frames or {}).get("player_telemetry_pit.parquet")
+    out: dict[str, str] = {}
+    for record in _frame_records(frame):
+        team = _club_text(record)
+        if not team:
+            continue
+        for key in ("player_name", "player", "name"):
+            text = str(record.get(key) or "").strip()
+            if text and text.lower() not in {"nan", "none"}:
+                out[text] = team
+                break
+        for key in ("player_id", "gsis_id"):
+            text = str(record.get(key) or "").strip()
+            if text and text.lower() not in {"nan", "none"}:
+                out[text] = team
+    return out

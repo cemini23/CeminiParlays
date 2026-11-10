@@ -28,6 +28,66 @@ from ceminiparlays.matchup_math import (
 
 CHECKDOWN_MARKETS = frozenset({"receptions_q4", "rec_yds_q4", "rec_yds_q3"})
 YARDS_MARKETS = frozenset({"rec_yds_q4", "rec_yds_q3"})
+#: Q4 rush script. Negative spread means the back's team is favored.
+_COMPETITIVE_LEAD = 1.08
+_NEUTRAL_SCRIPT = 1.00
+_BENCH_HAIRCUT = 0.68
+
+
+def q4_rush_script_multiplier(
+    spread: float | None,
+    is_starter_rb: bool = True,
+) -> float | None:
+    """Scale a starter's Q4 rush mean for the game script.
+
+    ``COMPETITIVE_LEAD`` (``-7.5 <= spread <= -2.5``) returns ``1.08``.
+    The back stays on the field to kill the clock in a one- or two-score lead.
+    ``NEUTRAL_OR_SLIGHT_DOG`` (``-2.5 < spread <= 4.5``) returns ``1.00``.
+    ``BENCH_BLOWOUT_RISK`` (``spread <= -8.0``) returns ``0.68`` for a starter
+    RB1. That haircut is the benching prior. The over is still blocked from
+    Tier 1 and from anchor selection. Use the full-game ``rush_yds`` over.
+    ``TRAIL_BLOWOUT`` (``spread > 4.5``) returns ``None``. The trailing team
+    leaves the run, so the Q4 rush over is not priced.
+    A missing spread returns ``None`` and the caller leaves the mean alone.
+    """
+
+    if spread is None:
+        return None
+    try:
+        number = float(spread)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    if number <= -8.0:
+        return _BENCH_HAIRCUT if is_starter_rb else _NEUTRAL_SCRIPT
+    if number > 4.5:
+        return None
+    if -7.5 <= number <= -2.5:
+        return _COMPETITIVE_LEAD
+    if -2.5 < number <= 4.5:
+        return _NEUTRAL_SCRIPT
+    return _NEUTRAL_SCRIPT
+
+
+def q4_rush_over_blocked(spread: float | None, is_starter_rb: bool = True) -> bool:
+    """True when an RB ``rush_yds_q4`` over is off the anchor card.
+
+    A starter RB1 at ``spread <= -8`` is a bench-blowout. Any RB at
+    ``spread > 4.5`` is a trail-blowout. Both miss the Q4 rush over.
+    """
+
+    if spread is None:
+        return False
+    try:
+        number = float(spread)
+    except (TypeError, ValueError):
+        return False
+    if not math.isfinite(number):
+        return False
+    if number <= -8.0 and is_starter_rb:
+        return True
+    return number > 4.5
 
 
 @dataclass(frozen=True)
@@ -222,11 +282,43 @@ def _competitive_script(spread: float, game_total: float | None) -> bool:
     return False
 
 
+def _trail_blowout_volume_ok(inputs: CheckdownInputs) -> bool:
+    """A trailing RB2 with a thin target rate does not keep the two-minute drill.
+
+    ``spread >= 6.5`` is the trail-blowout window. The over then needs
+    ``games >= 4`` and either ``targets_per_game >= 3`` or a third-down
+    route share of at least half. A closer spread does not use this gate.
+    """
+
+    if inputs.spread is None:
+        return True
+    try:
+        spread = float(inputs.spread)
+        games = float(inputs.games)
+        targets = float(inputs.targets_per_game)
+    except (TypeError, ValueError):
+        return False
+    if not math.isfinite(spread) or spread < 6.5:
+        return True
+    if not math.isfinite(games) or games < 4.0:
+        return False
+    target_ok = math.isfinite(targets) and targets >= 3.0
+    route_ok = False
+    if inputs.third_down_route_share is not None:
+        try:
+            held = float(inputs.third_down_route_share)
+        except (TypeError, ValueError):
+            held = float("nan")
+        route_ok = math.isfinite(held) and held >= 0.50
+    return target_ok or route_ok
+
+
 def _route_share_ok(inputs: CheckdownInputs) -> bool:
     """The back keeps the two-minute routes.
 
     ``q4_trail_target_share > 0`` is required. A typed third-down route
-    share must be at least half of the team's RB routes.
+    share must be at least half of the team's RB routes. A trail-blowout
+    also requires a real target rate or that route share.
     """
 
     share = inputs.q4_trail_target_share
@@ -236,6 +328,8 @@ def _route_share_ok(inputs: CheckdownInputs) -> bool:
         return False
     if trail is None or not math.isfinite(trail) or trail <= 0.0:
         return False
+    if not _trail_blowout_volume_ok(inputs):
+        return False
     route = inputs.third_down_route_share
     if route is None:
         return True
@@ -244,6 +338,30 @@ def _route_share_ok(inputs: CheckdownInputs) -> bool:
     except (TypeError, ValueError):
         return False
     return math.isfinite(held) and held >= 0.50
+
+
+def _block_trail_yards_over(inputs: CheckdownInputs, market: str, side: str) -> bool:
+    """Drop a trail-blowout receiving-yards over when YAC is thin.
+
+    Catches behind the line still cash ``receptions_q4`` over 0.5. They do
+    not cash a yard line. The yards over needs ``def_q4_yac`` at or above
+    the league YAC. A missing rate fails closed.
+    """
+
+    if market != "rec_yds_q4" or side != "over" or inputs.spread is None:
+        return False
+    try:
+        spread = float(inputs.spread)
+    except (TypeError, ValueError):
+        return False
+    if not math.isfinite(spread) or spread < 6.5:
+        return False
+    if inputs.def_q4_yac is None or inputs.league_yac is None:
+        return True
+    try:
+        return float(inputs.def_q4_yac) < float(inputs.league_yac)
+    except (TypeError, ValueError):
+        return True
 
 
 def _under_script_ok(inputs: CheckdownInputs) -> bool:
@@ -336,6 +454,8 @@ def price_checkdown(
     else:
         side, prob, price = "under", 1.0 - p_over, int(book_under)
     if _script_blocks(inputs, market, side, posted):
+        return None
+    if _block_trail_yards_over(inputs, market, side):
         return None
     return CheckdownPrice(
         market=market,

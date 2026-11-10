@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,7 @@ from pathlib import Path
 from ceminiparlays.roster import normalize_team
 
 TRUTHY = {"1", "true", "yes", "y", "t", "exposed"}
+_ODDS_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def _optional_float(value: str | None) -> float | None:
@@ -175,12 +177,19 @@ def _filled_row(
     row: EnvRow,
     spreads: dict[tuple[str, str], float],
     totals: dict[tuple[str, str], float],
+    implieds: dict[tuple[str, str], float] | None = None,
 ) -> EnvRow:
-    """The row with a blank spread or implied total filled, when the book posted it."""
+    """The row with a blank spread or implied total filled, when a source posted it.
+
+    A typed cell stays. An odds file may post ``implied_total`` directly.
+    When that cell is blank, implied team total is ``(over_under - spread) / 2``.
+    """
 
     pair = (normalize_team(row.team), normalize_team(row.opponent))
     spread = row.spread if row.spread is not None else spreads.get(pair)
     implied = row.implied_total
+    if implied is None and implieds is not None:
+        implied = implieds.get(pair)
     total = totals.get(pair)
     if implied is None and spread is not None and total is not None:
         implied = (float(total) - float(spread)) / 2.0
@@ -204,21 +213,105 @@ def _refresh_environment(
     environment: Environment,
     spreads: dict[tuple[str, str], float],
     totals: dict[tuple[str, str], float],
+    implieds: dict[tuple[str, str], float] | None = None,
 ) -> Environment:
     updated = dict(environment)
     for key, row in list(environment.items()):
         if isinstance(key, tuple) and len(key) == 2 and key[0] and key[1]:
-            updated[key] = _filled_row(row, spreads, totals)
+            updated[key] = _filled_row(row, spreads, totals, implieds)
     for key, row in list(environment.items()):
         if isinstance(key, tuple) and len(key) == 2 and key[1] == "":
             updated[key] = updated.get(
-                (row.team, row.opponent), _filled_row(row, spreads, totals)
+                (row.team, row.opponent),
+                _filled_row(row, spreads, totals, implieds),
             )
         elif isinstance(key, str):
             updated[key] = updated.get(
-                (row.team, row.opponent), _filled_row(row, spreads, totals)
+                (row.team, row.opponent),
+                _filled_row(row, spreads, totals, implieds),
             )
     return updated
+
+
+def discover_environment_odds(environment_path: Path | None) -> Path | None:
+    """Find ``environment_odds_YYYY-MM-DD.csv`` beside the environment file.
+
+    A date in the file name selects that odds file. With no date, one sibling
+    odds file is used. Two or more siblings are not a guess. A missing file
+    returns ``None``. This function does not read the network.
+    """
+
+    if environment_path is None:
+        return None
+    path = Path(environment_path)
+    parent = path.parent
+    dates = _ODDS_DATE.findall(path.name)
+    if dates:
+        candidate = parent / f"environment_odds_{dates[-1]}.csv"
+        return candidate if candidate.is_file() else None
+    if not parent.is_dir():
+        return None
+    matches = sorted(
+        item for item in parent.glob("environment_odds_*.csv") if item.is_file()
+    )
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def fill_environment_from_odds_csv(
+    environment: Environment,
+    odds_csv_path: Path | None,
+) -> Environment:
+    """Fill blank ``spread`` and ``implied_total`` from an operator odds CSV.
+
+    Columns are ``team``, ``opp``, ``spread``, ``implied_total``, and
+    ``over_under``. A typed cell stays. A missing file returns the environment
+    unchanged. This function does not scrape and does not invent a number.
+    """
+
+    if not environment or odds_csv_path is None:
+        return environment
+    path = Path(odds_csv_path)
+    if not path.is_file():
+        return environment
+    spreads, totals, implieds = _odds_lines(path)
+    if not spreads and not totals and not implieds:
+        return environment
+    return _refresh_environment(environment, spreads, totals, implieds)
+
+
+def _odds_lines(
+    path: Path,
+) -> tuple[
+    dict[tuple[str, str], float],
+    dict[tuple[str, str], float],
+    dict[tuple[str, str], float],
+]:
+    """Spreads, game totals, and implied totals from an odds CSV."""
+
+    spreads: dict[tuple[str, str], float] = {}
+    totals: dict[tuple[str, str], float] = {}
+    implieds: dict[tuple[str, str], float] = {}
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for raw in reader:
+            team = normalize_team(raw.get("team") or "")
+            opponent = normalize_team(raw.get("opp") or raw.get("opponent") or "")
+            if not team or not opponent:
+                continue
+            pair = (team, opponent)
+            spread = _optional_float(raw.get("spread"))
+            implied = _optional_float(raw.get("implied_total"))
+            total = _optional_float(raw.get("over_under") or raw.get("total"))
+            if spread is not None:
+                spreads[pair] = spread
+            if implied is not None:
+                implieds[pair] = implied
+            if total is not None:
+                totals[pair] = total
+                totals[(opponent, team)] = total
+    return spreads, totals, implieds
 
 
 def env_for(

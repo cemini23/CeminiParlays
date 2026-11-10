@@ -55,9 +55,11 @@ from ceminiparlays.diff import (
     write_booked_ledger,
 )
 from ceminiparlays.environment import (
+    discover_environment_odds,
     env_for,
     env_rows_for_games,
     fill_environment_from_book_lines,
+    fill_environment_from_odds_csv,
     missing_env_games,
     read_environment,
     write_compose_itt,
@@ -119,7 +121,7 @@ from ceminiparlays.payouts import (
     resolve_payout,
 )
 from ceminiparlays.report import PREDICTION_BANNER, fair_card, slip_card
-from ceminiparlays.roster import load_roster, lookup_player
+from ceminiparlays.roster import apply_active_teams, load_roster, lookup_player
 from ceminiparlays.slips import (
     DEFAULT_MIN_EDGE,
     EDGE_FIELDS,
@@ -618,6 +620,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--allow-fewer",
         action="store_true",
         help="Print COMPOSED_SHORTFALL and exit 0 when composed tickets are below --n-tickets.",
+    )
+    compose.add_argument(
+        "--allow-short-card",
+        action="store_true",
+        help=(
+            "Exit 0 when composed tickets are below --n-tickets. "
+            "The SHORT_CARD line still prints."
+        ),
     )
     compose.add_argument(
         "--from-ceminidfs",
@@ -1296,11 +1306,12 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         )
         implied = implied_slip_win(table.all_hit)
         per_leg = breakeven_per_leg(table.all_hit, banner_size)
-    roster = None if getattr(args, "no_roster", False) else load_roster(args.roster)
-    environment = fill_environment_from_book_lines(
-        read_environment(getattr(args, "environment", None)),
-        lines,
+    rank_handoff_path = getattr(args, "from_ceminidfs", None)
+    rank_handoff = (
+        load_ceminidfs_handoff(rank_handoff_path) if rank_handoff_path is not None else None
     )
+    roster = _roster_for(args, rank_handoff)
+    environment = _environment_with_odds(getattr(args, "environment", None), lines)
     live, excluded = evaluate_legs(
         lines,
         dists,
@@ -1369,7 +1380,9 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         handoff_path = getattr(args, "from_ceminidfs", None)
         if handoff_path is None:
             raise ValueError("--dfs-pricing needs --from-ceminidfs <handoff.csv>")
-        handoff = load_ceminidfs_handoff(handoff_path)
+        handoff = rank_handoff
+        if handoff is None:
+            handoff = load_ceminidfs_handoff(handoff_path)
         if handoff.missing:
             print(handoff.note)
         _apply_dfs_pricing(
@@ -1431,6 +1444,58 @@ def _print_jev_route(args: argparse.Namespace) -> None:
     if not getattr(args, "with_jev", False):
         return
     print("jev=fail_closed")
+
+
+def _handoff_teams(handoff: object) -> dict[str, str]:
+    """Player to current club from a loaded handoff. A missing file is empty."""
+
+    if handoff is None or getattr(handoff, "missing", True):
+        return {}
+    out: dict[str, str] = {}
+    for row in getattr(handoff, "rows", []):
+        player = str(getattr(row, "player", "") or "").strip()
+        team = str(getattr(row, "team", "") or "").strip()
+        if player and team:
+            out[player] = team
+    return out
+
+
+def _roster_for(args: argparse.Namespace, handoff: object = None):
+    """Load the roster and let the current-week handoff override a stale club.
+
+    ``--no-roster`` returns ``None``. The static roster file is not rewritten.
+    """
+
+    if getattr(args, "no_roster", False):
+        return None
+    roster = load_roster(getattr(args, "roster", None))
+    return apply_active_teams(roster, _handoff_teams(handoff))
+
+
+def _environment_with_odds(path: Path | None, lines: object):
+    """Read the environment, fill blanks from a sibling odds CSV, then book lines.
+
+    A typed cell wins. The odds file fills a blank before the book file does.
+    A missing odds file leaves the environment unchanged.
+    """
+
+    environment = read_environment(path)
+    environment = fill_environment_from_odds_csv(
+        environment,
+        discover_environment_odds(path),
+    )
+    return fill_environment_from_book_lines(environment, lines)
+
+
+def short_card_exit(composed: int, requested: int, allow: bool) -> int | None:
+    """Print ``SHORT_CARD`` when the card is short, then the shared shortfall exit.
+
+    ``allow`` is true for ``--allow-short-card`` or ``--allow-fewer``.
+    """
+
+    if composed < requested:
+        print(f"SHORT_CARD: composed {composed} of {requested} requested tickets")
+    return shortfall_exit(composed, requested, allow)
 
 
 def shortfall_exit(composed: int, requested: int, allow_fewer: bool) -> int | None:
@@ -1904,8 +1969,10 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     else:
         per_leg = 0.0
     dists = read_distributions(args.distributions) if args.distributions else {}
-    roster = None if getattr(args, "no_roster", False) else load_roster(args.roster)
-    environment = fill_environment_from_book_lines(read_environment(args.environment), lines)
+    dfs_path = getattr(args, "from_ceminidfs", None)
+    roster_handoff = load_ceminidfs_handoff(dfs_path) if dfs_path is not None else None
+    roster = _roster_for(args, roster_handoff)
+    environment = _environment_with_odds(args.environment, lines)
     live, excluded = evaluate_legs(
         lines,
         dists,
@@ -1953,10 +2020,10 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         print(f"wrote {json_path}")
         return 2
 
-    handoff = None
-    dfs_path = getattr(args, "from_ceminidfs", None)
-    if dfs_path is not None:
+    handoff = roster_handoff
+    if dfs_path is not None and handoff is None:
         handoff = load_ceminidfs_handoff(dfs_path)
+    if handoff is not None:
         if handoff.missing:
             print(handoff.note)
         else:
@@ -2159,10 +2226,10 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     # only the short side.
     if len(tickets) > requested_tickets:
         return 2
-    code = shortfall_exit(
+    code = short_card_exit(
         len(tickets),
         requested_tickets,
-        bool(getattr(args, "allow_fewer", False)),
+        bool(getattr(args, "allow_fewer", False) or getattr(args, "allow_short_card", False)),
     )
     if code is not None:
         return code

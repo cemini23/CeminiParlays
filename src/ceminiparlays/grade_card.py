@@ -43,6 +43,9 @@ EXTRA_LEDGER_COLUMNS = (
     "displayed_boosted_payout",
     "off_card",
     "leg_statuses",
+    # Marginal probability of this leg. ``model_prob`` on a multi-leg slip is
+    # the ticket joint. A blank cell means the file did not store a marginal.
+    "leg_model_prob",
 )
 LEDGER_COLUMNS = CORE_LEDGER_COLUMNS + EXTRA_LEDGER_COLUMNS
 
@@ -257,13 +260,33 @@ def _result(side: str, line: float, actual: float) -> str:
     raise ValueError(f"unknown side: {side}")
 
 
+def _parse_stake(value: object) -> float | None:
+    """A dollar stake, or ``0.0`` for a paper ``TBD`` cell.
+
+    ``0``, ``0.00``, and ``TBD`` are paper stakes. A blank cell is absent.
+    """
+
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.lower() == "tbd":
+        return 0.0
+    try:
+        number = round(float(text), 2)
+    except (TypeError, ValueError):
+        return None
+    if number != number:
+        return None
+    return number
+
+
 def _stake(group: list[dict[str, str]]) -> float:
     values = []
     for row in group:
-        try:
-            values.append(round(float(row["ticket_stake_usd"]), 2))
-        except (TypeError, ValueError, KeyError):
+        parsed = _parse_stake(row.get("ticket_stake_usd"))
+        if parsed is None:
             continue
+        values.append(parsed)
     if not values:
         raise ValueError("a ticket has no stake")
     if any(abs(value - values[0]) > 0.001 for value in values):
@@ -321,6 +344,11 @@ def _ticket_profit(group: list[dict[str, str]], results: list[str]) -> tuple[str
     boosted = _money(group[0].get("displayed_boosted_payout"))
     if boosted is not None and boosted > 0.0:
         return "win", boosted - stake
+    # A paper card can settle the result and the Brier term before a price exists.
+    if stake == 0.0 and any(
+        not str(row.get("book_american_odds") or "").strip() for row, _result_name in live
+    ):
+        return "win", 0.0
     decimal = 1.0
     for row, _result_name in live:
         decimal *= american_to_decimal(int(float(row["book_american_odds"])))
@@ -418,10 +446,40 @@ def _held(results: list[str]) -> bool:
     )
 
 
+def _ticket_joint_prob(ordered: list[dict[str, str]]) -> float | None:
+    """The ticket joint, when ``model_prob`` is not a per-leg marginal.
+
+    A multi-leg ledger repeats the joint on every row. ``leg_model_prob`` is
+    the explicit marginal. Equal ``model_prob`` cells are the same joint.
+    One leg, or unequal marginals, returns ``None`` so each leg keeps its term.
+    """
+
+    if len(ordered) < 2:
+        return None
+    values: list[float] = []
+    for row in ordered:
+        try:
+            values.append(float(row["model_prob"]))
+        except (TypeError, ValueError, KeyError):
+            return None
+    explicit = any(str(row.get("leg_model_prob") or "").strip() for row in ordered)
+    same = all(abs(value - values[0]) <= 1e-9 for value in values)
+    if explicit or same:
+        return values[0]
+    return None
+
+
 def _grade_ticket_legs(
-    ordered: list[dict[str, str]], plays: list[dict], ticket_id: str
+    ordered: list[dict[str, str]],
+    plays: list[dict],
+    ticket_id: str,
+    *,
+    ticket_brier: bool = False,
 ) -> tuple[list[str], list[LegGrade], list[float]]:
-    """The results, the leg grades, and the Brier terms for one ticket."""
+    """The results, the leg grades, and the leg-level Brier terms.
+
+    ``ticket_brier`` skips the leg terms. The caller scores the joint once.
+    """
 
     results: list[str] = []
     leg_grades: list[LegGrade] = []
@@ -439,9 +497,10 @@ def _grade_ticket_legs(
                 0.0 if model_p is None else model_p,
             )
         )
-        if result in {"win", "loss"}:
-            outcome = 1.0 if result == "win" else 0.0
-            brier_terms.append(((model_p or 0.0) - outcome) ** 2)
+        if ticket_brier or result not in {"win", "loss"}:
+            continue
+        outcome = 1.0 if result == "win" else 0.0
+        brier_terms.append(((model_p or 0.0) - outcome) ** 2)
     return results, leg_grades, brier_terms
 
 
@@ -460,12 +519,21 @@ def grade_rows(rows: list[dict[str, str]], plays: list[dict]) -> CardGrade:
     brier_terms: list[float] = []
     for ticket_id, group in groups.items():
         ordered = sorted(group, key=lambda row: int(float(row.get("leg_num") or 1)))
+        joint = _ticket_joint_prob(ordered)
         results, ticket_legs, ticket_brier = _grade_ticket_legs(
-            ordered, plays, ticket_id
+            ordered, plays, ticket_id, ticket_brier=joint is not None
         )
         leg_grades.extend(ticket_legs)
-        brier_terms.extend(ticket_brier)
         ticket_result, ticket_profit = _ticket_profit(ordered, results)
+        # One joint term per settled ticket. Do not score the joint against
+        # each leg outcome.
+        if joint is not None:
+            if ticket_result in {"win", "loss"}:
+                outcome = 1.0 if ticket_result == "win" else 0.0
+                ticket_model_p = float(ordered[0]["model_prob"])
+                brier_terms.append((ticket_model_p - outcome) ** 2)
+        else:
+            brier_terms.extend(ticket_brier)
         tagged = _tag_leg_statuses(ordered, results)
         if _held(results):
             hold_rows.extend(tagged)

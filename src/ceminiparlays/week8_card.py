@@ -16,7 +16,12 @@ from itertools import combinations
 from pathlib import Path
 
 from ceminiparlays.book_team import canonical_team
-from ceminiparlays.compose import rank_same_game, redundant_quarter_pair
+from ceminiparlays.compose import (
+    MAX_TICKETS_PER_PROP,
+    QUARTER_STAKE_SHARE,
+    rank_same_game,
+    redundant_quarter_pair,
+)
 from ceminiparlays.copula import exact_joint
 from ceminiparlays.feature_cache import load_feature_cache
 from ceminiparlays.grade_card import LEDGER_COLUMNS, archive_card_copies
@@ -33,7 +38,12 @@ from ceminiparlays.matchup_math import (
 )
 from ceminiparlays.names import fold_name
 from ceminiparlays.odds import american_to_decimal
-from ceminiparlays.q4_checkdown import CheckdownInputs, price_checkdown
+from ceminiparlays.q4_checkdown import (
+    CheckdownInputs,
+    price_checkdown,
+    q4_rush_over_blocked,
+    q4_rush_script_multiplier,
+)
 from ceminiparlays.quarter_usage import attach_quarter_counts, reception_over_blocked
 from ceminiparlays.resources import REPO_ROOT
 from ceminiparlays.sunday_card import norm_name
@@ -217,11 +227,16 @@ def price_period_yards(
     book_under: int,
     opps_q: float = 0.0,
     opps_total: float = 0.0,
+    market: str = "",
+    spread: float | None = None,
+    is_starter_rb: bool = True,
 ) -> dict | None:
     """Quarter yards = full-game rate times the Empirical Bayes quarter share.
 
     Both counts at zero keep the locked 0.25 prior. Sigma is the period floor,
-    not the full-game yard floor.
+    not the full-game yard floor. A ``rush_yds_q4`` mean takes the Q4 script
+    factor. A blocked rush over is not returned. The full-game rush over is
+    the market for a mega-favorite RB1.
     """
 
     base = baseline_volume(games, rate)
@@ -229,6 +244,10 @@ def price_period_yards(
         return None
     share = quarter_share(float(opps_q), float(opps_total))
     mean = base * share
+    if market == "rush_yds_q4" and spread is not None:
+        factor = q4_rush_script_multiplier(spread, is_starter_rb=is_starter_rb)
+        if factor is not None:
+            mean *= factor
     if mean <= 0.0 or not math.isfinite(mean):
         return None
     try:
@@ -239,6 +258,12 @@ def price_period_yards(
         return None
     priced = _clipped_side(p_raw, fair, int(book_over), int(book_under))
     if priced is None:
+        return None
+    if (
+        market == "rush_yds_q4"
+        and priced["side"] == "over"
+        and q4_rush_over_blocked(spread, is_starter_rb=is_starter_rb)
+    ):
         return None
     priced["w_q_eb"] = share
     return priced
@@ -292,6 +317,61 @@ def _ev_key(leg: dict) -> tuple:
     return (-float(leg["ev"]), str(leg.get("player_key") or ""), str(leg.get("market") or ""))
 
 
+def _is_quarter_market(market: str) -> bool:
+    text = str(market or "")
+    return text.endswith(("_q1", "_q2", "_q3", "_q4"))
+
+
+def _prop_use(tickets: list[CardTicket]) -> tuple[dict[tuple, int], dict[tuple, int]]:
+    """Ticket counts and quarter-prop cents for each prop identity."""
+
+    counts: dict[tuple, int] = {}
+    quarter_cents: dict[tuple, int] = {}
+    for ticket in tickets:
+        seen: set[tuple] = set()
+        for leg in ticket.legs:
+            ident = _leg_identity(leg)
+            if ident in seen:
+                continue
+            seen.add(ident)
+            counts[ident] = counts.get(ident, 0) + 1
+            if _is_quarter_market(str(leg.get("market") or "")):
+                quarter_cents[ident] = quarter_cents.get(ident, 0) + ticket.stake_cents
+    return counts, quarter_cents
+
+
+def _concentration_ok(
+    chosen: list[CardTicket],
+    ticket: CardTicket,
+    total_cents: int = BANKROLL_CENTS,
+) -> bool:
+    """False when a prop would sit on a third ticket or a quarter prop exceeds 30%.
+
+    The first ticket for a quarter prop is kept. A later ticket must leave
+    that prop at or under 30% of the card stake. ``total_cents`` is the
+    full card, not the stake placed so far.
+    """
+
+    counts, quarter_cents = _prop_use(chosen)
+    seen: set[tuple] = set()
+    for leg in ticket.legs:
+        ident = _leg_identity(leg)
+        if ident in seen:
+            continue
+        seen.add(ident)
+        if counts.get(ident, 0) + 1 > MAX_TICKETS_PER_PROP:
+            return False
+        if not _is_quarter_market(str(leg.get("market") or "")):
+            continue
+        current = quarter_cents.get(ident, 0)
+        if current <= 0 or total_cents <= 0:
+            continue
+        share = (current + ticket.stake_cents) / float(total_cents)
+        if share > QUARTER_STAKE_SHARE + 1e-12:
+            return False
+    return True
+
+
 def _place(
     chosen: list[CardTicket],
     card_legs: list[dict],
@@ -308,6 +388,8 @@ def _place(
     if len(legs) > 1 and not all(pair_ok(left, right) for left, right in combinations(legs, 2)):
         return False
     if not exposure_ok(exposure, legs, ticket.stake_cents):
+        return False
+    if not _concentration_ok(chosen, ticket):
         return False
     chosen.append(ticket)
     card_legs.extend(legs)
@@ -729,6 +811,20 @@ def _note(player: str, team: str, opp: str, market: str, roof: str) -> str:
     return "; ".join(notes) if notes else "none"
 
 
+def _attach_script(
+    leg: dict,
+    defense: dict | None,
+    league_yac: float | None,
+    is_starter_rb: bool,
+) -> dict:
+    """Store the script fields the tier gate reads. A missing YAC stays missing."""
+
+    leg["def_q4_yac"] = finite((defense or {}).get("def_q4_yac"))
+    leg["league_yac"] = league_yac
+    leg["is_starter_rb"] = is_starter_rb
+    return leg
+
+
 def _base_leg(row: dict, player: dict, meta: dict, market: str, side: str, line: float, price: int, model_p: float, ev: float) -> dict:
     team = canonical_team(str(row.get("team") or ""))
     opp = canonical_team(str(row.get("opp") or ""))
@@ -876,6 +972,19 @@ def build_pools(
         if team and yards >= starter_yards.get(team, -1.0):
             starter_yards[team] = yards
             starters[team] = fold_name(str(row.get("player_name") or ""))
+    rb1: dict[str, str] = {}
+    rb1_yards: dict[str, float] = {}
+    for row in players:
+        if str(row.get("position") or "").upper() != "RB":
+            continue
+        name = norm_name(str(row.get("player_name") or ""))
+        if name in never:
+            continue
+        team = canonical_team(str(row.get("team") or ""))
+        yards = finite(row.get("rush_yds_per_game")) or 0.0
+        if team and yards >= rb1_yards.get(team, -1.0):
+            rb1_yards[team] = yards
+            rb1[team] = fold_name(str(row.get("player_name") or ""))
 
     meta_by_pair: dict[frozenset[str], dict] = {}
     for row in games:
@@ -971,6 +1080,9 @@ def build_pools(
         meta["kick_et"] = kick
         meta["spread"] = spread
         meta["game_total"] = game_total
+        player_fold = fold_name(str(player.get("player_name") or ""))
+        is_starter_rb = position == "RB" and rb1.get(team) == player_fold
+        defense = defense_by_team.get(opp)
         if market in CHECKDOWN_BOARD:
             if position not in SKILL:
                 continue
@@ -978,7 +1090,7 @@ def build_pools(
                 continue
             inputs = _checkdown_inputs(
                 player,
-                defense_by_team.get(opp),
+                defense,
                 league_trail,
                 league_cushion,
                 league_comp,
@@ -1019,6 +1131,7 @@ def build_pools(
                     under_p,
                     under_ev,
                 )
+                _attach_script(leg, defense, league_yac, is_starter_rb)
                 extra = "Q4 clock grinder; reception over blocked"
                 if leg["note"] in {"", "none"}:
                     leg["note"] = extra
@@ -1036,6 +1149,7 @@ def build_pools(
                     priced.model_p,
                     priced.ev,
                 )
+            _attach_script(leg, defense, league_yac, is_starter_rb)
             leg["player_key"] = player_key or leg["player_key"]
             leg["w_rec_q_eb"] = share
             leg["q4_clock_grinder"] = bool(player.get("q4_clock_grinder"))
@@ -1082,6 +1196,9 @@ def build_pools(
             book_under=under,
             opps_q=opps_q,
             opps_total=opps_total,
+            market=market,
+            spread=spread if market == "rush_yds_q4" else None,
+            is_starter_rb=is_starter_rb,
         )
         if priced_normal is None:
             continue
@@ -1098,6 +1215,7 @@ def build_pools(
             priced_normal["model_p"],
             priced_normal["ev"],
         )
+        _attach_script(leg, defense, league_yac, is_starter_rb)
         leg["player_key"] = player_key or leg["player_key"]
         leg["w_rush_q4_eb"] = float(priced_normal["w_q_eb"])
         _keep_best(tier2, leg)
@@ -1156,6 +1274,19 @@ def _reception_q4_leg(side: str, spread: float | None, leg: dict) -> bool:
     return False
 
 
+def _trail_yac_ok(leg: dict) -> bool:
+    """A trail-blowout receiving-yards over needs league-or-better YAC."""
+
+    spread = finite(leg.get("spread"))
+    if spread is None or spread < 6.5:
+        return True
+    yac = finite(leg.get("def_q4_yac"))
+    league = finite(leg.get("league_yac"))
+    if yac is None or league is None:
+        return False
+    return yac >= league
+
+
 def _tier1_leg(leg: dict) -> bool:
     if str(leg.get("position") or "") != "RB":
         return False
@@ -1166,9 +1297,17 @@ def _tier1_leg(leg: dict) -> bool:
     market = str(leg.get("market") or "")
     side = str(leg.get("side") or "")
     spread = _qualifying_spread(leg)
+    raw_spread = finite(leg.get("spread"))
+    if market == "rush_yds_q4" and side == "over" and q4_rush_over_blocked(
+        raw_spread,
+        is_starter_rb=bool(leg.get("is_starter_rb", True)),
+    ):
+        return False
     if market == "receptions_q4" and abs(float(leg["line"]) - 0.5) <= 1e-9:
         return _reception_q4_leg(side, spread, leg)
     if market == "rec_yds_q4" and side == "over" and spread is not None:
+        if not _trail_yac_ok(leg):
+            return False
         return _targets_per_game(leg) >= 1.0
     return False
 
@@ -1245,16 +1384,25 @@ def _split_problems(tickets: list[CardTicket]) -> list[str]:
 
 
 def _duplicate_problems(tickets: list[CardTicket]) -> list[str]:
+    """Flag a prop on more than two tickets, and a quarter prop over 30%."""
+
     problems: list[str] = []
-    seen_multi: set[tuple[str, str, str, float]] = set()
-    for ticket in tickets:
-        if len(ticket.legs) < 2:
+    counts, quarter_cents = _prop_use(tickets)
+    total = stake_cents(tickets) or BANKROLL_CENTS
+    for ident, count in counts.items():
+        if count > MAX_TICKETS_PER_PROP:
+            problems.append(
+                f"prop {ident[0]} {ident[1]} {ident[2]} is on {count} tickets; "
+                f"cap is {MAX_TICKETS_PER_PROP}"
+            )
+    for ident, cents in quarter_cents.items():
+        if total <= 0:
             continue
-        for leg in ticket.legs:
-            ident = _leg_identity(leg)
-            if ident in seen_multi:
-                problems.append(f"duplicate multi-leg prop {ident[0]} {ident[1]} {ident[2]}")
-            seen_multi.add(ident)
+        share = cents / float(total)
+        if share > QUARTER_STAKE_SHARE + 1e-12:
+            problems.append(
+                f"quarter prop {ident[0]} {ident[1]} is {share:.1%} of the card; cap is 30%"
+            )
     return problems
 
 
@@ -1269,7 +1417,33 @@ def verify_card(tickets: list[CardTicket], never: set[str]) -> list[str]:
     return problems
 
 
-def ledger_rows(tickets: list[CardTicket]) -> list[dict[str, str]]:
+def _stake_text(ticket: CardTicket, stake_mode: str) -> str:
+    if stake_mode == "tbd":
+        return "TBD"
+    return f"{ticket.stake_cents / 100:.2f}"
+
+
+def _note_text(ticket: CardTicket, stake_mode: str) -> str:
+    note = ticket.note
+    if stake_mode != "tbd":
+        return note
+    extra = f"unit_weight={ticket.stake_cents / 100:.2f}"
+    if note in {"", "none"}:
+        return extra
+    return f"{note}; {extra}"
+
+
+def ledger_rows(
+    tickets: list[CardTicket],
+    *,
+    stake_mode: str = "fixed",
+) -> list[dict[str, str]]:
+    """One row per leg. Multi-leg ``model_prob`` is the ticket joint.
+
+    ``stake_mode="tbd"`` writes ``TBD`` instead of a dollar stake and puts
+    ``unit_weight`` on the note. The operator sizes the dollars on the laptop.
+    """
+
     rows: list[dict[str, str]] = []
     for ticket in tickets:
         for index, leg in enumerate(ticket.legs, start=1):
@@ -1294,23 +1468,30 @@ def ledger_rows(tickets: list[CardTicket]) -> list[dict[str, str]]:
                         else f"{float(ticket.joint_p):.6f}"
                     ),
                     "tax_adj_ev": f"{ticket.tax_ev:.6f}",
-                    "ticket_stake_usd": f"{ticket.stake_cents / 100:.2f}",
-                    "t90_flag": ticket.note,
+                    "ticket_stake_usd": _stake_text(ticket, stake_mode),
+                    "t90_flag": _note_text(ticket, stake_mode),
                     "boost_pct": "",
                     "displayed_boosted_payout": "",
                     "off_card": "false",
                     "leg_statuses": "",
+                    "leg_model_prob": f"{float(leg['model_p']):.6f}",
                 }
             )
     return rows
 
 
-def write_ledger(tickets: list[CardTicket], path: Path, doc_path: Path | None = None) -> None:
+def write_ledger(
+    tickets: list[CardTicket],
+    path: Path,
+    doc_path: Path | None = None,
+    *,
+    stake_mode: str = "fixed",
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(LEDGER_COLUMNS), lineterminator="\n")
         writer.writeheader()
-        writer.writerows(ledger_rows(tickets))
+        writer.writerows(ledger_rows(tickets, stake_mode=stake_mode))
     archive_card_copies(path, SLATE_DAY, doc_path=doc_path)
 
 
@@ -1332,6 +1513,7 @@ def render_markdown(
     environment: list[dict],
     counts: dict,
     blocked: list[str] | None = None,
+    stake_mode: str = "fixed",
 ) -> str:
     lines = [
         f"# Week 8 Sunday Hard Rock card, {SLATE_DAY}",
@@ -1382,19 +1564,16 @@ def render_markdown(
         legs = "; ".join(_leg_text(leg) for leg in ticket.legs)
         prob = f"{float(ticket.joint_p):.4f}"
         book = f"{float(ticket.book_implied_p):.4f}"
+        if stake_mode == "tbd":
+            stake_cell = "TBD"
+            note = _note_text(ticket, "tbd")
+        else:
+            stake_cell = f"${ticket.stake_cents / 100:.2f}"
+            note = ticket.note
         lines.append(
-            "| {ticket} | {tier} | {game} | {legs} | {price} | {prob} | {book} | {ev:.1f}% | ${stake:.2f} | {note} |".format(
-                ticket=ticket.ticket_id,
-                tier=ticket.tier,
-                game=game,
-                legs=legs,
-                price=_book_text(ticket),
-                prob=prob,
-                book=book,
-                ev=ticket.tax_ev * 100.0,
-                stake=ticket.stake_cents / 100.0,
-                note=ticket.note,
-            )
+            f"| {ticket.ticket_id} | {ticket.tier} | {game} | {legs} | "
+            f"{_book_text(ticket)} | {prob} | {book} | {ticket.tax_ev * 100.0:.1f}% | "
+            f"{stake_cell} | {note} |"
         )
     lines.extend(["", "## Exposure", "", "| Game | Exposure |", "| --- | ---: |"])
     for label, cents in sorted(game_exposure(tickets).items(), key=lambda item: (-item[1], item[0])):
@@ -1463,6 +1642,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--card", type=Path, default=CARD_PATH)
     parser.add_argument("--doc", type=Path, default=DOC_PATH)
     parser.add_argument("--pbp", type=Path, default=PBP_PATH)
+    parser.add_argument(
+        "--stake-mode",
+        default="fixed",
+        choices=("fixed", "tbd"),
+        help=(
+            "fixed writes the dollar stake. tbd writes TBD and a unit_weight "
+            "note so the operator sizes the dollars on the laptop."
+        ),
+    )
     args = parser.parse_args(argv)
     try:
         tickets, problems, pools = build_from_files(args.lines, args.cache, args.scratches, args.pbp)
@@ -1498,10 +1686,11 @@ def main(argv: list[str] | None = None) -> int:
         pools["environment"],
         pools["counts"],
         pools.get("blocked_grinders") or [],
+        stake_mode=args.stake_mode,
     )
     args.doc.parent.mkdir(parents=True, exist_ok=True)
     args.doc.write_text(text, encoding="utf-8")
-    write_ledger(tickets, args.card, args.doc)
+    write_ledger(tickets, args.card, args.doc, stake_mode=args.stake_mode)
     print(text)
     print(f"wrote {args.card}")
     print(f"wrote {args.doc}")

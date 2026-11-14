@@ -1,0 +1,104 @@
+team,player,pos,token,label
+NE,Ben Brown,C,out,CONFIRMED
+NE,Carlton Davis III,CB,out,CONFIRMED
+NE,TreVeyon Henderson,RB,out,CONFIRMED
+DET,Cade Mays,C,out,CONFIRMED
+DET,D.J. Reed,CB,out,CONFIRMED
+DET,Isiah Pacheco,RB,ir,CLAIMED
+DET,Jack Campbell,LB,ir,CLAIMED
+DET,Jimmy Rolder,LB,ir,CLAIMED
+DET,Kerby Joseph,S,out,CONFIRMED
+KC,Jaylon Moore,T,out,CONFIRMED
+KC,Omarr Norman-Lott,DT,out,CONFIRMED
+KC,Peter Woods,DT,out,CONFIRMED
+ATL,Brian Robinson Jr.,RB,ir,CLAIMED
+ATL,Divine Deablo,LB,doubtful,CONFIRMED
+ATL,Samson Ebukam,DE,ir,CLAIMED
+ATL,Zachariah Branch,WR,out,CONFIRMED
+HOU,Azeez Al-Shaair,LB,out,CONFIRMED
+HOU,Brevin Jordan,TE,out,CONFIRMED
+HOU,Danielle Hunter,DE,out,CONFIRMED
+HOU,Jake Hummel,LB,ir,CLAIMED
+HOU,Keylan Rutledge,G,out,CONFIRMED
+HOU,Marvin Harrison Jr.,WR,out,CONFIRMED
+CLE,Michael Burton,FB,out,CONFIRMED
+CLE,Ronnie Hickman Jr.,S,out,CONFIRMED
+MIN,Blake Cashman,LB,out,CONFIRMED
+MIN,Demond Claiborne,RB,ir,CLAIMED
+MIN,Jauan Jennings,WR,out,CONFIRMED
+MIN,Kyler Murray,QB,out,CONFIRMED
+MIN,T.J. Hockenson,TE,out,CONFIRMED
+MIN,Tyrion Ingram-Dawkins,DT,out,CONFIRMED
+GB,Josh Jacobs,RB,out,CONFIRMED
+GB,Josh Whyle,TE,out,CONFIRMED
+GB,Micah Parsons,LB,out,CONFIRMED
+GB,Sean Rhyan,C,out,CONFIRMED
+GB,Warren Brinson,DT,ir,CLAIMED
+GB,Zaire Franklin,LB,doubtful,CONFIRMED
+JAX,BJ Green II,DE,out,CONFIRMED
+JAX,Jessie Bates,S,out,CONFIRMED
+JAX,Jordan Davis,DT,out,CONFIRMED
+TEN,Anthony Hill Jr.,LB,out,CONFIRMED
+TEN,Carnell Tate,WR,out,CONFIRMED
+TEN,Cody Barton,LB,out,CONFIRMED
+TEN,James Williams Sr.,LB,ir,CLAIMED
+TEN,Peter Skoronski,G,out,CONFIRMED
+TEN,Tommy Townsend,P,out,CONFIRMED
+MIA,Aaron Brewer,C,out,CONFIRMED
+MIA,Chris Bell,WR,doubtful,CONFIRMED
+MIA,Jared Wayne,WR,out,CONFIRMED
+MIA,Malik Willis,QB,ir,CLAIMED
+MIA,Zach Sieler,DT,ir,CLAIMED
+IND,Akeem Davis-Gaither,LB,out,CONFIRMED
+IND,Alec Pierce,WR,ir,CLAIMED
+IND,Jalen Travis,T,out,CONFIRMED
+IND,Jaylon Carlies,LB,out,CONFIRMED
+IND,Jerry Tillery,DT,out,CONFIRMED
+IND,Luke Rhodes,LS,out,CONFIRMED
+IND,Mo Alie-Cox,TE,out,CONFIRMED
+CAR,Bobby Okereke,LB,out,CONFIRMED
+CAR,Jaycee Horn,CB,ir,CLAIMED
+CAR,Jonathon Brooks,RB,doubtful,CONFIRMED
+CAR,Mike Jackson,CB,doubtful,CONFIRMED
+NO,CJ Donaldson,RB,out,CONFIRMED
+NO,Christen Miller,DT,out,CONFIRMED
+NO,Erik McCoy,C,out,CONFIRMED
+NO,Taliese Fuaga,T,out,CONFIRMED
+BUF,Spencer Brown,T,doubtful,CONFIRMED
+NYJ,Trevin Wallace,LB,out,CONFIRMED
+SEA,Charles Cross,T,out,CONFIRMED
+SEA,Leonard Williams,DT,out,CONFIRMED
+SEA,Quenton Nelson,G,out,CONFIRMED
+SEA,Sam Darnold,QB,out,CONFIRMED
+LAR,Davante Adams,WR,ir,CLAIMED
+LAR,Jordan Whittington,WR,ir,CLAIMED
+LAR,Steve Avila,G,out,CONFIRMED
+LAR,Terrance Ferguson,TE,out,CONFIRMED
+ARI,Gardner Minshew II,QB,ir,CLAIMED
+ARI,Hjalte Froholdt,C,out,CONFIRMED
+ARI,Jon Gaines II,G,out,CONFIRMED
+ARI,Michael Wilson,WR,ir,CLAIMED
+ARI,Zachary Carter,DT,out,CONFIRMED
+SF,Brandon Aiyuk,WR,out,CLAIMED
+SF,Gracen Halton,DT,ir,CLAIMED
+SF,Mike Evans,WR,out,CONFIRMED
+DAL,Donovan Ezeiruaku,LB,out,CONFIRMED
+DAL,Jake Ferguson,TE,out,CONFIRMED
+DAL,Jonathan Mingo,WR,out,CONFIRMED
+DAL,Juanyeh Thomas,S,doubtful,CONFIRMED
+DAL,P.J. Locke,S,out,CONFIRMED
+DAL,Tyler Goodson,RB,out,CONFIRMED
+NE,Reggie Gilliam,FB,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN ir (CLAIMED))
+HOU,Jaylin Smith,CB,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN ir (CLAIMED))
+GB,Chris Brooks,RB,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN ir (CLAIMED))
+GB,Skyy Moore,WR,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN ir (CLAIMED))
+MIA,Darrell Baker Jr.,CB,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN out (CLAIMED))
+IND,Arden Key,DE,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN ir (CLAIMED))
+CAR,Xavier Legette,WR,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN ir (CLAIMED))
+NO,Travis Etienne,RB,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN ir (CLAIMED))
+BUF,Tyrell Shavers,WR,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN out (CLAIMED))
+NYJ,VJ Payne,S,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN ir (CLAIMED))
+LAR,Puka Nacua,WR,dnp,CONFLICT / CLAIMED (CONFLICT: NFL.com dnp (primary) vs ESPN ir (CLAIMED))
+ARI,Hunter Long,TE,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN ir (CLAIMED))
+SF,C.J. West,DT,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN ir (CLAIMED))
+DAL,Devin Moore,CB,q,CONFLICT / CLAIMED (CONFLICT: NFL.com q (primary) vs ESPN ir (CLAIMED))

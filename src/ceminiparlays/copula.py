@@ -4,7 +4,7 @@ from math import sqrt
 from typing import Literal
 
 import numpy as np
-from scipy.stats import multivariate_normal, norm, t
+from scipy.stats import multivariate_normal, multivariate_t, norm, t
 
 CopulaType = Literal["gaussian", "student_t"]
 
@@ -63,20 +63,32 @@ def nearest_correlation(matrix: np.ndarray, eigenvalue_floor: float = _PD_EPS) -
     return corr
 
 
+def _copula_kind(copula_type: str) -> str:
+    """``t`` is the Student-t alias. Other names stay an error."""
+
+    token = str(copula_type or "").strip().lower().replace("-", "_")
+    if token == "gaussian":
+        return "gaussian"
+    if token in {"t", "student_t"}:
+        return "student_t"
+    raise ValueError(f"unsupported copula: {copula_type}")
+
+
 def exact_joint(
     marginal_probs: list[float] | np.ndarray,
     corr_matrix: np.ndarray,
-    copula_type: CopulaType = "gaussian",
+    copula_type: str = "gaussian",
+    df: float = 5.0,
 ) -> float:
-    """Exact Gaussian-copula joint hit probability for a small slip.
+    """Exact copula joint hit probability for a small slip.
 
-    ``p_all = Phi_k(norm.ppf(p), cov=corr)`` where ``Phi_k`` is the multivariate
-    normal CDF. Deterministic, so it has no Monte Carlo noise. Only implemented
-    for the Gaussian copula; larger slips and the Student-t path stay on MC.
+    The Gaussian path is ``Phi_k(norm.ppf(p), cov=corr)``. The Student-t path
+    (``copula_type`` ``t`` or ``student_t``, default ``df=5``) is the
+    multivariate-t CDF at ``t.ppf(p, df)``. Deterministic, so it has no Monte
+    Carlo noise.
     """
 
-    if copula_type != "gaussian":
-        raise ValueError("exact joint only implemented for the gaussian copula")
+    kind = _copula_kind(copula_type)
     marginals = np.clip(np.asarray(marginal_probs, dtype=float), 1e-9, 1.0 - 1e-9)
     corr = np.asarray(corr_matrix, dtype=float)
     k = len(marginals)
@@ -91,9 +103,23 @@ def exact_joint(
     np.fill_diagonal(clean, 1.0)
     if float(np.min(np.linalg.eigvalsh(clean))) <= _PD_EPS:
         clean = nearest_correlation(clean)
-    thresholds = norm.ppf(marginals)
+    if kind == "gaussian":
+        thresholds = norm.ppf(marginals)
+        return float(multivariate_normal.cdf(thresholds, mean=np.zeros(k), cov=clean))
+    degrees = float(df)
+    if not np.isfinite(degrees) or degrees <= 0.0:
+        raise ValueError("student-t df must be positive")
+    thresholds = t.ppf(marginals, degrees)
+    # SciPy integrates the t CDF with a random stream. A fixed seed keeps
+    # ``t`` and ``student_t`` on the same number.
     return float(
-        multivariate_normal.cdf(thresholds, mean=np.zeros(k), cov=clean)
+        multivariate_t.cdf(
+            thresholds,
+            loc=np.zeros(k),
+            shape=clean,
+            df=degrees,
+            random_state=0,
+        )
     )
 
 

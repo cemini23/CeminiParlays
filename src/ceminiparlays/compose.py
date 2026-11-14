@@ -560,20 +560,34 @@ def redundant_quarter_pair(left: dict, right: dict) -> bool:
     return {parsed[0].group("family"), parsed[1].group("family")} == _COLLINEAR_FAMILIES
 
 
-def _max_pair_rho(corr) -> float:
+def _pair_rho_values(corr) -> list[float]:
     import numpy as np
 
     matrix = np.asarray(corr, dtype=float)
     if matrix.ndim != 2 or matrix.shape[0] < 2 or matrix.shape[0] != matrix.shape[1]:
-        return 0.0
-    best = -1.0
+        return []
+    values: list[float] = []
     width = matrix.shape[0]
     for i in range(width):
         for j in range(i + 1, width):
             value = float(matrix[i, j])
-            if math.isfinite(value) and value > best:
-                best = value
-    return best
+            if math.isfinite(value):
+                values.append(value)
+    return values
+
+
+def _max_pair_rho(corr) -> float:
+    values = _pair_rho_values(corr)
+    if not values:
+        return 0.0
+    return max(values)
+
+
+def _min_pair_rho(corr) -> float:
+    values = _pair_rho_values(corr)
+    if not values:
+        return 0.0
+    return min(values)
 
 
 def _taxed_decimal(prices: list[int], corr, naive_decimal: float) -> tuple[float, bool]:
@@ -605,13 +619,13 @@ def _taxed_decimal(prices: list[int], corr, naive_decimal: float) -> tuple[float
 
 
 def joint_ticket(marginals: list[float], prices: list[int], corr) -> dict[str, object]:
-    """Exact Gaussian joint versus the product of the leg prices.
+    """Gaussian joint and Student-t (``df=5``) joint versus the leg prices.
 
-    ``joint_ev`` and ``naive_joint_ev`` use the product of the single-leg
-    decimals. ``tax_adjusted_sgp_ev`` uses the book SGP haircut when the
-    price source is ``leg_odds_naive`` and pair rho is above 0.15. A
-    same-game book does not pay the naive product. ``unconfirmed`` stays
-    true. This is not a bet and it does not add a stake weight.
+    ``joint_p`` stays the Gaussian joint. When any pair rho is negative, the
+    joint used for EV is ``min(p_gaussian, p_t)``. At rho 0 the Gaussian
+    number stays in place. ``t_copula_joint_p`` is always reported. The SGP
+    tax still uses the Gaussian copula on vigged marginals.
+    ``unconfirmed`` stays true. This is not a bet and it does not add a stake.
     """
 
     from ceminiparlays.copula import exact_joint
@@ -620,7 +634,12 @@ def joint_ticket(marginals: list[float], prices: list[int], corr) -> dict[str, o
         raise ValueError("marginals and prices must have the same length")
     if len(marginals) < 2:
         raise ValueError("a joint needs at least two legs")
-    p_joint = float(exact_joint(list(marginals), corr, "gaussian"))
+    clean = list(marginals)
+    p_gaussian = float(exact_joint(clean, corr, "gaussian"))
+    p_t = float(exact_joint(clean, corr, "t", df=5))
+    p_joint = p_gaussian
+    if _min_pair_rho(corr) < 0.0:
+        p_joint = min(p_gaussian, p_t)
     p_indep = 1.0
     decimal = 1.0
     clean_prices = [int(price) for price in prices]
@@ -631,6 +650,8 @@ def joint_ticket(marginals: list[float], prices: list[int], corr) -> dict[str, o
     taxed_decimal, taxed = _taxed_decimal(clean_prices, corr, decimal)
     return {
         "joint_p": p_joint,
+        "gaussian_joint_p": p_gaussian,
+        "t_copula_joint_p": p_t,
         "indep_p": p_indep,
         "decimal": decimal,
         "decimal_sgp": taxed_decimal,

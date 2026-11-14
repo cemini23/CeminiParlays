@@ -83,6 +83,7 @@ EVALUATION_MODULES: frozenset[str] = frozenset(
         "weather.py",
         "week7_card.py",
         "week8_card.py",
+        "week10_card.py",
     }
 )
 

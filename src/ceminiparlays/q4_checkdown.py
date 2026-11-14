@@ -25,6 +25,7 @@ from ceminiparlays.matchup_math import (
     poisson_over_prob,
     quarter_share,
 )
+from ceminiparlays.sunday_card import norm_name
 
 CHECKDOWN_MARKETS = frozenset({"receptions_q4", "rec_yds_q4", "rec_yds_q3"})
 YARDS_MARKETS = frozenset({"rec_yds_q4", "rec_yds_q3"})
@@ -32,6 +33,44 @@ YARDS_MARKETS = frozenset({"rec_yds_q4", "rec_yds_q3"})
 _COMPETITIVE_LEAD = 1.08
 _NEUTRAL_SCRIPT = 1.00
 _BENCH_HAIRCUT = 0.68
+#: Named RB1s who draw the bench haircut even when target-share rank is not 1.
+BENCH_BLOWOUT_RB1 = frozenset({"james cook", "kyren williams", "bhayshul tuten"})
+#: Trail-script grinders. The tag is ``BLOCKED_RB2_HURRYUP_FADE``.
+BLOCKED_RB2_HURRYUP_FADE = frozenset(
+    {
+        "isaiah davis",
+        "tyjae spears",
+        "bam knight",
+        "nicholas singleton",
+    }
+)
+
+
+def _spread_number(spread: float | None) -> float | None:
+    if spread is None:
+        return None
+    try:
+        number = float(spread)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def _blocked_rb2_name(player_name: str) -> bool:
+    return norm_name(player_name) in BLOCKED_RB2_HURRYUP_FADE
+
+
+def starter_rb(player_name: str, target_share_rank: int | None = None) -> bool:
+    """True for a named bench-risk RB1 or the team's target-share leader.
+
+    James Cook III is target-share rank 2 and is still the Bills RB1.
+    """
+
+    if norm_name(player_name) in BENCH_BLOWOUT_RB1:
+        return True
+    return target_share_rank == 1
 
 
 def q4_rush_script_multiplier(
@@ -40,32 +79,25 @@ def q4_rush_script_multiplier(
 ) -> float | None:
     """Scale a starter's Q4 rush mean for the game script.
 
-    ``COMPETITIVE_LEAD`` (``-7.5 <= spread <= -2.5``) returns ``1.08``.
-    The back stays on the field to kill the clock in a one- or two-score lead.
-    ``NEUTRAL_OR_SLIGHT_DOG`` (``-2.5 < spread <= 4.5``) returns ``1.00``.
+    ``COMPETITIVE_LEAD`` (``-7.5 <= spread <= -3.0``) returns ``1.08``.
+    ``NEUTRAL`` (``-2.5 <= spread <= 6.5``) returns ``1.00``.
     ``BENCH_BLOWOUT_RISK`` (``spread <= -8.0``) returns ``0.68`` for a starter
-    RB1. That haircut is the benching prior. The over is still blocked from
-    Tier 1 and from anchor selection. Use the full-game ``rush_yds`` over.
-    ``TRAIL_BLOWOUT`` (``spread > 4.5``) returns ``None``. The trailing team
-    leaves the run, so the Q4 rush over is not priced.
+    RB1 and ``1.00`` for a backup. The starter over is still blocked.
+    ``TRAIL_BLOWOUT`` (``spread >= 7.0``) returns ``None``. The Q4 rush over
+    is not priced. Gaps between those bands return ``1.00``.
     A missing spread returns ``None`` and the caller leaves the mean alone.
     """
 
-    if spread is None:
-        return None
-    try:
-        number = float(spread)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(number):
+    number = _spread_number(spread)
+    if number is None:
         return None
     if number <= -8.0:
         return _BENCH_HAIRCUT if is_starter_rb else _NEUTRAL_SCRIPT
-    if number > 4.5:
+    if number >= 7.0:
         return None
-    if -7.5 <= number <= -2.5:
+    if -7.5 <= number <= -3.0:
         return _COMPETITIVE_LEAD
-    if -2.5 < number <= 4.5:
+    if -2.5 <= number <= 6.5:
         return _NEUTRAL_SCRIPT
     return _NEUTRAL_SCRIPT
 
@@ -74,20 +106,56 @@ def q4_rush_over_blocked(spread: float | None, is_starter_rb: bool = True) -> bo
     """True when an RB ``rush_yds_q4`` over is off the anchor card.
 
     A starter RB1 at ``spread <= -8`` is a bench-blowout. Any RB at
-    ``spread > 4.5`` is a trail-blowout. Both miss the Q4 rush over.
+    ``spread >= 7`` is a trail-blowout. Both miss the Q4 rush over.
     """
 
-    if spread is None:
-        return False
-    try:
-        number = float(spread)
-    except (TypeError, ValueError):
-        return False
-    if not math.isfinite(number):
+    number = _spread_number(spread)
+    if number is None:
         return False
     if number <= -8.0 and is_starter_rb:
         return True
-    return number > 4.5
+    return number >= 7.0
+
+
+def trail_receptions_over_allowed(
+    spread: float | None,
+    games: float,
+    targets_per_game: float,
+    target_share_rank: int | None,
+    player_name: str,
+) -> bool:
+    """True when a trail blowout may keep ``receptions_q4`` over 0.5.
+
+    The card rule is ``games >= 4`` and either ``targets_per_game >= 3`` or
+    target-share rank 1. A route-share escape does not qualify. Named RB2
+    grinders stay blocked.
+    """
+
+    number = _spread_number(spread)
+    if number is None or number < 7.0 or _blocked_rb2_name(player_name):
+        return False
+    try:
+        played = float(games)
+        targets = float(targets_per_game)
+    except (TypeError, ValueError):
+        return False
+    if not math.isfinite(played) or played < 4.0:
+        return False
+    target_ok = math.isfinite(targets) and targets >= 3.0
+    return target_ok or target_share_rank == 1
+
+
+def q4_trail_market_rank(market: str, side: str, spread: float | None) -> int:
+    """Sort key. A trail ``receptions_q4`` over ranks ahead of ``rec_yds_q4``."""
+
+    number = _spread_number(spread)
+    if number is None or number < 7.0 or str(side) != "over":
+        return 1
+    if market == "receptions_q4":
+        return 0
+    if market == "rec_yds_q4":
+        return 2
+    return 1
 
 
 @dataclass(frozen=True)
@@ -128,6 +196,10 @@ class CheckdownInputs:
     third_down_route_share: float | None = None
     #: When true, a missing spread drops a script-dependent Q4 price.
     require_script: bool = False
+    #: 1 is the team's leading RB target share. ``None`` leaves that path off.
+    target_share_rank: int | None = None
+    #: Used to block named RB2 grinders on a trail script.
+    player_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -152,6 +224,8 @@ class CheckdownPrice:
     fair_p: float
     ev: float
     detail: CheckdownLambda
+    #: Lower sorts first. Trail receptions overs rank ahead of trail yard overs.
+    script_rank: int = 1
 
 
 def vacated_receptions(boost: float, targets_per_game: float, receptions_per_game: float) -> float:
@@ -285,9 +359,10 @@ def _competitive_script(spread: float, game_total: float | None) -> bool:
 def _trail_blowout_volume_ok(inputs: CheckdownInputs) -> bool:
     """A trailing RB2 with a thin target rate does not keep the two-minute drill.
 
-    ``spread >= 6.5`` is the trail-blowout window. The over then needs
-    ``games >= 4`` and either ``targets_per_game >= 3`` or a third-down
-    route share of at least half. A closer spread does not use this gate.
+    ``spread >= 7.0`` is the trail-blowout window. The over then needs
+    ``games >= 4`` and one of ``targets_per_game >= 3``, target-share rank 1,
+    or a third-down route share of at least half. A named RB2 grinder is
+    blocked before that escape. A closer spread does not use this gate.
     """
 
     if inputs.spread is None:
@@ -298,11 +373,14 @@ def _trail_blowout_volume_ok(inputs: CheckdownInputs) -> bool:
         targets = float(inputs.targets_per_game)
     except (TypeError, ValueError):
         return False
-    if not math.isfinite(spread) or spread < 6.5:
+    if not math.isfinite(spread) or spread < 7.0:
         return True
+    if _blocked_rb2_name(inputs.player_name):
+        return False
     if not math.isfinite(games) or games < 4.0:
         return False
     target_ok = math.isfinite(targets) and targets >= 3.0
+    rank_ok = inputs.target_share_rank == 1
     route_ok = False
     if inputs.third_down_route_share is not None:
         try:
@@ -310,7 +388,7 @@ def _trail_blowout_volume_ok(inputs: CheckdownInputs) -> bool:
         except (TypeError, ValueError):
             held = float("nan")
         route_ok = math.isfinite(held) and held >= 0.50
-    return target_ok or route_ok
+    return target_ok or rank_ok or route_ok
 
 
 def _route_share_ok(inputs: CheckdownInputs) -> bool:
@@ -318,7 +396,8 @@ def _route_share_ok(inputs: CheckdownInputs) -> bool:
 
     ``q4_trail_target_share > 0`` is required. A typed third-down route
     share must be at least half of the team's RB routes. A trail-blowout
-    also requires a real target rate or that route share.
+    also requires targets, target-share rank 1, or that route share.
+    Named RB2 grinders fail before the route-share escape.
     """
 
     share = inputs.q4_trail_target_share
@@ -354,7 +433,7 @@ def _block_trail_yards_over(inputs: CheckdownInputs, market: str, side: str) -> 
         spread = float(inputs.spread)
     except (TypeError, ValueError):
         return False
-    if not math.isfinite(spread) or spread < 6.5:
+    if not math.isfinite(spread) or spread < 7.0:
         return False
     if inputs.def_q4_yac is None or inputs.league_yac is None:
         return True
@@ -467,4 +546,5 @@ def price_checkdown(
         fair_p=fair if side == "over" else 1.0 - fair,
         ev=leg_ev(prob, price),
         detail=built,
+        script_rank=q4_trail_market_rank(market, side, inputs.spread),
     )

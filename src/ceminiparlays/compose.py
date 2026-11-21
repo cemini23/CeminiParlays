@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import math
 import re
+import shutil
+from dataclasses import dataclass
 from itertools import combinations
+from pathlib import Path
 
 from ceminiparlays.environment import Environment, env_for
 from ceminiparlays.markets import GAME_STATS, is_first_td
@@ -31,6 +34,37 @@ SGP_TAX_WEIGHT = 0.55
 MAX_TICKETS_PER_PROP = 2
 #: A quarter prop may not take more than this share of card stake or unit weight.
 QUARTER_STAKE_SHARE = 0.30
+_SLATE_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+@dataclass
+class FilterDrops:
+    """Counts of legs and combos removed before the card is full."""
+
+    ev_floor: int = 0
+    correlation_cap: int = 0
+    exposure_cap: int = 0
+    scratch_inactive: int = 0
+    bench_blowout_q4: int = 0
+
+    def format(self) -> str:
+        return (
+            "FILTER_DROPS "
+            f"ev_floor={self.ev_floor} "
+            f"correlation_cap={self.correlation_cap} "
+            f"exposure_cap={self.exposure_cap} "
+            f"scratch_inactive={self.scratch_inactive} "
+            f"bench_blowout_q4={self.bench_blowout_q4}"
+        )
+
+
+def tally_scratch_inactive(drops: FilterDrops, excluded: list) -> None:
+    """Count scratch and inactive exclusions. Other warns stay in their own gate."""
+
+    for leg in excluded:
+        token = str(getattr(leg, "warn", "") or "").strip().lower()
+        if token in {"scratch", "inactive"}:
+            drops.scratch_inactive += 1
 
 
 def first_td_available(environment: Environment | None, leg: EvaluatedLeg) -> bool:
@@ -80,19 +114,21 @@ def _within_card_caps(
     quarter_units: dict[tuple[str, str, str], float],
     combo: tuple[EvaluatedLeg, ...] | list[EvaluatedLeg],
     n_tickets: int,
+    max_leg_reuse: int = MAX_TICKETS_PER_PROP,
 ) -> bool:
-    """False when the combo would put a prop on a third ticket or past 30%.
+    """False when the combo would put a prop past ``max_leg_reuse`` or past 30%.
 
     The first ticket that carries a quarter prop is always allowed. A later
     ticket is allowed only when the prop stays at or under 30% of the
     requested card. Each ticket has unit weight 1. Dollar stakes use the
-    same share on the week card.
+    same share on the week card. The default reuse cap is 2 tickets.
     """
 
     pending: dict[tuple[str, str, str], float] = {}
+    cap = max_leg_reuse if max_leg_reuse >= 1 else MAX_TICKETS_PER_PROP
     for leg in combo:
         key = _leg_key(leg)
-        if prop_counts.get(key, 0) + 1 > MAX_TICKETS_PER_PROP:
+        if prop_counts.get(key, 0) + 1 > cap:
             return False
         if _is_quarter_stat(leg.line.stat_type):
             pending[key] = pending.get(key, 0.0) + 1.0
@@ -322,11 +358,38 @@ def _high_receiving_barred(leg: EvaluatedLeg, allow_high_receiving: bool) -> boo
     return leg.line.line >= 50
 
 
+def bench_blowout_q4_blocked(
+    leg: EvaluatedLeg,
+    environment: Environment | None,
+    *,
+    allow: bool = False,
+) -> bool:
+    """True when a ``rush_yds_q4`` over is on a team at ``spread <= -8``.
+
+    The tag is ``BENCH_BLOWOUT_RISK``. It follows the team spread, so every
+    over on that team is blocked. An under stays. ``allow`` is the override.
+    """
+
+    if allow:
+        return False
+    stat = (leg.line.stat_type or "").strip().lower()
+    if stat != "rush_yds_q4":
+        return False
+    if leg.line.side not in MORE_SIDES:
+        return False
+    row = env_for(environment, leg.line.team, leg.line.opponent)
+    if row is None or row.spread is None:
+        return False
+    return float(row.spread) <= -8.0
+
+
 def _compose_pool(
     live: list[EvaluatedLeg],
     markets: list[str] | None,
     environment: Environment | None,
     allow_high_receiving: bool,
+    allow_bench_blowout: bool = False,
+    drops: FilterDrops | None = None,
 ) -> list[EvaluatedLeg]:
     """The legs this call may use: the market filter, the env bar, the rec bar."""
 
@@ -341,6 +404,12 @@ def _compose_pool(
         if not first_td_available(environment, leg):
             continue
         if _high_receiving_barred(leg, allow_high_receiving):
+            continue
+        if bench_blowout_q4_blocked(
+            leg, environment, allow=allow_bench_blowout
+        ):
+            if drops is not None:
+                drops.bench_blowout_q4 += 1
             continue
         pool.append(leg)
     return pool
@@ -361,6 +430,34 @@ def _combo_is_legal(combo, size: int, max_legs_per_market: int | None) -> bool:
     return not _over_market_cap(combo, max_legs_per_market)
 
 
+def _as_quarter_dict(leg: EvaluatedLeg) -> dict[str, str]:
+    return {
+        "player_key": leg.line.player_key or leg.line.player_name,
+        "market": leg.line.stat_type,
+    }
+
+
+def _has_redundant_quarter_pair(
+    combo: tuple[EvaluatedLeg, ...] | list[EvaluatedLeg],
+) -> bool:
+    legs = list(combo)
+    for index, left in enumerate(legs):
+        for right in legs[index + 1 :]:
+            if redundant_quarter_pair(_as_quarter_dict(left), _as_quarter_dict(right)):
+                return True
+    return False
+
+
+def _below_ev_floor(
+    combo: tuple[EvaluatedLeg, ...] | list[EvaluatedLeg],
+    min_edge: float,
+) -> bool:
+    edges = [leg.prop_edge for leg in combo if leg.prop_edge is not None]
+    if not edges:
+        return False
+    return min(edges) < min_edge
+
+
 def _scored_combos(
     candidate_pool: list[EvaluatedLeg],
     size: int,
@@ -368,6 +465,8 @@ def _scored_combos(
     min_odds: int | None,
     max_odds: int | None,
     max_legs_per_market: int | None,
+    min_edge: float | None = None,
+    drops: FilterDrops | None = None,
 ) -> list[tuple[tuple[float, float, float], float, tuple[EvaluatedLeg, ...]]]:
     """Every legal, priced, in-window combo at one size, best first."""
 
@@ -375,7 +474,15 @@ def _scored_combos(
         tuple[tuple[float, float, float], float, tuple[EvaluatedLeg, ...]]
     ] = []
     for combo in combinations(candidate_pool, size):
+        if _has_redundant_quarter_pair(combo):
+            if drops is not None:
+                drops.correlation_cap += 1
+            continue
         if not _combo_is_legal(combo, size, max_legs_per_market):
+            continue
+        if min_edge is not None and _below_ev_floor(combo, min_edge):
+            if drops is not None:
+                drops.ev_floor += 1
             continue
         multiplier, _source, _unconfirmed = estimate_multiplier(list(combo))
         if multiplier is None or multiplier <= 1.0:
@@ -405,24 +512,39 @@ def compose_tickets(
     environment: Environment | None,
     max_legs_per_market: int | None = None,
     allow_high_receiving: bool = False,
+    max_leg_reuse: int = MAX_TICKETS_PER_PROP,
+    allow_bench_blowout: bool = False,
+    min_edge: float | None = None,
+    drops: FilterDrops | None = None,
 ) -> list[list[EvaluatedLeg]]:
     """Pick up to ``n_tickets`` diversified tickets from ``live``.
 
     A player prop may sit on at most one multi-leg ticket. A 1-leg ticket may
     repeat a prop that is already on that one multi-leg ticket, and it may not
-    repeat the prop on a second single. Each ticket uses distinct games.
-    Same-game first-TD pairs never rank. When
+    repeat the prop on a second single. ``max_leg_reuse`` is the hard cap for
+    one player and market across the card. The default is 2. Each ticket uses
+    distinct games. Same-game first-TD pairs never rank. When
     ``max_legs_per_market`` is an int >= 1, a combo where one ``stat_type``
     appears more than that many times is skipped. ``None`` or ``0`` is no cap.
     The odds window uses the best typed estimate (row M → slip_odds → leg_odds
     / fair product). A ``first_td`` leg whose env row says the game has no
     first-touchdown prop is skipped. A receiving line at 50 or higher is
-    skipped unless ``allow_high_receiving`` is set.
+    skipped unless ``allow_high_receiving`` is set. A ``rush_yds_q4`` over on
+    a team at ``spread <= -8`` is skipped unless ``allow_bench_blowout`` is set.
     """
 
     if n_tickets < 1:
         raise ValueError("n_tickets must be at least 1")
-    pool = _compose_pool(live, markets, environment, allow_high_receiving)
+    if max_leg_reuse < 1:
+        raise ValueError("max_leg_reuse must be at least 1")
+    pool = _compose_pool(
+        live,
+        markets,
+        environment,
+        allow_high_receiving,
+        allow_bench_blowout,
+        drops,
+    )
     if not pool:
         return []
     ordered = sorted(pool, key=lambda leg: _score([leg], environment), reverse=True)
@@ -439,27 +561,64 @@ def compose_tickets(
         if size < 1:
             raise ValueError("leg count must be >= 1")
         scored = _scored_combos(
-            candidate_pool, size, environment, min_odds, max_odds, max_legs_per_market
+            candidate_pool,
+            size,
+            environment,
+            min_odds,
+            max_odds,
+            max_legs_per_market,
+            min_edge,
+            drops,
         )
         # Multi-leg keys are banned across every size. A 1-leg ticket may
         # share a key with one multi-leg ticket, not with another single.
-        # The card cap is still two tickets for one prop, and 30% for a quarter prop.
-        room = n_tickets - len(tickets)
-        blocked = single_keys if size <= 1 else multi_keys
-        for combo in _select_disjoint(scored, room, blocked):
-            keys = {_leg_key(leg) for leg in combo}
-            signature = frozenset(keys)
-            if signature in chosen:
-                continue
-            if not _within_card_caps(prop_counts, quarter_units, combo, n_tickets):
-                continue
-            tickets.append(list(combo))
-            chosen.add(signature)
-            _note_card_caps(prop_counts, quarter_units, combo)
-            if size <= 1:
-                single_keys |= keys
-            else:
-                multi_keys |= keys
+        # The card cap is ``max_leg_reuse`` (default 2), and 30% for a quarter prop.
+        rejected: set[frozenset[tuple[str, str, str]]] = set()
+        while len(tickets) < n_tickets:
+            room = n_tickets - len(tickets)
+            blocked = single_keys if size <= 1 else multi_keys
+            available = [
+                item
+                for item in scored
+                if frozenset(_leg_key(leg) for leg in item[2]) not in rejected
+            ]
+            picked = _select_disjoint(available, room, blocked)
+            if not picked:
+                break
+            accepted = 0
+            for combo in picked:
+                if len(tickets) >= n_tickets:
+                    break
+                keys = {_leg_key(leg) for leg in combo}
+                signature = frozenset(keys)
+                if signature in chosen or signature in rejected:
+                    continue
+                if not _within_card_caps(
+                    prop_counts,
+                    quarter_units,
+                    combo,
+                    n_tickets,
+                    max_leg_reuse,
+                ):
+                    if drops is not None:
+                        drops.exposure_cap += 1
+                    rejected.add(signature)
+                    continue
+                tickets.append(list(combo))
+                chosen.add(signature)
+                _note_card_caps(prop_counts, quarter_units, combo)
+                if size <= 1:
+                    single_keys |= keys
+                else:
+                    multi_keys |= keys
+                accepted += 1
+            if accepted == 0:
+                newly_rejected = any(
+                    frozenset(_leg_key(leg) for leg in combo) in rejected
+                    for combo in picked
+                )
+                if not newly_rejected:
+                    break
     return tickets
 
 
@@ -798,6 +957,65 @@ TICKET_FIELDS = [
     "fair_p",
     "injury_status",
 ]
+
+
+def resolve_slate_date(explicit: str | None, *paths: Path | None) -> str:
+    """Use the typed date, else the last ``YYYY-MM-DD`` in a path name."""
+
+    if explicit:
+        text = str(explicit).strip()
+        if text:
+            return text
+    for path in paths:
+        if path is None:
+            continue
+        found = _SLATE_DATE.findall(str(path))
+        if found:
+            return found[-1]
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def write_dated_card_files(
+    out_dir: Path,
+    slate_date: str,
+    tickets: list[list[EvaluatedLeg]],
+    markdown: str,
+    platform: str,
+) -> tuple[Path, Path]:
+    """Write ``hardrock_card_DATE.csv`` and ``card_DATE.md`` under ``out_dir``."""
+
+    from ceminiparlays.io import write_csv
+
+    folder = Path(out_dir)
+    folder.mkdir(parents=True, exist_ok=True)
+    csv_path = folder / f"hardrock_card_{slate_date}.csv"
+    md_path = folder / f"card_{slate_date}.md"
+    rows: list[dict[str, object]] = []
+    for index, ticket in enumerate(tickets, start=1):
+        typed = {leg.line.ticket_id for leg in ticket if leg.line.ticket_id}
+        ticket_id = next(iter(typed)) if len(typed) == 1 else f"compose-{index:03d}"
+        rows.extend(ticket_rows(ticket, ticket_id, platform))
+    write_csv(csv_path, rows, TICKET_FIELDS)
+    md_path.write_text(markdown, encoding="utf-8")
+    return csv_path, md_path
+
+
+def sync_card_files(files: list[Path], dest_dirs: list[Path]) -> list[Path]:
+    """Copy the generated card files into each sync directory."""
+
+    copied: list[Path] = []
+    for dest in dest_dirs:
+        folder = Path(dest)
+        folder.mkdir(parents=True, exist_ok=True)
+        for src in files:
+            if not Path(src).is_file():
+                raise FileNotFoundError(f"card file missing for sync: {src}")
+            target = folder / Path(src).name
+            shutil.copy2(src, target)
+            copied.append(target)
+    return copied
 
 
 def ticket_rows(

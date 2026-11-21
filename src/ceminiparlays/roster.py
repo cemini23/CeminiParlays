@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import csv
 import json
+import re
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
 from ceminiparlays.io import LineRow
 from ceminiparlays.names import alias_fold_keys, fold_name
-from ceminiparlays.resources import read_config_text
+from ceminiparlays.resources import REPO_CONFIG, REPO_ROOT, read_config_text
+
+CONFIG_ROSTER_PATH = REPO_CONFIG / "rosters" / "nfl.json"
+PACKAGE_ROSTER_PATH = REPO_ROOT / "src" / "ceminiparlays" / "data" / "rosters" / "nfl.json"
+_ROSTER_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 TEAM_ALIASES = {
     "ARI": "ARI",
@@ -220,6 +226,107 @@ def active_teams_from_csv(path: Path | None) -> dict[str, str]:
             if name and team:
                 out[name] = normalize_team(team)
     return out
+
+
+def _roster_player_index(players: Mapping[str, object]) -> dict[str, str]:
+    """Map a folded name and a player key onto the JSON player key."""
+
+    index: dict[str, str] = {}
+    for key, entry in players.items():
+        if not isinstance(entry, Mapping):
+            continue
+        for token in (str(key), fold_name(str(key))):
+            if token:
+                index.setdefault(token.lower(), str(key))
+        name = str(entry.get("name") or "")
+        for token in (name.lower(), fold_name(name)):
+            if token:
+                index.setdefault(token, str(key))
+    return index
+
+
+def _date_in_name(path: Path) -> str | None:
+    found = _ROSTER_DATE.findall(path.name)
+    return found[-1] if found else None
+
+
+def apply_whitelist_payload(
+    payload: Mapping[str, object],
+    assignments: Mapping[str, str],
+    *,
+    retrieved: str | None = None,
+) -> tuple[dict, list[str]]:
+    """Return an updated roster payload and the team-change lines.
+
+    A known player moves to the whitelist club. A new name is added. The
+    input payload is not mutated.
+    """
+
+    updated = deepcopy(dict(payload))
+    players = updated.get("players")
+    if not isinstance(players, dict):
+        players = {}
+        updated["players"] = players
+    index = _roster_player_index(players)
+    diff: list[str] = []
+    for raw_name, raw_team in assignments.items():
+        name = str(raw_name or "").strip()
+        team = normalize_team(str(raw_team))
+        if not name or not team:
+            continue
+        match = index.get(name.lower()) or index.get(fold_name(name))
+        if match is None:
+            key = fold_name(name) or name.lower().replace(" ", "_")
+            players[key] = {"name": name, "team": team}
+            index[key.lower()] = key
+            index[fold_name(name)] = key
+            index[name.lower()] = key
+            diff.append(f"{key} {name} (new) -> {team}")
+            continue
+        entry = players.get(match)
+        if not isinstance(entry, dict):
+            continue
+        current = normalize_team(str(entry.get("team") or ""))
+        if current == team:
+            continue
+        shown = str(entry.get("name") or name)
+        entry["team"] = team
+        diff.append(f"{match} {shown} {current} -> {team}")
+    if retrieved:
+        updated["retrieved"] = retrieved
+    return updated, diff
+
+
+def refresh_roster_files(
+    whitelist: Path,
+    targets: list[Path],
+) -> list[str]:
+    """Write the whitelist clubs into each roster JSON. Return the diff lines.
+
+    The first existing target is the source. Every target receives the same
+    text, so ``config/rosters/nfl.json`` and the package copy stay aligned.
+    """
+
+    if not targets:
+        raise ValueError("refresh-roster needs a roster JSON path")
+    source = next((path for path in targets if Path(path).is_file()), None)
+    if source is None:
+        raise FileNotFoundError(f"roster JSON missing: {targets[0]}")
+    payload = json.loads(Path(source).read_text(encoding="utf-8"))
+    assignments = active_teams_from_csv(whitelist)
+    if not assignments:
+        raise ValueError(f"roster whitelist has no player,team rows: {whitelist}")
+    updated, diff = apply_whitelist_payload(
+        payload,
+        assignments,
+        retrieved=_date_in_name(Path(whitelist)),
+    )
+    text = json.dumps(updated, indent=2) + "\n"
+    for path in targets:
+        resolved = Path(path)
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        resolved.write_text(text, encoding="utf-8")
+    return diff
 
 
 def roster_mismatch(line: LineRow, roster: Roster) -> str | None:

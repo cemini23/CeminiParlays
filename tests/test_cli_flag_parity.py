@@ -62,3 +62,58 @@ def test_rank_run_compose_flag_parity() -> None:
     assert rank.allow_fewer is True
     assert compose.allow_fewer is True
     assert run.allow_fewer is True
+
+
+def test_strict_ticket_count_and_leg_reuse_parity() -> None:
+    parser = build_parser()
+    commands = (
+        ["rank", "--lines", "lines.csv", "--distributions", "dist.csv"],
+        ["run", "--lines", "lines.csv", "--distributions", "dist.csv"],
+        ["compose", "--lines", "lines.csv"],
+        ["sunday-card", "--lines", "lines.csv"],
+    )
+    for prefix in commands:
+        args = parser.parse_args(
+            [
+                *prefix,
+                "--strict-ticket-count",
+                "--max-leg-reuse",
+                "1",
+                "--n-tickets",
+                "3",
+            ]
+        )
+        assert args.strict_ticket_count is True
+        assert args.max_leg_reuse == 1
+        assert args.n_tickets == 3
+    compose = parser.parse_args(
+        [
+            "compose",
+            "--lines",
+            "lines.csv",
+            "--env-csv",
+            "environment.csv",
+            "--env-odds-csv",
+            "environment_odds_2026-11-08.csv",
+            "--sync-dirs",
+            "parlays-slate",
+            "parlays-recap",
+        ]
+    )
+    sunday = parser.parse_args(
+        [
+            "sunday-card",
+            "--lines",
+            "lines.csv",
+            "--env-csv",
+            "environment.csv",
+            "--env-odds-csv",
+            "environment_odds_2026-11-08.csv",
+            "--require-env-odds",
+        ]
+    )
+    assert compose.env_odds_csv.name == "environment_odds_2026-11-08.csv"
+    assert sunday.env_odds_csv.name == "environment_odds_2026-11-08.csv"
+    assert compose.require_env_odds is None
+    assert sunday.require_env_odds is True
+    assert len(compose.sync_dirs) == 2

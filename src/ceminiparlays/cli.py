@@ -39,13 +39,18 @@ from ceminiparlays.proppricing import (
 )
 from ceminiparlays.compose import (
     TICKET_FIELDS,
+    FilterDrops,
     compose_tickets,
     concentration_warnings,
     drop_unavailable_first_td,
-    multi_leg_duplicates,
     estimate_multiplier,
+    multi_leg_duplicates,
     player_stat_ticket_counts,
+    resolve_slate_date,
+    sync_card_files,
+    tally_scratch_inactive,
     ticket_rows,
+    write_dated_card_files,
 )
 from ceminiparlays.diff import (
     ACCEPTED,
@@ -60,9 +65,12 @@ from ceminiparlays.environment import (
     env_rows_for_games,
     fill_environment_from_book_lines,
     fill_environment_from_odds_csv,
+    merge_environment_odds,
     missing_env_games,
     read_environment,
+    require_complete_env_odds,
     write_compose_itt,
+    write_environment,
 )
 from ceminiparlays.late_active import (
     apply_inactive_scratch,
@@ -121,7 +129,14 @@ from ceminiparlays.payouts import (
     resolve_payout,
 )
 from ceminiparlays.report import PREDICTION_BANNER, fair_card, slip_card
-from ceminiparlays.roster import apply_active_teams, load_roster, lookup_player
+from ceminiparlays.roster import (
+    CONFIG_ROSTER_PATH,
+    PACKAGE_ROSTER_PATH,
+    apply_active_teams,
+    load_roster,
+    lookup_player,
+    refresh_roster_files,
+)
 from ceminiparlays.slips import (
     DEFAULT_MIN_EDGE,
     EDGE_FIELDS,
@@ -355,6 +370,23 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--shade-pp", type=float, default=0.0)
     parser.add_argument(
+        "--strict-ticket-count",
+        action="store_true",
+        help=(
+            "Exit 2 when fewer than --n-tickets survive. "
+            "This overrides --allow-fewer."
+        ),
+    )
+    parser.add_argument(
+        "--max-leg-reuse",
+        type=int,
+        default=2,
+        help=(
+            "One player and market may appear on at most this many tickets. "
+            "Default 2. Compose enforces the cap."
+        ),
+    )
+    parser.add_argument(
         "--environment",
         type=Path,
         default=None,
@@ -557,10 +589,8 @@ def build_parser() -> argparse.ArgumentParser:
     inactive.add_argument("--entered", type=Path, default=None)
     inactive.add_argument("--scratches", type=Path, default=None)
 
-    compose = sub.add_parser(
-        "compose",
-        help="Pick diversified tickets inside an odds window and write ticket CSVs",
-    )
+    compose_flags = argparse.ArgumentParser(add_help=False)
+    compose = compose_flags
     _add_common(compose)
     compose.add_argument("--lines", type=Path, required=True)
     compose.add_argument("--distributions", type=Path, default=None)
@@ -607,6 +637,70 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     compose.add_argument("--environment", type=Path, default=None)
+    compose.add_argument(
+        "--env-csv",
+        type=Path,
+        default=None,
+        help=(
+            "Environment CSV. When this flag is set, --require-env-odds "
+            "defaults to true."
+        ),
+    )
+    compose.add_argument(
+        "--env-odds-csv",
+        type=Path,
+        default=None,
+        help=(
+            "Odds CSV with spread and implied_total. Blank env cells are filled "
+            "by normalized team code. Roof and weather stay."
+        ),
+    )
+    compose.add_argument(
+        "--require-env-odds",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Fail when a slate team still has a null implied_total or spread "
+            "after the odds merge. Default true when --env-csv is set."
+        ),
+    )
+    compose.add_argument(
+        "--strict-ticket-count",
+        action="store_true",
+        help=(
+            "Exit 2 when fewer than --n-tickets survive. "
+            "This overrides --allow-fewer."
+        ),
+    )
+    compose.add_argument(
+        "--max-leg-reuse",
+        type=int,
+        default=2,
+        help=(
+            "One player and market may appear on at most this many tickets. "
+            "Default 2."
+        ),
+    )
+    compose.add_argument(
+        "--allow-bench-blowout",
+        action="store_true",
+        help="Keep a rush_yds_q4 over on a team with spread <= -8.",
+    )
+    compose.add_argument(
+        "--sync-dirs",
+        nargs="+",
+        type=Path,
+        default=None,
+        help=(
+            "Copy hardrock_card_YYYY-MM-DD.csv and card_YYYY-MM-DD.md into "
+            "each directory after the card is written."
+        ),
+    )
+    compose.add_argument(
+        "--slate-date",
+        default=None,
+        help="Date stamped on the synced card files. Default is the date in the env path.",
+    )
     compose.add_argument(
         "--max-legs-per-market",
         type=int,
@@ -718,6 +812,58 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Abort (exit 2) when any leg is dropped. Default on.",
+    )
+    sub.add_parser(
+        "compose",
+        parents=[compose_flags],
+        help="Pick diversified tickets inside an odds window and write ticket CSVs",
+    )
+    sub.add_parser(
+        "sunday-card",
+        parents=[compose_flags],
+        help="Merge environment odds, then compose the Sunday card",
+    )
+
+    merge = sub.add_parser(
+        "merge-env-odds",
+        help="Fill blank environment.csv spread and implied_total from an odds CSV",
+    )
+    merge.add_argument("--env-csv", type=Path, required=True)
+    merge.add_argument("--env-odds-csv", type=Path, default=None)
+    merge.add_argument(
+        "--require-env-odds",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Fail when a team row is still blank after the merge. Default true.",
+    )
+    merge.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Merged CSV path. Default writes back to --env-csv.",
+    )
+
+    refresh = sub.add_parser(
+        "refresh-roster",
+        help="Update the NFL roster JSON from the current-week active whitelist",
+    )
+    refresh.add_argument(
+        "--whitelist",
+        type=Path,
+        required=True,
+        help="active_roster_whitelist_YYYY-MM-DD.csv with player and team columns",
+    )
+    refresh.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help=f"Roster JSON to update. Default {CONFIG_ROSTER_PATH}.",
+    )
+    refresh.add_argument(
+        "--package",
+        type=Path,
+        default=None,
+        help=f"Package roster JSON to update. Default {PACKAGE_ROSTER_PATH}.",
     )
 
     diff = sub.add_parser(
@@ -1311,7 +1457,11 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         load_ceminidfs_handoff(rank_handoff_path) if rank_handoff_path is not None else None
     )
     roster = _roster_for(args, rank_handoff)
-    environment = _environment_with_odds(getattr(args, "environment", None), lines)
+    environment = _environment_with_odds(
+        getattr(args, "environment", None),
+        lines,
+        _odds_path_from_args(args),
+    )
     live, excluded = evaluate_legs(
         lines,
         dists,
@@ -1432,7 +1582,16 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         print(f"implied slip win {implied:.4f}; per-leg breakeven {per_leg:.4f}")
     requested = getattr(args, "n_tickets", None)
     if requested is not None:
-        code = shortfall_exit(len(slips), int(requested), bool(getattr(args, "allow_fewer", False)))
+        drops = FilterDrops()
+        tally_scratch_inactive(drops, scratched)
+        for note in notes:
+            if "unmodeled-corr" in note or "skip unmodeled" in note:
+                drops.correlation_cap += 1
+        weak = [token for _leg, token in edge_fails if token == "weak-edge"]
+        drops.ev_floor += len(weak)
+        if len(slips) < int(requested):
+            print(drops.format())
+        code = shortfall_exit(len(slips), int(requested), _short_card_allowed(args))
         if code is not None:
             return code
     return 0
@@ -1472,29 +1631,87 @@ def _roster_for(args: argparse.Namespace, handoff: object = None):
     return apply_active_teams(roster, _handoff_teams(handoff))
 
 
-def _environment_with_odds(path: Path | None, lines: object):
-    """Read the environment, fill blanks from a sibling odds CSV, then book lines.
+def _env_path(args: argparse.Namespace) -> Path | None:
+    """``--env-csv`` wins. ``--environment`` is the older name for the same file."""
+
+    env_csv = getattr(args, "env_csv", None)
+    if env_csv is not None:
+        return Path(env_csv)
+    environment = getattr(args, "environment", None)
+    if environment is None:
+        return None
+    return Path(environment)
+
+
+def _env_odds_required(args: argparse.Namespace) -> bool:
+    """True when the operator set the flag, or when ``--env-csv`` is present.
+
+    ``--environment`` alone keeps the older ticket-level blank check.
+    ``--no-require-env-odds`` turns the new check off.
+    """
+
+    explicit = getattr(args, "require_env_odds", None)
+    if explicit is not None:
+        return bool(explicit)
+    return getattr(args, "env_csv", None) is not None
+
+
+def _odds_path_from_args(args: argparse.Namespace) -> Path | None:
+    """The explicit odds CSV, or None so the caller can discover a sibling."""
+
+    explicit = getattr(args, "env_odds_csv", None)
+    if explicit is None:
+        return None
+    path = Path(explicit)
+    if not path.is_file():
+        raise FileNotFoundError(f"environment odds file missing: {path}")
+    return path
+
+
+def _short_card_allowed(args: argparse.Namespace) -> bool:
+    """``--strict-ticket-count`` wins over ``--allow-fewer`` and ``--allow-short-card``."""
+
+    if bool(getattr(args, "strict_ticket_count", False)):
+        return False
+    return bool(
+        getattr(args, "allow_fewer", False) or getattr(args, "allow_short_card", False)
+    )
+
+
+def _environment_with_odds(
+    path: Path | None,
+    lines: object,
+    odds_path: Path | None = None,
+):
+    """Read the environment, fill blanks from an odds CSV, then book lines.
 
     A typed cell wins. The odds file fills a blank before the book file does.
-    A missing odds file leaves the environment unchanged.
+    An explicit odds path is used as given. Otherwise one sibling odds file
+    is used. A missing odds file leaves the environment unchanged.
     """
 
     environment = read_environment(path)
-    environment = fill_environment_from_odds_csv(
-        environment,
-        discover_environment_odds(path),
-    )
+    chosen = odds_path if odds_path is not None else discover_environment_odds(path)
+    environment = fill_environment_from_odds_csv(environment, chosen)
     return fill_environment_from_book_lines(environment, lines)
 
 
-def short_card_exit(composed: int, requested: int, allow: bool) -> int | None:
+def short_card_exit(
+    composed: int,
+    requested: int,
+    allow: bool,
+    drops: FilterDrops | None = None,
+) -> int | None:
     """Print ``SHORT_CARD`` when the card is short, then the shared shortfall exit.
 
     ``allow`` is true for ``--allow-short-card`` or ``--allow-fewer``.
+    A short card also prints ``FILTER_DROPS`` when ``drops`` is set.
     """
 
     if composed < requested:
         print(f"SHORT_CARD: composed {composed} of {requested} requested tickets")
+        if drops is not None:
+            print(drops.format())
     return shortfall_exit(composed, requested, allow)
 
 
@@ -1849,7 +2066,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         min_odds=getattr(args, "min_odds", None),
         max_odds=getattr(args, "max_odds", None),
         n_tickets=getattr(args, "n_tickets", None),
-        environment=getattr(args, "environment", None),
+        environment=_env_path(args),
         handoff=getattr(args, "from_ceminidfs", None),
         max_slips=getattr(args, "max_slips", None),
         max_legs_per_market=getattr(args, "max_legs_per_market", None),
@@ -1972,7 +2189,8 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     dfs_path = getattr(args, "from_ceminidfs", None)
     roster_handoff = load_ceminidfs_handoff(dfs_path) if dfs_path is not None else None
     roster = _roster_for(args, roster_handoff)
-    environment = _environment_with_odds(args.environment, lines)
+    env_path = _env_path(args)
+    environment = _environment_with_odds(env_path, lines, _odds_path_from_args(args))
     live, excluded = evaluate_legs(
         lines,
         dists,
@@ -2045,6 +2263,8 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     else:
         max_legs_per_market = raw_market_cap
 
+    drops = FilterDrops()
+    tally_scratch_inactive(drops, excluded)
     tickets = compose_tickets(
         live,
         n_tickets=compose_limit,
@@ -2055,6 +2275,9 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         environment=environment,
         max_legs_per_market=max_legs_per_market,
         allow_high_receiving=bool(getattr(args, "allow_rec_line", False)),
+        max_leg_reuse=int(getattr(args, "max_leg_reuse", 2) or 2),
+        allow_bench_blowout=bool(getattr(args, "allow_bench_blowout", False)),
+        drops=drops,
     )
     dupes = multi_leg_duplicates(tickets)
     if dupes:
@@ -2062,15 +2285,19 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         for item in dupes:
             print(f"DUPLICATE_LEG {item}")
         return 2
-    # A present --environment file with a blank implied_total or spread on a
+    # --env-csv fails closed on every blank team row before compose_itt.json.
+    # --environment keeps the ticket-level blank check below.
+    if _env_odds_required(args):
+        require_complete_env_odds(environment)
+    # A present environment file with a blank implied_total or spread on a
     # ticket game fails before any ticket CSV, card, or compose_itt.json write.
-    if args.environment is not None and Path(args.environment).is_file():
+    if env_path is not None and env_path.is_file():
         _require_environment_fields(tickets, environment)
-    if args.environment is not None:
+    if env_path is not None:
         for note in _weather_market_reviews(tickets, environment):
             print(note)
     out_dir.mkdir(parents=True, exist_ok=True)
-    if args.environment is not None:
+    if env_path is not None:
         games = {
             tuple(sorted({leg.line.team, leg.line.opponent}))
             for ticket in tickets
@@ -2078,7 +2305,7 @@ def _cmd_compose(args: argparse.Namespace) -> int:
             if leg.line.team and leg.line.opponent
         }
         itt_rows = env_rows_for_games(environment, games) if tickets else []
-        source = Path(args.environment).name
+        source = env_path.name
         if handoff is not None and not handoff.missing:
             source = f"{source}+{Path(dfs_path).name}"
         write_compose_itt(
@@ -2211,25 +2438,52 @@ def _cmd_compose(args: argparse.Namespace) -> int:
     print(f"wrote {json_path}")
     if md_path is not None:
         print(f"wrote {md_path}")
-    if args.environment is not None:
+    if env_path is not None:
         print(f"wrote {out_dir / 'compose_itt.json'}")
+    sync_dirs = list(getattr(args, "sync_dirs", None) or [])
+    if sync_dirs:
+        slate_date = resolve_slate_date(
+            getattr(args, "slate_date", None),
+            env_path,
+            getattr(args, "lines", None),
+        )
+        markdown = (
+            md_path.read_text(encoding="utf-8")
+            if md_path is not None
+            else _compose_card_md(tickets, priced_slips)
+        )
+        card_csv, card_md_dated = write_dated_card_files(
+            out_dir,
+            slate_date,
+            tickets,
+            markdown,
+            platform,
+        )
+        for synced in sync_card_files([card_csv, card_md_dated], sync_dirs):
+            print(f"synced {synced}")
     print("do not submit — type every ticket in-app")
     max_n = getattr(args, "max_exposure_per_player", None)
     if max_n is not None:
         counts = player_stat_ticket_counts(tickets)
         if any(count > max_n for count in counts.values()):
+            if len(tickets) < requested_tickets:
+                print(drops.format())
             return 2
+    drops.ev_floor += len(weak_fails)
     if weak_fails:
+        if len(tickets) < requested_tickets:
+            print(drops.format())
         return 2
     # Fewer tickets than --n-tickets is a hard fail. Do not pad the card.
     # More tickets than the request is also a fail. --allow-fewer softens
-    # only the short side.
+    # only the short side. --strict-ticket-count keeps the hard fail.
     if len(tickets) > requested_tickets:
         return 2
     code = short_card_exit(
         len(tickets),
         requested_tickets,
-        bool(getattr(args, "allow_fewer", False) or getattr(args, "allow_short_card", False)),
+        _short_card_allowed(args),
+        drops,
     )
     if code is not None:
         return code
@@ -2702,6 +2956,49 @@ def _cmd_slip_screen_measure(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_merge_env_odds(args: argparse.Namespace) -> int:
+    """Fill blank spread and implied_total. Roof and weather stay on each row."""
+
+    env_path = _env_path(args)
+    if env_path is None:
+        raise ValueError("merge-env-odds needs --env-csv")
+    odds = _odds_path_from_args(args)
+    if odds is None:
+        odds = discover_environment_odds(env_path)
+    if odds is None or not Path(odds).is_file():
+        raise FileNotFoundError(
+            f"environment odds file missing beside {env_path}; pass --env-odds-csv"
+        )
+    filled = merge_environment_odds(
+        env_path,
+        odds,
+        require=_env_odds_required(args),
+    )
+    dest = getattr(args, "out", None) or env_path
+    write_environment(dest, filled)
+    print(f"wrote {dest}")
+    return 0
+
+
+def _cmd_refresh_roster(args: argparse.Namespace) -> int:
+    """Update both NFL roster JSON files from the active whitelist."""
+
+    whitelist = Path(args.whitelist)
+    if not whitelist.is_file():
+        raise FileNotFoundError(f"roster whitelist missing: {whitelist}")
+    config = Path(args.config) if getattr(args, "config", None) else CONFIG_ROSTER_PATH
+    package = Path(args.package) if getattr(args, "package", None) else PACKAGE_ROSTER_PATH
+    diff = refresh_roster_files(whitelist, [config, package])
+    if not diff:
+        print("TEAM_CHANGE none")
+    else:
+        for line in diff:
+            print(f"TEAM_CHANGE {line}")
+    print(f"wrote {config}")
+    print(f"wrote {package}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -2714,6 +3011,9 @@ def main(argv: list[str] | None = None) -> int:
         "run": _cmd_run,
         "slate": _cmd_slate,
         "compose": _cmd_compose,
+        "sunday-card": _cmd_compose,
+        "merge-env-odds": _cmd_merge_env_odds,
+        "refresh-roster": _cmd_refresh_roster,
         "diff": _cmd_diff,
         "bankroll": _cmd_bankroll,
         "closings": _cmd_closings,

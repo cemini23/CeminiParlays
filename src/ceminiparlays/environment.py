@@ -387,6 +387,121 @@ def env_rows_for_games(
     return rows
 
 
+ENV_CSV_FIELDS = [
+    "game_id",
+    "team",
+    "opp",
+    "implied_total",
+    "spread",
+    "roof",
+    "weather_exposed",
+    "wind_mph",
+    "precip_pop",
+    "first_td",
+]
+
+
+def _cell_float(value: float | None) -> str:
+    if value is None:
+        return ""
+    text = f"{float(value):.4f}".rstrip("0").rstrip(".")
+    return text if text not in {"", "-0"} else "0"
+
+
+def team_env_rows(environment: Environment) -> list[EnvRow]:
+    """One row per ``(team, opp)`` key, in stable order."""
+
+    rows: list[EnvRow] = []
+    seen: set[tuple[str, str]] = set()
+    for key, row in environment.items():
+        if not (isinstance(key, tuple) and len(key) == 2 and key[0] and key[1]):
+            continue
+        pair = (row.team, row.opponent)
+        if pair in seen:
+            continue
+        seen.add(pair)
+        rows.append(row)
+    rows.sort(key=lambda item: (item.game_id, item.team, item.opponent))
+    return rows
+
+
+def incomplete_env_labels(environment: Environment) -> list[str]:
+    """Labels for team rows that still have a null spread or implied total."""
+
+    labels: list[str] = []
+    for row in team_env_rows(environment):
+        missing: list[str] = []
+        if row.implied_total is None:
+            missing.append("implied_total")
+        if row.spread is None:
+            missing.append("spread")
+        if missing:
+            labels.append(
+                f"{row.team} vs {row.opponent} null {','.join(missing)}"
+            )
+    return labels
+
+
+def require_complete_env_odds(environment: Environment) -> None:
+    """Fail closed when a slate team still has a null spread or implied total.
+
+    The caller must not write ``compose_itt.json`` after this raises.
+    """
+
+    labels = incomplete_env_labels(environment)
+    if not labels:
+        return
+    detail = "; ".join(labels)
+    raise ValueError(
+        "ENV_ODDS_INCOMPLETE: "
+        f"{detail}. compose_itt.json was not written."
+    )
+
+
+def write_environment(path: Path, environment: Environment) -> None:
+    """Write team rows. Roof, wind, precip, and first_td stay on the row."""
+
+    resolved = Path(path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    with resolved.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=ENV_CSV_FIELDS, lineterminator="\n")
+        writer.writeheader()
+        for row in team_env_rows(environment):
+            writer.writerow(
+                {
+                    "game_id": row.game_id,
+                    "team": row.team,
+                    "opp": row.opponent,
+                    "implied_total": _cell_float(row.implied_total),
+                    "spread": _cell_float(row.spread),
+                    "roof": row.roof,
+                    "weather_exposed": "true" if row.weather_exposed else "false",
+                    "wind_mph": _cell_float(row.wind_mph),
+                    "precip_pop": _cell_float(row.precip_pop),
+                    "first_td": row.first_td,
+                }
+            )
+
+
+def merge_environment_odds(
+    env_csv: Path,
+    odds_csv: Path | None,
+    *,
+    require: bool = False,
+) -> Environment:
+    """Fill blank spread and implied total. A typed cell and the roof stay.
+
+    Team codes are normalized (``JAC`` matches ``JAX``). ``require`` fails
+    when any team row is still blank after the fill.
+    """
+
+    environment = read_environment(env_csv)
+    filled = fill_environment_from_odds_csv(environment, odds_csv)
+    if require:
+        require_complete_env_odds(filled)
+    return filled
+
+
 def write_compose_itt(
     path: Path,
     *,

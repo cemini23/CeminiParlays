@@ -1,9 +1,8 @@
-"""Week 11 Saturday card: $23 bankroll, holds, and model fair prices."""
+"""Week 11 card: live Hard Rock lines, fail-closed guards, $18 remainder."""
 
 from __future__ import annotations
 
 import csv
-from collections import defaultdict
 from pathlib import Path
 
 import pytest
@@ -13,21 +12,40 @@ from ceminiparlays.resources import REPO_ROOT
 from ceminiparlays.sunday_card import norm_name
 from ceminiparlays.week11_card import (
     BANKROLL_CENTS,
+    BOOKED_LEGS,
     CARD_CSV,
     CARD_MD,
+    ENTERED_PATH,
     ENV_PATH,
     HOLD_PATH,
-    LEG_EXPOSURE_CAP_CENTS,
+    LIVE_PATH,
     MAX_LEG_REUSE,
-    PricedLeg,
+    RATES_PATH,
     SCRATCH_PATH,
     STARTERS_PATH,
+    TEMPLATE_PATH,
+    TEMPLATE_ROWS,
+    LiveLinesMissingError,
+    PricedLeg,
+    TeamTotalAsPlayerError,
+    _rates,
     _starters,
+    allocated_cents,
+    assert_mean_not_team_total,
     build_tickets,
+    decision_legs,
+    format_leg_table,
+    load_live_lines,
+    pricing_source,
     qb_check_failures,
     render_csv,
+    render_entered,
     render_markdown,
     screen_pool,
+    shift_fair_over,
+    team_level_totals,
+    unallocated_cents,
+    write_hardrock_template,
 )
 
 HARD_EXCLUDE = {
@@ -59,6 +77,36 @@ QUESTIONABLE = {
 def _rows(path: Path) -> list[dict[str, str]]:
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
+
+
+def _quote(book: str, player: str, market: str, side: str, line: float, odds: int, game: str) -> dict[str, str]:
+    return {
+        "bookmaker": book,
+        "player": player,
+        "market": market,
+        "side": side,
+        "line": f"{line:.1f}",
+        "american_odds": str(odds),
+        "timestamp": "2026-11-22T00:00:00Z",
+        "game": game,
+    }
+
+
+def _two_way(book: str, player: str, market: str, line: float, over: int, under: int, game: str) -> list[dict[str, str]]:
+    return [
+        _quote(book, player, market, "over", line, over, game),
+        _quote(book, player, market, "under", line, under, game),
+    ]
+
+
+def _skewed_prop(player: str, game: str) -> list[dict[str, str]]:
+    """Hard Rock -115. Two other books are short the over, so the over is +EV."""
+
+    rows: list[dict[str, str]] = []
+    rows.extend(_two_way("hardrockbet", player, "player_rush_yds", 70.5, -115, -115, game))
+    rows.extend(_two_way("draftkings", player, "player_rush_yds", 70.5, -150, 130, game))
+    rows.extend(_two_way("fanduel", player, "player_rush_yds", 70.5, -150, 130, game))
+    return rows
 
 
 @pytest.fixture(scope="module")
@@ -102,131 +150,231 @@ def test_scratches_and_watchlist_cover_the_saturday_names() -> None:
     assert held == QUESTIONABLE
 
 
-def test_bankroll_caps_and_script_gates(built) -> None:
-    _pool, tickets = built
-    assert BANKROLL_CENTS == 2300
-    assert LEG_EXPOSURE_CAP_CENTS == 805
-    assert MAX_LEG_REUSE == 1
-    assert 4 <= len(tickets) <= 6
-    assert sum(int(ticket["stake_cents"]) for ticket in tickets) == 2300
-    exposure: dict[str, int] = defaultdict(int)
-    reuse: dict[tuple[str, str, str], int] = defaultdict(int)
+def test_missing_live_lines_fail_closed(tmp_path: Path) -> None:
+    missing = tmp_path / "live_lines.csv"
+    with pytest.raises(LiveLinesMissingError):
+        load_live_lines(missing)
+    empty = tmp_path / "empty.csv"
+    empty.write_text(
+        "bookmaker,player,market,side,line,american_odds,timestamp,game\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(LiveLinesMissingError):
+        load_live_lines(empty)
+    blank = tmp_path / "blank.csv"
+    blank.write_text(
+        "bookmaker,player,market,side,line,american_odds,timestamp,game\n"
+        "hardrockbet,Jonah Coleman,player_rush_yds,over,,,-,\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(LiveLinesMissingError):
+        load_live_lines(blank)
+
+
+def test_mean_equal_to_a_team_total_fails_closed() -> None:
+    totals = team_level_totals(_rates(RATES_PATH))
+    blend = (91.4 + 151.1) / 2.0
+    assert abs(blend - 121.25) < 1e-9
+    assert any(abs(item - 121.25) <= 0.01 for item in totals)
+    with pytest.raises(TeamTotalAsPlayerError):
+        assert_mean_not_team_total("Jonah Coleman", blend, totals)
+    with pytest.raises(TeamTotalAsPlayerError):
+        shift_fair_over(
+            "Jonah Coleman",
+            "rush_yds",
+            122.5,
+            [
+                ("draftkings", 121.25, -110, -110),
+                ("fanduel", 121.25, -110, -110),
+            ],
+            totals,
+        )
+
+
+def test_single_book_does_not_invent_a_price() -> None:
+    rows = _two_way("hardrockbet", "Jonah Coleman", "player_rush_yds", 71.5, -115, -115, "LV@DEN")
+    pool = screen_pool(rows=rows)
+    leg = pool["jonah coleman|rush_yds|over"]
+    assert leg.line == 71.5
+    assert leg.reason == "NO_CONSENSUS"
+    assert not leg.ok
+    assert build_tickets(pool) == []
+
+
+def test_same_line_plus_ev_can_fill_three_six_dollar_tickets() -> None:
+    games = ["MIA@BUF", "NO@CHI", "TEN@DAL", "TB@DET", "ARI@KC", "PIT@PHI"]
+    rows: list[dict[str, str]] = []
+    for index, game in enumerate(games):
+        rows.extend(_skewed_prop(f"Test Back {index}", game))
+    pool = screen_pool(rows=rows)
+    overs = [leg for leg in pool.values() if leg.side == "over" and leg.player.startswith("Test Back")]
+    assert overs
+    assert all(leg.ok for leg in overs)
+    assert all((leg.edge or 0.0) >= 0.02 for leg in overs)
+    tickets = build_tickets(pool)
+    assert len(tickets) == 3
+    assert allocated_cents(tickets) == 1800
+    assert unallocated_cents(tickets) == 0
+    assert BANKROLL_CENTS == 1800
+    seen: set[tuple[str, str, str]] = set()
     for ticket in tickets:
+        assert int(ticket["stake_cents"]) == 600
         legs = ticket["legs"]
-        stake = int(ticket["stake_cents"])
-        assert stake % 100 == 0
+        assert isinstance(legs, list)
         assert 2 <= len(legs) <= 3
-        if ticket["same_game"]:
-            assert stake in {200, 300}
-        else:
-            assert stake in {400, 500, 600}
-        assert ticket["unmodeled"] is False
-        assert ticket["fair_american"] not in range(-99, 100)
-        players = set()
+        for leg in legs:
+            key = (norm_name(leg.player), leg.market, leg.side)
+            assert key not in seen
+            seen.add(key)
+            assert (norm_name(leg.player), leg.market) not in BOOKED_LEGS
+    assert max(1, len(seen)) >= 1
+    assert len(seen) == sum(len(ticket["legs"]) for ticket in tickets)
+
+
+def test_live_card_uses_book_lines_and_skips_booked_legs(built) -> None:
+    pool, tickets = built
+    coleman = pool["jonah coleman|rush_yds|over"]
+    lawrence = pool["trevor lawrence|pass_yds|under"]
+    assert coleman.line == 71.5
+    assert coleman.book_american == -115
+    assert "121.25" not in coleman.note
+    assert "LEAGUE_SLATE_MEDIAN" not in coleman.note
+    assert coleman.mean is None or abs(coleman.mean - 121.25) > 0.01
+    assert coleman.reason != "OK"
+    assert lawrence.line == 232.5
+    assert lawrence.line != 217.5
+    assert lawrence.reason != "OK"
+    gibbs = pool["jahmyr gibbs|rush_yds_q4|over"]
+    assert gibbs.reason == "NO_QUARTER_BOOK"
+    assert gibbs.line is None
+    booked = {leg.leg_id for ticket in tickets for leg in ticket["legs"]}
+    for player, market in BOOKED_LEGS:
+        assert f"{player}|{market}|over" not in booked
+        assert f"{player}|{market}|under" not in booked
+    assert 3 <= len(tickets) <= 4
+    assert allocated_cents(tickets) == 1800
+    assert unallocated_cents(tickets) == 0
+    for ticket in tickets:
+        assert int(ticket["stake_cents"]) in {300, 400, 500, 600}
+        assert float(ticket["ev"]) > 0.0
+        assert not ticket.get("best_available")
+        legs = ticket["legs"]
+        assert 2 <= len(legs) <= 3
         for leg in legs:
             assert leg.ok
-            assert leg.fair_american is not None
-            assert leg.fair_american not in range(-99, 100)
-            name = norm_name(leg.player)
-            assert name not in HARD_EXCLUDE
-            assert name not in QUESTIONABLE
-            assert leg.market != "first_td"
-            reuse[(name, leg.market, leg.side)] += 1
-            players.add(name)
-            if leg.market == "rush_yds_q4" and leg.side == "over":
-                assert leg.spread is not None
-                assert -7.5 <= leg.spread <= -3.0
+            assert leg.market != "rush_yds_q4"
+            assert leg.market != "total_q3"
             if leg.market == "receptions_q4":
-                assert leg.spread is not None and leg.spread >= 7.0
-        for player in players:
-            exposure[player] += stake
-    assert max(reuse.values()) <= MAX_LEG_REUSE
-    assert max(exposure.values()) <= LEG_EXPOSURE_CAP_CENTS
+                assert "Q4_POISSON_MODEL" in leg.note
+                assert leg.line is not None
+            assert norm_name(leg.player) not in HARD_EXCLUDE
+            assert norm_name(leg.player) not in QUESTIONABLE
+            assert "LEAGUE_SLATE_MEDIAN" not in leg.note
+            assert leg.line not in {112.85, 11.10, 14.5}
+    assert allocated_cents(tickets) + unallocated_cents(tickets) == 1800
+    assert MAX_LEG_REUSE == 1
+    breece = pool["breece hall|rec_yds|under"]
+    assert breece.line == 21.5
+    assert breece.book_american == -115
+    assert breece.reason == "OK"
+    assert pricing_source(breece) == "LINE_SHIFT_DEVIG"
+    assert (breece.edge or 0.0) > 0.0
+    header = format_leg_table(decision_legs(pool)).splitlines()[0]
+    assert header == (
+        "Player | Team | Market | Side | HR Line | HR Odds | Fair Odds | Edge % | Pricing Source"
+    )
     failures = qb_check_failures(
         [leg for ticket in tickets for leg in ticket["legs"]],
         _starters(STARTERS_PATH),
     )
     assert failures == []
-
-
-def test_published_fair_prices(built) -> None:
-    pool, tickets = built
-    by_id = {ticket["ticket_id"]: ticket for ticket in tickets}
-    assert [ticket["fair_american"] for ticket in tickets] == [282, 248, 130, 335, 130]
-    assert int(by_id["HR11-5"]["stake_cents"]) == 300
-    assert by_id["HR11-5"]["same_game"] is True
-    assert pool["johnson_under"].fair_american == -150
-    assert pool["lawrence_under"].fair_american == -194
-    assert pool["coleman_rush"].fair_american == -137
-    assert pool["pollard_rush"].fair_american == -170
-    assert pool["kamara_rec"].fair_american == -172
-    assert pool["milton_under"].reason == "OK"
-    assert pool["milton_under"].fair_american == -134
-    assert pool["allgeier_rec"].reason == "NO_EDGE"
-    assert pool["dak_over"].reason == "ROOF_CHECK"
-    assert pool["lamb_over"].reason == "NO_PLAYER_RATE"
-    assert pool["pickens_over"].reason == "NO_PLAYER_RATE"
-    assert pool["mayfield_under"].reason == "SATURDAY_HOLD"
-    assert pool["mayfield_under"].fair_american == -194
-    staked = {leg.leg_id for ticket in tickets for leg in ticket["legs"]}
-    assert "mayfield_under" not in staked
-    assert "dak_over" not in staked
-    assert "pollard_rec" not in staked
+    mayfield = pool["baker mayfield|pass_yds|under"]
+    assert mayfield.reason == "SATURDAY_HOLD"
+    assert "mayfield" not in " ".join(leg.leg_id for ticket in tickets for leg in ticket["legs"])
 
 
 def test_beck_pass_leg_fails_and_mayfield_does_not(built) -> None:
     pool, _tickets = built
     starters = _starters(STARTERS_PATH)
     beck = PricedLeg(
-        "beck_under",
+        "beck",
         "Carson Beck",
         "ARI",
         "KC",
         "pass_yds",
         "under",
-        217.5,
+        163.5,
         0.6,
         0.6,
         0.1,
         -150,
         15.5,
         "1:00 PM ET",
-        "ARI@KC",
+        "2026-11-22-ARI@KC",
         "OK",
         "",
     )
     failures = qb_check_failures([beck], starters)
     assert len(failures) == 1
     assert failures[0].startswith("FAIL_BACKUP_QB")
-    assert qb_check_failures([pool["mayfield_under"]], starters) == []
-    assert qb_check_failures([pool["johnson_under"]], starters) == []
+    assert qb_check_failures([pool["baker mayfield|pass_yds|under"]], starters) == []
+    johnson = pool["josh johnson|pass_yds|under"]
+    assert johnson.reason == "BOOKED"
+    assert qb_check_failures([johnson], starters) == []
 
 
-def test_written_card_has_no_book_price_column(built) -> None:
+def test_builder_source_has_no_slate_median_path() -> None:
+    source = (REPO_ROOT / "src" / "ceminiparlays" / "week11_card.py").read_text(encoding="utf-8")
+    assert "_full_game_mean" not in source
+    assert "clip_main_line_prob" not in source
+    assert "LEAGUE_SLATE_MEDIAN" not in source
+    assert "Q4_RUSH_LINE" not in source
+    assert "REF_PRICE" not in source
+
+
+def test_template_is_twelve_blank_rows(tmp_path: Path) -> None:
+    path = write_hardrock_template(tmp_path / "hardrock_lines_template_2026-11-22.csv")
+    rows = _rows(path)
+    assert len(rows) == 12
+    assert len(TEMPLATE_ROWS) == 12
+    assert rows[0]["line"] == ""
+    assert rows[0]["american_odds"] == ""
+    assert rows[0]["bookmaker"] == "hardrockbet"
+    assert not TEMPLATE_PATH.exists()
+
+
+def test_entered_ticket_shell_marks_the_slip_blank() -> None:
+    text = render_entered()
+    rows = list(csv.DictReader(text.splitlines()))
+    assert len(rows) == 3
+    assert {row["ticket_id"] for row in rows} == {"HR11-1"}
+    assert rows[0]["stake_usd"] == "5.00"
+    assert {row["line"] for row in rows} == {"FILL_FROM_SLIP"}
+    assert {row["american_odds"] for row in rows} == {"FILL_FROM_SLIP"}
+    markets = {(row["player_name"], row["market"], row["side"]) for row in rows}
+    assert markets == {
+        ("Josh Johnson", "pass_yds", "under"),
+        ("James Cook III", "rush_yds", "over"),
+        ("Jahmyr Gibbs", "rush_yds_q4", "over"),
+    }
+
+
+def test_written_card_matches_the_live_render(built) -> None:
     pool, tickets = built
     csv_text = render_csv(tickets)
     markdown = render_markdown(tickets, pool)
-    header = csv_text.splitlines()[0]
-    assert "book_american_odds" not in header
-    assert "fair_american" in header
+    assert "book_american_odds" in csv_text.splitlines()[0]
+    assert "LEAGUE_SLATE_MEDIAN" not in markdown
+    assert "112.85" not in markdown
+    assert "Unallocated:" in markdown
     assert CARD_CSV.read_text(encoding="utf-8") == csv_text
     assert CARD_MD.read_text(encoding="utf-8") == markdown
-    for name in (
-        "Baker Mayfield",
-        "Brock Bowers",
-        "Ladd McConkey",
-        "Luke Schoonmaker",
-        "Darren Waller",
-        "Tommy Tremble",
-        "Carnell Tate",
-        "Charlie Kolar",
-        "Will Shipley",
-    ):
-        assert name in markdown
+    assert ENTERED_PATH.read_text(encoding="utf-8") == render_entered()
     slate = REPO_ROOT / "parlays-slate" / "2026-11-22"
     recap = REPO_ROOT / "parlays-recap" / "2026-11-22"
     assert (slate / "hardrock_card_2026-11-22.csv").read_text(encoding="utf-8") == csv_text
     assert (recap / "card_2026-11-22.md").read_text(encoding="utf-8") == markdown
+    assert LIVE_PATH.is_file()
 
 
 def test_sync_copies_both_names_and_skips_a_missing_workspace(tmp_path: Path) -> None:

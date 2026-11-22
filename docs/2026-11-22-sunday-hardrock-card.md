@@ -1,96 +1,72 @@
-# Week 11 Saturday Hard Rock card, 2026-11-22
+# Week 11 Hard Rock card, 2026-11-22
 
-Do not submit a bet from this file. Type every ticket yourself.
-The stake sum is $23.00. That is the research allocation for this card.
-Each ticket has 2 or 3 legs. Core tickets are $5. The same-game ticket is $3.
-No leg is on more than one ticket. No leg stake is above 35 percent of $23.
+Do not submit a bet from this file. Type any ticket yourself.
+HR11-1 is already placed for $5.00. Those three legs are not on this card.
+Remaining bankroll: $18.00.
+Allocated on this card: $18.00.
+Unallocated: $0.00.
+Each new ticket is $3.00 to $6.00. Three tickets are $6.00 each.
+Four tickets are $6.00, $6.00, $3.00, and $3.00.
+The card keeps the pack with the higher stake-weighted EV.
+A ticket is +EV only when the copula joint beats the estimated Hard Rock price.
+Same-line +EV legs: 0.
+Line-shift +EV legs: 1.
+Q4 Poisson +EV legs: 14.
+Bucket A priced tickets: 478.
+Bucket B priced tickets: 113.
 
-Fair American is the model breakeven. It is not a Hard Rock price.
-Compare a live Hard Rock price with this fair price before you place a bet.
-A full-game yard line is the slate median of team rates. It is not a book line.
-The Q4 rush line is 14.5. The Q4 catch line is 0.5. The Q3 line is the slate median.
-The number -110 is only the reference ladder for the EV column.
-Spreads and totals are CLAIMED from the Week 11 DraftKings environment odds file.
+Prices come from config/week11/live_lines_2026-11-22.csv.
+SAME_LINE_DEVIG is a power de-vig when two other books post the Hard Rock line.
+LINE_SHIFT_DEVIG moves an adjacent yard line with the normal tail in half_edge.py.
+Q4_POISSON_MODEL uses the shrunk q4_rec_pg rate. The line is a live Hard Rock line.
+The gate is games at least 6 and target-share rank 1. A missing row is not a leg.
+Team offense and team defense totals are not a player mean.
+Est. HR Parlay Odds is the product of the posted leg prices.
+When pair rho is above 0.15, the repo SGP tax shortens that price.
+That price is not a captured Hard Rock same-game quote.
 
-Questionable players are off this Saturday card. They are in the T-90 list.
-DAL pass and catch overs wait on the AT&T roof call Sunday morning.
-No first_td leg is on this card. Two first_td legs from one game are never paired.
-A rush_yds_q4 over is off when the team spread is -8.0 or lower.
+Highest line-shift leg: Breece Hall rec_yds under 21.50 at 1.24% (LINE_SHIFT_DEVIG).
+Ollie Gordon II q4_rec_pg raw is 0.00. Shrinkage pulls the rate toward the league mean. The under uses that shrunk Poisson and the live Hard Rock line. Reject the leg if you do not want a zero-catch sample on the card.
+Jahmyr Gibbs receptions_q4 is not the booked rush_yds_q4 leg. HR11-1 already has the rush_yds_q4 leg.
 
-## Card
+## Tickets
 
-| Ticket | Stake | Legs | Joint model prob | Fair parlay price |
-| --- | ---: | --- | ---: | ---: |
-| HR11-1 | $5.00 | Josh Johnson pass_yds under 217.50 (fair -150); James Cook III rush_yds over 112.85 (fair -194); Jahmyr Gibbs rush_yds_q4 over 14.50 (fair -194) | 0.2617 | +282 |
-| HR11-2 | $5.00 | Trevor Lawrence pass_yds under 217.50 (fair -194); D'Andre Swift rush_yds over 112.85 (fair -194); Chuba Hubbard rush_yds_q4 over 14.50 (fair -194) | 0.2875 | +248 |
-| HR11-3 | $5.00 | Emmett Johnson rush_yds over 112.85 (fair -194); Ashton Jeanty receptions_q4 over 0.50 (fair -194) | 0.4356 | +130 |
-| HR11-4 | $5.00 | Jonah Coleman rush_yds over 112.85 (fair -137); Tony Pollard rush_yds over 112.85 (fair -170); Alvin Kamara receptions_q4 over 0.50 (fair -172) | 0.2301 | +335 |
-| HR11-5 | $3.00 | Jaylen Warren rush_yds_q4 over 14.50 (fair -194); PIT at PHI total_q3 under 11.10 (fair -194) | 0.4356 | +130 |
+Ticket | Stake | Exact HR Legs & Odds | Pricing Source | Est. HR Parlay Odds | Fair Parlay Odds | EV %
+--- | --- | --- | --- | --- | --- | ---
+HR11-2 | $6.00 | Ollie Gordon II receptions_q4 under 0.50 (HR +120); Braelon Allen receptions_q4 over 0.50 (HR +180); Justice Hill receptions_q4 under 0.50 (HR -110) | Q4_POISSON_MODEL | +1076 | +291 | 201.09%
+HR11-3 | $6.00 | Cam Skattebo receptions_q4 under 0.50 (HR -120); Jahmyr Gibbs receptions_q4 under 0.50 (HR +130); Ashton Jeanty receptions_q4 under 1.50 (HR -195) | Q4_POISSON_MODEL | +538 | +290 | 63.43%
+HR11-4 | $6.00 | Bucky Irving receptions_q4 under 0.50 (HR +100); Javonte Williams receptions_q4 over 0.50 (HR +155); Keaton Mitchell receptions_q4 over 0.50 (HR +155) | Q4_POISSON_MODEL | +1200 | +797 | 45.05%
 
-## Leg notes
+## Legs
 
-- HR11-1 joint gaussian 0.2617 t 0.2651. corr_unmodeled no.
-- HR11-1 Josh Johnson: LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=202.70
-- HR11-1 James Cook III: LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=135.55
-- HR11-1 Jahmyr Gibbs: Q4 rush 22.75 x 1.08; line 14.5 is not a book line
-- HR11-2 joint gaussian 0.2875 t 0.2922. corr_unmodeled no.
-- HR11-2 Trevor Lawrence: LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=184.10
-- HR11-2 D'Andre Swift: LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=135.90
-- HR11-2 Chuba Hubbard: Q4 rush 17.67 x 1.08; line 14.5 is not a book line
-- HR11-3 joint gaussian 0.4356 t 0.4380. corr_unmodeled no.
-- HR11-3 Emmett Johnson: LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=132.95
-- HR11-3 Ashton Jeanty: Poisson Q4 rec 1.33; line 0.5 is not a book line
-- HR11-4 joint gaussian 0.2301 t 0.2323. corr_unmodeled no.
-- HR11-4 Jonah Coleman: LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=121.25; packet names DEN rush, not a back; Q4 row names Jonah Coleman
-- HR11-4 Tony Pollard: LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=127.10
-- HR11-4 Alvin Kamara: Poisson Q4 rec 1.00; line 0.5 is not a book line
-- HR11-5 joint gaussian 0.4356 t 0.4380. corr_unmodeled no.
-- HR11-5 Jaylen Warren: Q4 rush 19.43 x 1.08; line 14.5 is not a book line
-- HR11-5 PIT at PHI: Q3 mean 5.72; reference line is the slate median, not a book total
-
-## Sunday T-90 watchlist
-
-Do not put these names on the Saturday card.
-
-- Baker Mayfield (TB, QB). Status is questionable.
-- Brock Bowers (LV, TE). Status is questionable.
-- Ladd McConkey (LAC, WR). Status is questionable.
-- Luke Schoonmaker (DAL, TE). Status is questionable.
-- Darren Waller (CAR, TE). Status is questionable.
-- Tommy Tremble (CAR, TE). Status is questionable.
-- Carnell Tate (TEN, WR). Status is questionable.
-- Charlie Kolar (LAC, TE). Status is questionable.
-- Will Shipley (PHI, RB). Status is questionable.
-- Priced, not staked: Baker Mayfield pass_yds under 217.50 (fair -194). LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=142.10
-
-Baker Mayfield pass_yds under is a mixed lean. TB pass offense is rank 32.
-DET pass defense allows rank 28. Wait for the inactive list.
-A Bowers-out Raiders fade is not a Saturday leg. Bowers is questionable.
-
-## Sunday morning roof check
-
-AT&T Stadium is retractable. Weather stays exposed until the roof call.
-Do not place a DAL pass or catch over on Saturday night.
-
-- Dak Prescott pass_yds over 217.50: ROOF_CHECK. Fair -194. LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=265.50
-- CeeDee Lamb rec_yds over : NO_PLAYER_RATE. Fair n/a. packet has no player receiving-yard rate
-- George Pickens rec_yds over : NO_PLAYER_RATE. Fair n/a. packet has no player receiving-yard rate
-
-## Screened, not staked
-
-- Joe Milton pass_yds under: passed, not staked. Fair -134. LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=206.95
-- Bhayshul Tuten rush_yds_q4 over: passed, not staked. Fair -144. Q4 rush 15.11 x 1.08; line 14.5 is not a book line
-- Javonte Williams rush_yds_q4 over: passed, not staked. Fair -188. Q4 rush 16.33 x 1.08; line 14.5 is not a book line
-- Tony Pollard receptions_q4 over: passed, not staked. Fair -136. Poisson Q4 rec 0.86; line 0.5 is not a book line
-- Tyler Allgeier receptions_q4 over: NO_EDGE. Fair n/a. Poisson Q4 rec 0.70; line 0.5 is not a book line
+Player | Team | Market | Side | HR Line | HR Odds | Fair Odds | Edge % | Pricing Source
+--- | --- | --- | --- | --- | --- | --- | --- | ---
+Ollie Gordon II | MIA | receptions_q4 | under | 0.50 | +120 | -373 | 73.48% | Q4_POISSON_MODEL
+Braelon Allen | NYJ | receptions_q4 | over | 0.50 | +180 | -100 | 40.22% | Q4_POISSON_MODEL
+Justice Hill | BAL | receptions_q4 | under | 0.50 | -110 | -184 | 23.77% | Q4_POISSON_MODEL
+Cam Skattebo | NYG | receptions_q4 | under | 0.50 | -120 | -196 | 21.32% | Q4_POISSON_MODEL
+Jahmyr Gibbs | DET | receptions_q4 | under | 0.50 | +130 | -103 | 16.81% | Q4_POISSON_MODEL
+Bucky Irving | TB | receptions_q4 | under | 0.50 | +100 | -137 | 15.67% | Q4_POISSON_MODEL
+Ashton Jeanty | LV | receptions_q4 | under | 1.50 | -195 | -321 | 15.33% | Q4_POISSON_MODEL
+Javonte Williams | DAL | receptions_q4 | over | 0.50 | +155 | +128 | 11.98% | Q4_POISSON_MODEL
+Keaton Mitchell | LAC | receptions_q4 | over | 0.50 | +155 | +128 | 11.98% | Q4_POISSON_MODEL
+Ty Johnson | BUF | receptions_q4 | over | 0.50 | +195 | +174 | 7.66% | Q4_POISSON_MODEL
+Tyler Allgeier | ARI | receptions_q4 | over | 0.50 | +135 | +122 | 6.03% | Q4_POISSON_MODEL
+Alvin Kamara | NO | receptions_q4 | under | 0.50 | +115 | +109 | 2.83% | Q4_POISSON_MODEL
+Chuba Hubbard | CAR | receptions_q4 | under | 0.50 | +115 | +112 | 1.26% | Q4_POISSON_MODEL
+Breece Hall | NYJ | rec_yds | under | 21.50 | -115 | -118 | 1.24% | LINE_SHIFT_DEVIG
+Jaylen Warren | PIT | receptions_q4 | over | 0.50 | -105 | -105 | 0.21% | Q4_POISSON_MODEL
+Bhayshul Tuten | JAX | receptions_q4 | under | 0.50 | -210 | -204 | -0.88% | Q4_POISSON_MODEL
+Courtland Sutton |  | rec_yds | over | 30.50 | -120 | -117 | -1.13% | LINE_SHIFT_DEVIG
+Fernando Mendoza | LV | interceptions | under | 0.50 | +120 | +123 | -1.52% | SAME_LINE_DEVIG
+Kalif Raymond |  | receptions | under | 2.50 | -135 | -129 | -1.78% | SAME_LINE_DEVIG
+Josh Johnson | ARI | interceptions | over | 0.50 | -200 | -189 | -1.90% | SAME_LINE_DEVIG
 
 ## Checks
 
-QB check: every pass leg matches the confirmed starter. FAIL_BACKUP_QB count is 0.
-Hard excludes on the card: none.
-Roster refresh: the file active_roster_whitelist_2026-11-22.csv is not on this machine.
+QB check on every new pass leg must be FAIL_BACKUP_QB=0.
+Josh Johnson pass_yds, James Cook III rush_yds, and Jahmyr Gibbs rush_yds_q4 are booked.
+Other markets for those three players stay eligible.
+Out, IR, and doubtful names are off. The Sunday T-90 list is off.
+DAL pass and receiving yards stay off while the AT&T roof is retractable and exposed.
 config/rosters/nfl.json was not rewritten.
-Known card names that are in the roster already use the 2026 club.
-Unknown names pass the roster gate.
-
-Desk path /workspace is not on this machine. Copies are in parlays-slate and parlays-recap.

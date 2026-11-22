@@ -1,5 +1,7 @@
 """Rank, run, and compose share max-slips, market-cap, and allow-fewer flags."""
 
+import pytest
+
 from ceminiparlays.cli import build_parser
 
 
@@ -117,3 +119,38 @@ def test_strict_ticket_count_and_leg_reuse_parity() -> None:
     assert compose.require_env_odds is None
     assert sunday.require_env_odds is True
     assert len(compose.sync_dirs) == 2
+
+
+def test_engine_flag_is_on_rank_and_run_but_not_compose() -> None:
+    """``--engine`` reaches ``rank_slips`` from rank and run only.
+
+    ``compose`` prices one explicit ticket and keeps its own flags; it still
+    follows ``CEMINIPARLAYS_ENGINE`` through the default ``None``.
+    """
+
+    parser = build_parser()
+    rank = parser.parse_args(
+        ["rank", "--lines", "lines.csv", "--distributions", "dist.csv"]
+    )
+    run = parser.parse_args(
+        ["run", "--lines", "lines.csv", "--distributions", "dist.csv"]
+    )
+    assert rank.engine is None
+    assert run.engine is None
+    for command in ("rank", "run"):
+        args = parser.parse_args(
+            [
+                command,
+                "--lines",
+                "lines.csv",
+                "--distributions",
+                "dist.csv",
+                "--engine",
+                "rust",
+            ]
+        )
+        assert args.engine == "rust"
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["compose", "--lines", "lines.csv", "--engine", "rust"]
+        )

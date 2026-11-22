@@ -255,6 +255,15 @@ def _add_rank_options(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--n-sims", type=int, default=20_000)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--engine",
+        choices=["python", "rust"],
+        default=None,
+        help=(
+            "simulate_slip numeric engine. Omit to follow CEMINIPARLAYS_ENGINE "
+            "(default python). rust needs tools/rust_port/build_rust.sh."
+        ),
+    )
     parser.add_argument("--displayed-multiplier", type=float, default=None)
     parser.add_argument(
         "--displayed-odds",
@@ -1567,6 +1576,7 @@ def _rank_and_write(args: argparse.Namespace, out_csv: Path, report_path: Path |
         ),
         scores_by_game=scores_by_game,
         max_legs_per_market=getattr(args, "max_legs_per_market", None),
+        engine=getattr(args, "engine", None),
     )
     for note in notes:
         print(f"  {note}")

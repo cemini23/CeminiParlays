@@ -49,6 +49,10 @@ ceminiparlays = ["py.typed", "data/*.json", "data/payout_profiles/*.json", "data
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "tools"]
+markers = [
+    "rust_parity: Rust copula engine parity suite (requires the built extension)",
+    "kelly_invariant: Kelly sizing invariants fed with Rust outputs",
+]
 
 [tool.ruff]
 line-length = 100

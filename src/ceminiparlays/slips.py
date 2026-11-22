@@ -817,6 +817,8 @@ class _RankContext:
     is_flex: bool
     notes: list[str]
     pickem_hurdle: float | None = None
+    #: ``None`` follows ``CEMINIPARLAYS_ENGINE`` / ``python``; ``rust`` is opt-in.
+    engine: str | None = None
 
 
 def _refs_for(combo) -> list[LegRef]:
@@ -978,7 +980,9 @@ def _joint_probabilities(combo, clean, ctx: _RankContext) -> tuple:
         min(max(leg.fair_p - ctx.shade_pp, 1e-9), 1.0 - 1e-9) for leg in combo
     ]
     if ctx.is_flex or ctx.slip_size > 3:
-        sim = simulate_slip(marginals, clean, n_sims=ctx.n_sims, seed=ctx.seed)
+        sim = simulate_slip(
+            marginals, clean, n_sims=ctx.n_sims, seed=ctx.seed, engine=ctx.engine
+        )
         return (
             float(sim["p_all"]),
             float(sim["p_all_se"]),
@@ -1211,6 +1215,7 @@ def rank_slips(
     allow_unmodeled_correlation: bool = False,
     scores_by_game: dict | None = None,
     max_legs_per_market: int | None = None,
+    engine: str | None = None,
 ) -> list[EvaluatedSlip]:
     """Enumerate slip_size combinations and rank by a lower-bound EV.
 
@@ -1252,6 +1257,7 @@ def rank_slips(
         priced_venue=priced_venue,
         is_flex=mode.lower() in {"flex"},
         notes=notes,
+        engine=engine,
     )
     ranked: list[EvaluatedSlip] = []
     for combo in combinations(live, slip_size):
@@ -1334,6 +1340,7 @@ def rank_slip_sizes(
     allow_unmodeled_correlation: bool = False,
     scores_by_game: dict | None = None,
     max_legs_per_market: int | None = None,
+    engine: str | None = None,
 ) -> list[EvaluatedSlip]:
     """Rank one or more slip sizes, then apply optional American odds filters."""
 
@@ -1360,6 +1367,7 @@ def rank_slip_sizes(
                 allow_unmodeled_correlation=allow_unmodeled_correlation,
                 scores_by_game=scores_by_game,
                 max_legs_per_market=max_legs_per_market,
+                engine=engine,
             )
         )
     before = len(ranked)

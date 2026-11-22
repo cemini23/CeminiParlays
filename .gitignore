@@ -15,6 +15,9 @@ venv/
 # Local adopts
 .local/
 
+# fast-anything scratch state
+.fast/
+
 # Pipeline artifacts
 artifacts/
 runs/
@@ -42,3 +45,8 @@ research/
 reports/
 briefs/
 prompts/
+
+# Rust copula engine build output and installed extension
+rust/copula_engine/target/
+src/ceminiparlays/_copula_engine*.so
+src/ceminiparlays/_copula_engine*.dylib

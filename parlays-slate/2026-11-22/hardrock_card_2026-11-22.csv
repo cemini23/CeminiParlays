@@ -1,0 +1,14 @@
+ticket_id,leg_num,game_id,kick_et,player_name,team,opp,market,side,line,fair_american,model_prob,raw_prob,ev_vs_ref_minus110,ticket_stake_usd,ticket_fair_american,gaussian_joint_p,t_copula_joint_p,corr_unmodeled,note
+HR11-1,1,ARI@KC,1:00 PM ET,Josh Johnson,ARI,KC,pass_yds,under,217.50,-150,0.6007,0.6007,0.1468,$5.00,+282,0.2617,0.2651,no,LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=202.70
+HR11-1,2,MIA@BUF,1:00 PM ET,James Cook III,BUF,MIA,rush_yds,over,112.85,-194,0.6600,0.7017,0.2600,$5.00,+282,0.2617,0.2651,no,LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=135.55
+HR11-1,3,TB@DET,1:00 PM ET,Jahmyr Gibbs,DET,TB,rush_yds_q4,over,14.50,-194,0.6600,0.8959,0.2600,$5.00,+282,0.2617,0.2651,no,Q4 rush 22.75 x 1.08; line 14.5 is not a book line
+HR11-2,1,JAX@NYG,4:25 PM ET,Trevor Lawrence,JAX,NYG,pass_yds,under,217.50,-194,0.6600,0.7176,0.2600,$5.00,+248,0.2875,0.2922,no,LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=184.10
+HR11-2,2,NO@CHI,1:00 PM ET,D'Andre Swift,CHI,NO,rush_yds,over,112.85,-194,0.6600,0.7045,0.2600,$5.00,+248,0.2875,0.2922,no,LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=135.90
+HR11-2,3,BAL@CAR,1:00 PM ET,Chuba Hubbard,CAR,BAL,rush_yds_q4,over,14.50,-194,0.6600,0.7167,0.2600,$5.00,+248,0.2875,0.2922,no,Q4 rush 17.67 x 1.08; line 14.5 is not a book line
+HR11-3,1,ARI@KC,1:00 PM ET,Emmett Johnson,KC,ARI,rush_yds,over,112.85,-194,0.6600,0.6804,0.2600,$5.00,+130,0.4356,0.4380,no,LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=132.95
+HR11-3,2,LV@DEN,4:25 PM ET,Ashton Jeanty,LV,DEN,receptions_q4,over,0.50,-194,0.6600,0.7355,0.2600,$5.00,+130,0.4356,0.4380,no,Poisson Q4 rec 1.33; line 0.5 is not a book line
+HR11-4,1,LV@DEN,4:25 PM ET,Jonah Coleman,DEN,LV,rush_yds,over,112.85,-137,0.5776,0.5776,0.1028,$5.00,+335,0.2301,0.2323,no,"LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=121.25; packet names DEN rush, not a back; Q4 row names Jonah Coleman"
+HR11-4,2,TEN@DAL,1:00 PM ET,Tony Pollard,TEN,DAL,rush_yds,over,112.85,-170,0.6302,0.6302,0.2030,$5.00,+335,0.2301,0.2323,no,LEAGUE_SLATE_MEDIAN_NOT_BOOK mean=127.10
+HR11-4,3,NO@CHI,1:00 PM ET,Alvin Kamara,NO,CHI,receptions_q4,over,0.50,-172,0.6321,0.6321,0.2068,$5.00,+335,0.2301,0.2323,no,Poisson Q4 rec 1.00; line 0.5 is not a book line
+HR11-5,1,PIT@PHI,1:00 PM ET,Jaylen Warren,PIT,PHI,rush_yds_q4,over,14.50,-194,0.6600,0.7912,0.2600,$3.00,+130,0.4356,0.4380,no,Q4 rush 19.43 x 1.08; line 14.5 is not a book line
+HR11-5,2,PIT@PHI,1:00 PM ET,PIT at PHI,PIT,PHI,total_q3,under,11.10,-194,0.6600,0.9376,0.2600,$3.00,+130,0.4356,0.4380,no,"Q3 mean 5.72; reference line is the slate median, not a book total"

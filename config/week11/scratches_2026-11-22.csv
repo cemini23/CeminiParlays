@@ -1,0 +1,70 @@
+player,team,pos,token,source,retrieved,label
+Gardner Minshew II,ARI,QB,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+James Conner,ARI,RB,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Lamar Jackson,BAL,QB,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Dalton Kincaid,BUF,TE,doubtful,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,SATURDAY_DOUBTFUL
+Zavier Scott,CHI,RB,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Jake Ferguson,DAL,TE,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,SATURDAY_OUT
+Jonathan Mingo,DAL,WR,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,SATURDAY_OUT
+Caleb Lohner,DEN,TE,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Jared Wiley,KC,TE,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Kenneth Walker III,KC,RB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,SATURDAY_OUT
+Brenen Thompson,LAC,WR,doubtful,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Jared Wayne,MIA,WR,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Tyrone Tracy Jr.,NYG,RB,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Isaiah Williams,NYJ,WR,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,SATURDAY_OUT
+Omar Cooper Jr.,NYJ,WR,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,SATURDAY_OUT
+Dontayvion Wicks,PHI,WR,ir,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,SATURDAY_IR
+Jalen McMillan,TB,WR,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Wan'Dale Robinson,TEN,WR,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Andrew Wingard,ARI,S,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Jon Gaines II,ARI,G,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Jordan Burch,ARI,LB,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Zachary Carter,ARI,DT,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Jaylinn Hawkins,BAL,S,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Marlon Humphrey,BAL,CB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Nnamdi Madubuike,BAL,DT,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Ar'maj Reed-Adams,BUF,G,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Christian Benford,BUF,CB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Dorian Williams,BUF,LB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Bobby Okereke,CAR,LB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Isaiah Simmons,CAR,S,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Kentavius Street,CHI,DT,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Kyler Gordon,CHI,CB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+DaRon Bland,DAL,CB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+P.J. Locke,DAL,S,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Tyler Booker,DAL,G,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Eyioma Uwazurike,DEN,DE,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Aidan Hutchinson,DET,DE,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Cade Mays,DET,C,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+BJ Green II,JAX,DE,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Robert Hainsey,JAX,C,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Jaylon Moore,KC,T,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Trey Smith,KC,G,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Branson Taylor,LAC,G,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Daiyan Henley,LAC,LB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Kendall Williamson,LAC,S,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Rodney Shelley,LAC,CB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Tonka Hemingway,LV,DT,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Bradley Pinion,MIA,P,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Dante Trader Jr.,MIA,S,doubtful,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Jaylin Simpson,MIA,CB,doubtful,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Jordan Phillips,MIA,DT,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Zeek Biggers,MIA,DT,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Asim Richards,NO,T,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Christen Miller,NO,DT,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Erik McCoy,NO,C,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Justin Reid,NO,S,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Martin Emerson,NO,CB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Taliese Fuaga,NO,T,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+David Onyemata,NYJ,DT,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Smael Mondon Jr.,PHI,LB,doubtful,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Zack Baun,PHI,LB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Mason McCormick,PIT,G,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved 2026-11-21 05:24 PM ET,CLAIMED
+Antoine Winfield Jr.,TB,S,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Josh Hayes,TB,CB,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Fernando Carmona,TEN,G,out,https://www.nfl.com/injuries/league/2026/REG11,NFL.com report as rendered (report day not shown on page); retrieved 2026-11-21 05:24 PM ET,CONFIRMED
+Carson Beck,ARI,QB,out,sunday desk rule,2026-11-21,SATURDAY_ESPN_OUT
+Tyjae Spears,TEN,RB,ir,sunday desk rule,2026-11-21,SATURDAY_ESPN_IR
+Jonathon Brooks,CAR,RB,ir,sunday desk rule,2026-11-21,SATURDAY_ESPN_IR
+Michael Pittman Jr.,PIT,WR,ir,sunday desk rule,2026-11-21,SATURDAY_ESPN_IR

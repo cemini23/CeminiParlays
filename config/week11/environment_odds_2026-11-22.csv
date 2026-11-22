@@ -1,0 +1,21 @@
+team,opp,spread,implied_total,over_under,provider,details,source_url,retrieved_et,label
+MIA,BUF,16.5,14.0,44.5,DraftKings,BUF -16.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+BUF,MIA,-16.5,30.5,44.5,DraftKings,BUF -16.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+NO,CHI,11.5,18.5,48.5,DraftKings,CHI -11.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+CHI,NO,-11.5,30.0,48.5,DraftKings,CHI -11.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+TEN,DAL,7.5,23.5,54.5,DraftKings,DAL -7.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+DAL,TEN,-7.5,31.0,54.5,DraftKings,DAL -7.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+TB,DET,4.5,21.5,47.5,DraftKings,DET -4.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+DET,TB,-4.5,26.0,47.5,DraftKings,DET -4.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+ARI,KC,15.5,12.5,40.5,DraftKings,KC -15.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+KC,ARI,-15.5,28.0,40.5,DraftKings,KC -15.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+PIT,PHI,-3.5,20.5,37.5,DraftKings,PIT -3.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+PHI,PIT,3.5,17.0,37.5,DraftKings,PIT -3.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+BAL,CAR,3.0,20.25,43.5,DraftKings,CAR -3,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+CAR,BAL,-3.0,23.25,43.5,DraftKings,CAR -3,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+NYJ,LAC,3.0,19.75,42.5,DraftKings,LAC -3,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+LAC,NYJ,-3.0,22.75,42.5,DraftKings,LAC -3,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+LV,DEN,10.5,15.0,40.5,DraftKings,DEN -10.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+DEN,LV,-10.5,25.5,40.5,DraftKings,DEN -10.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+JAX,NYG,-6.0,26.25,46.5,DraftKings,JAX -6,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED
+NYG,JAX,6.0,20.25,46.5,DraftKings,JAX -6,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122,2026-11-21 05:22 PM ET,CLAIMED

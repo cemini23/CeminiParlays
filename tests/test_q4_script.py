@@ -38,8 +38,8 @@ def test_blowout_favorite_cuts_lambda_by_thirty_percent() -> None:
 def test_over_requires_a_competitive_route_share() -> None:
     hot = dict(receptions_per_game=8.0, targets_per_game=10.0, third_down_route_share=0.80)
     blocked = price_checkdown(_inputs(spread=-10.0, **hot), "receptions_q4", 0.5, -110, -110)
-    kept = price_checkdown(_inputs(spread=-3.0, **hot), "receptions_q4", 0.5, -110, -110)
-    high_total = price_checkdown(
+    kept = price_checkdown(_inputs(spread=-2.5, **hot), "receptions_q4", 0.5, -110, -110)
+    favored = price_checkdown(
         _inputs(spread=-5.5, game_total=47.0, **hot),
         "receptions_q4",
         0.5,
@@ -47,7 +47,7 @@ def test_over_requires_a_competitive_route_share() -> None:
         -110,
     )
     low_routes = price_checkdown(
-        _inputs(spread=-3.0, receptions_per_game=8.0, third_down_route_share=0.20),
+        _inputs(spread=-2.5, receptions_per_game=8.0, third_down_route_share=0.20),
         "receptions_q4",
         0.5,
         -110,
@@ -56,7 +56,8 @@ def test_over_requires_a_competitive_route_share() -> None:
     assert blocked is None
     assert low_routes is None
     assert kept is not None and kept.side == "over"
-    assert high_total is not None and high_total.side == "over"
+    # The week-11 direction guard bans the over on a team at spread <= -3.0.
+    assert favored is None
 
 
 def test_under_fits_a_heavy_favorite_and_blocks_a_route_back() -> None:

@@ -18,6 +18,10 @@ from pathlib import Path
 from ceminiparlays.environment import Environment, env_for
 from ceminiparlays.markets import GAME_STATS, is_first_td
 from ceminiparlays.odds import american_to_decimal
+from ceminiparlays.q4_checkdown import (
+    q4_receptions_over_blocked,
+    q4_receptions_under_blocked,
+)
 from ceminiparlays.slips import LESS_SIDES, MORE_SIDES, EvaluatedLeg
 
 #: Largest pool the composer enumerates. 14 choose 5 is still tiny.
@@ -34,6 +38,11 @@ SGP_TAX_WEIGHT = 0.55
 MAX_TICKETS_PER_PROP = 2
 #: A quarter prop may not take more than this share of card stake or unit weight.
 QUARTER_STAKE_SHARE = 0.30
+#: One quarter market (for example ``receptions_q4``) may take at most this
+#: share of the whole card. The week-11 recap set the cap at 40 percent.
+QUARTER_MARKET_STAKE_SHARE = 0.40
+#: A ticket may carry at most this many legs. No 5-leg or longer ticket ranks.
+MAX_LEGS = 4
 _SLATE_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -46,6 +55,7 @@ class FilterDrops:
     exposure_cap: int = 0
     scratch_inactive: int = 0
     bench_blowout_q4: int = 0
+    q4_direction: int = 0
 
     def format(self) -> str:
         return (
@@ -54,7 +64,8 @@ class FilterDrops:
             f"correlation_cap={self.correlation_cap} "
             f"exposure_cap={self.exposure_cap} "
             f"scratch_inactive={self.scratch_inactive} "
-            f"bench_blowout_q4={self.bench_blowout_q4}"
+            f"bench_blowout_q4={self.bench_blowout_q4} "
+            f"q4_direction={self.q4_direction}"
         )
 
 
@@ -115,13 +126,16 @@ def _within_card_caps(
     combo: tuple[EvaluatedLeg, ...] | list[EvaluatedLeg],
     n_tickets: int,
     max_leg_reuse: int = MAX_TICKETS_PER_PROP,
+    quarter_markets: dict[str, float] | None = None,
 ) -> bool:
     """False when the combo would put a prop past ``max_leg_reuse`` or past 30%.
 
     The first ticket that carries a quarter prop is always allowed. A later
     ticket is allowed only when the prop stays at or under 30% of the
     requested card. Each ticket has unit weight 1. Dollar stakes use the
-    same share on the week card. The default reuse cap is 2 tickets.
+    same share on the week card. The default reuse cap is 2 tickets. When
+    ``quarter_markets`` is passed, one quarter market (such as
+    ``receptions_q4``) also stays at or under 40% of the card.
     """
 
     pending: dict[tuple[str, str, str], float] = {}
@@ -139,6 +153,18 @@ def _within_card_caps(
             continue
         if (current + add) / total > QUARTER_STAKE_SHARE + 1e-12:
             return False
+    if quarter_markets is not None:
+        market_pending: dict[str, float] = {}
+        for leg in combo:
+            stat = str(leg.line.stat_type or "")
+            if _is_quarter_stat(stat):
+                market_pending[stat] = 1.0
+        for stat, add in market_pending.items():
+            current = quarter_markets.get(stat, 0.0)
+            if current <= 0.0 or total <= 0.0:
+                continue
+            if (current + add) / total > QUARTER_MARKET_STAKE_SHARE + 1e-12:
+                return False
     return True
 
 
@@ -146,16 +172,21 @@ def _note_card_caps(
     prop_counts: dict[tuple[str, str, str], int],
     quarter_units: dict[tuple[str, str, str], float],
     combo: tuple[EvaluatedLeg, ...] | list[EvaluatedLeg],
+    quarter_markets: dict[str, float] | None = None,
 ) -> None:
     seen: set[tuple[str, str, str]] = set()
+    seen_markets: set[str] = set()
     for leg in combo:
         key = _leg_key(leg)
-        if key in seen:
-            continue
-        seen.add(key)
-        prop_counts[key] = prop_counts.get(key, 0) + 1
-        if _is_quarter_stat(leg.line.stat_type):
-            quarter_units[key] = quarter_units.get(key, 0.0) + 1.0
+        stat = str(leg.line.stat_type or "")
+        if key not in seen:
+            seen.add(key)
+            prop_counts[key] = prop_counts.get(key, 0) + 1
+            if _is_quarter_stat(stat):
+                quarter_units[key] = quarter_units.get(key, 0.0) + 1.0
+        if quarter_markets is not None and _is_quarter_stat(stat) and stat not in seen_markets:
+            seen_markets.add(stat)
+            quarter_markets[stat] = quarter_markets.get(stat, 0.0) + 1.0
 
 
 def _side_price(leg: EvaluatedLeg) -> int | None:
@@ -383,6 +414,30 @@ def bench_blowout_q4_blocked(
     return float(row.spread) <= -8.0
 
 
+def q4_reception_direction_blocked(
+    leg: EvaluatedLeg,
+    environment: Environment | None,
+) -> bool:
+    """True when a ``receptions_q4`` leg fails the week-11 direction gate.
+
+    The under is off on a ``TRAIL_BLOWOUT`` team (``spread >= 7.0``). The
+    over is off on a ``COMPETITIVE_LEAD`` or ``BENCH_BLOWOUT_RISK`` team
+    (``spread <= -3.0``). The team spread comes from the environment row. A
+    missing row or a missing spread leaves the leg eligible.
+    """
+
+    stat = (leg.line.stat_type or "").strip().lower()
+    if stat != "receptions_q4":
+        return False
+    row = env_for(environment, leg.line.team, leg.line.opponent)
+    spread = row.spread if row is not None else None
+    if leg.line.side in LESS_SIDES:
+        return q4_receptions_under_blocked(spread)
+    if leg.line.side in MORE_SIDES:
+        return q4_receptions_over_blocked(spread)
+    return False
+
+
 def _compose_pool(
     live: list[EvaluatedLeg],
     markets: list[str] | None,
@@ -410,6 +465,10 @@ def _compose_pool(
         ):
             if drops is not None:
                 drops.bench_blowout_q4 += 1
+            continue
+        if q4_reception_direction_blocked(leg, environment):
+            if drops is not None:
+                drops.q4_direction += 1
             continue
         pool.append(leg)
     return pool
@@ -526,11 +585,14 @@ def compose_tickets(
     distinct games. Same-game first-TD pairs never rank. When
     ``max_legs_per_market`` is an int >= 1, a combo where one ``stat_type``
     appears more than that many times is skipped. ``None`` or ``0`` is no cap.
+    A requested leg count above 4 raises: no 5-leg or longer ticket ranks.
     The odds window uses the best typed estimate (row M → slip_odds → leg_odds
     / fair product). A ``first_td`` leg whose env row says the game has no
     first-touchdown prop is skipped. A receiving line at 50 or higher is
     skipped unless ``allow_high_receiving`` is set. A ``rush_yds_q4`` over on
     a team at ``spread <= -8`` is skipped unless ``allow_bench_blowout`` is set.
+    A ``receptions_q4`` under on a trail-blowout team and a ``receptions_q4``
+    over on a team at ``spread <= -3`` are skipped with no override.
     """
 
     if n_tickets < 1:
@@ -555,11 +617,14 @@ def compose_tickets(
     single_keys: set[tuple[str, str, str]] = set()
     prop_counts: dict[tuple[str, str, str], int] = {}
     quarter_units: dict[tuple[str, str, str], float] = {}
+    quarter_markets: dict[str, float] = {}
     for size in sizes:
         if len(tickets) >= n_tickets:
             break
         if size < 1:
             raise ValueError("leg count must be >= 1")
+        if size > MAX_LEGS:
+            raise ValueError(f"a ticket may carry at most {MAX_LEGS} legs")
         scored = _scored_combos(
             candidate_pool,
             size,
@@ -599,6 +664,7 @@ def compose_tickets(
                     combo,
                     n_tickets,
                     max_leg_reuse,
+                    quarter_markets,
                 ):
                     if drops is not None:
                         drops.exposure_cap += 1
@@ -606,7 +672,7 @@ def compose_tickets(
                     continue
                 tickets.append(list(combo))
                 chosen.add(signature)
-                _note_card_caps(prop_counts, quarter_units, combo)
+                _note_card_caps(prop_counts, quarter_units, combo, quarter_markets)
                 if size <= 1:
                     single_keys |= keys
                 else:

@@ -18,7 +18,7 @@ from ceminiparlays.names import fold_name
 
 _DATE = re.compile(r"(20\d{2}-\d{2}-\d{2})")
 _STATUS = re.compile(r"\b(out|ir|inactive|doubtful|nfi|pup|suspended)\b", re.IGNORECASE)
-_STATUS_COLUMNS = ("to_status", "status", "injury_status", "label", "from_status")
+_STATUS_COLUMNS = ("to_status", "status", "injury_status", "token", "label", "from_status")
 
 
 @dataclass(frozen=True)

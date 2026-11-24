@@ -232,18 +232,18 @@ def test_max_legs_per_market_caps_rush_yds() -> None:
     uncapped = compose_tickets(
         pool,
         n_tickets=1,
-        sizes=[5],
+        sizes=[4],
         min_odds=None,
         max_odds=None,
         markets=None,
         environment=None,
     )
     assert len(uncapped) == 1
-    assert sum(leg.line.stat_type == "rush_yds" for leg in uncapped[0]) == 5
+    assert sum(leg.line.stat_type == "rush_yds" for leg in uncapped[0]) == 4
     zero_cap = compose_tickets(
         pool,
         n_tickets=1,
-        sizes=[5],
+        sizes=[4],
         min_odds=None,
         max_odds=None,
         markets=None,
@@ -254,7 +254,7 @@ def test_max_legs_per_market_caps_rush_yds() -> None:
     capped = compose_tickets(
         pool,
         n_tickets=3,
-        sizes=[2, 5],
+        sizes=[2, 4],
         min_odds=None,
         max_odds=None,
         markets=None,
@@ -264,17 +264,17 @@ def test_max_legs_per_market_caps_rush_yds() -> None:
     assert capped
     for ticket in capped:
         assert sum(leg.line.stat_type == "rush_yds" for leg in ticket) <= 2
-    five_only = compose_tickets(
+    four_only = compose_tickets(
         pool,
         n_tickets=1,
-        sizes=[5],
+        sizes=[4],
         min_odds=None,
         max_odds=None,
         markets=None,
         environment=None,
         max_legs_per_market=2,
     )
-    assert five_only == []
+    assert four_only == []
 
 
 def test_same_game_first_td_stays_skipped_under_market_cap() -> None:

@@ -33,6 +33,16 @@ YARDS_MARKETS = frozenset({"rec_yds_q4", "rec_yds_q3"})
 _COMPETITIVE_LEAD = 1.08
 _NEUTRAL_SCRIPT = 1.00
 _BENCH_HAIRCUT = 0.68
+#: Game-script tags that a team spread maps onto. The card reads these tags
+#: as a hard block on one side of the ``receptions_q4`` market (week 11 recap).
+SCRIPT_TRAIL_BLOWOUT = "TRAIL_BLOWOUT"
+SCRIPT_COMPETITIVE_LEAD = "COMPETITIVE_LEAD"
+SCRIPT_BENCH_BLOWOUT_RISK = "BENCH_BLOWOUT_RISK"
+SCRIPT_NEUTRAL = "NEUTRAL"
+#: A favored team at or past this spread never keeps a ``receptions_q4`` over.
+Q4_RECEPTION_OVER_SPREAD_CAP = -3.0
+#: A target-share leader at or above this rate never keeps the under.
+Q4_RECEPTION_UNDER_MIN_TARGETS = 3.0
 #: Named RB1s who draw the bench haircut even when target-share rank is not 1.
 BENCH_BLOWOUT_RB1 = frozenset({"james cook", "kyren williams", "bhayshul tuten"})
 #: Trail-script grinders. The tag is ``BLOCKED_RB2_HURRYUP_FADE``.
@@ -60,6 +70,66 @@ def _spread_number(spread: float | None) -> float | None:
 
 def _blocked_rb2_name(player_name: str) -> bool:
     return norm_name(player_name) in BLOCKED_RB2_HURRYUP_FADE
+
+
+def q4_script_tag(spread: float | None) -> str | None:
+    """Map a team spread onto one game-script tag.
+
+    ``spread >= 7.0`` is ``TRAIL_BLOWOUT``. ``spread <= -8.0`` is
+    ``BENCH_BLOWOUT_RISK``. ``-7.5 <= spread <= -3.0`` is
+    ``COMPETITIVE_LEAD``. Every other finite spread is ``NEUTRAL``. A missing
+    or non-finite spread returns ``None``. The row that does not exist cannot
+    carry a tag.
+    """
+
+    number = _spread_number(spread)
+    if number is None:
+        return None
+    if number >= 7.0:
+        return SCRIPT_TRAIL_BLOWOUT
+    if number <= -8.0:
+        return SCRIPT_BENCH_BLOWOUT_RISK
+    if -7.5 <= number <= -3.0:
+        return SCRIPT_COMPETITIVE_LEAD
+    return SCRIPT_NEUTRAL
+
+
+def q4_receptions_under_blocked(
+    spread: float | None,
+    target_share_rank: int | None = None,
+    targets_per_game: float | None = None,
+) -> bool:
+    """True when a ``receptions_q4`` under is off the card.
+
+    A ``TRAIL_BLOWOUT`` team throws in Q4, so the checkdown under is banned.
+    A target-share leader with ``targets_per_game >= 3.0`` also keeps the
+    under off, whatever the spread. A missing spread or target rate leaves
+    the under eligible.
+    """
+
+    if q4_script_tag(spread) == SCRIPT_TRAIL_BLOWOUT:
+        return True
+    if target_share_rank != 1:
+        return False
+    try:
+        targets = float(targets_per_game)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(targets) and targets >= Q4_RECEPTION_UNDER_MIN_TARGETS
+
+
+def q4_receptions_over_blocked(spread: float | None) -> bool:
+    """True when a ``receptions_q4`` over is off the card.
+
+    ``COMPETITIVE_LEAD`` and ``BENCH_BLOWOUT_RISK`` teams run the clock in Q4.
+    The card bans the over at ``spread <= -3.0``. A missing spread does not
+    block.
+    """
+
+    number = _spread_number(spread)
+    if number is None:
+        return False
+    return number <= Q4_RECEPTION_OVER_SPREAD_CAP
 
 
 def starter_rb(player_name: str, target_share_rank: int | None = None) -> bool:
@@ -465,6 +535,20 @@ def _under_script_ok(inputs: CheckdownInputs) -> bool:
     return False
 
 
+def _reception_direction_blocked(inputs: CheckdownInputs, side: str) -> bool:
+    """The week-11 direction gate for ``receptions_q4``. Hard block, no override."""
+
+    if side == "under":
+        return q4_receptions_under_blocked(
+            inputs.spread,
+            inputs.target_share_rank,
+            inputs.targets_per_game,
+        )
+    if side == "over":
+        return q4_receptions_over_blocked(inputs.spread)
+    return False
+
+
 def _script_blocks(inputs: CheckdownInputs, market: str, side: str, line: float) -> bool:
     """True when a Q4 RB side fails the game-script gate."""
 
@@ -532,6 +616,8 @@ def price_checkdown(
         side, prob, price = "over", p_over, int(book_over)
     else:
         side, prob, price = "under", 1.0 - p_over, int(book_under)
+    if market == "receptions_q4" and _reception_direction_blocked(inputs, side):
+        return None
     if _script_blocks(inputs, market, side, posted):
         return None
     if _block_trail_yards_over(inputs, market, side):

@@ -11,19 +11,17 @@ from pathlib import Path
 from ceminiparlays.resources import REPO_ROOT
 
 
-def sync_dated_card(
-    csv_path: Path,
-    md_path: Path,
+def sync_named_files(
+    files: list[Path],
     slate_date: str,
     roots: list[Path],
 ) -> list[Path]:
-    """Copy the card CSV and markdown into ``root / slate_date`` for each root.
+    """Copy each file into ``root / slate_date`` for each root. Names are kept.
 
-    The file names stay ``hardrock_card_YYYY-MM-DD.csv`` and
-    ``card_YYYY-MM-DD.md``. A missing source raises ``FileNotFoundError``.
+    A missing source raises ``FileNotFoundError``.
     """
 
-    sources = [Path(csv_path), Path(md_path)]
+    sources = [Path(path) for path in files]
     for source in sources:
         if not source.is_file():
             raise FileNotFoundError(f"card file missing: {source}")
@@ -36,6 +34,21 @@ def sync_dated_card(
             shutil.copy2(source, target)
             written.append(target)
     return written
+
+
+def sync_dated_card(
+    csv_path: Path,
+    md_path: Path,
+    slate_date: str,
+    roots: list[Path],
+) -> list[Path]:
+    """Copy the card CSV and markdown into ``root / slate_date`` for each root.
+
+    The file names stay ``hardrock_card_YYYY-MM-DD.csv`` and
+    ``card_YYYY-MM-DD.md``. A missing source raises ``FileNotFoundError``.
+    """
+
+    return sync_named_files([csv_path, md_path], slate_date, roots)
 
 
 def default_sync_roots() -> list[Path]:

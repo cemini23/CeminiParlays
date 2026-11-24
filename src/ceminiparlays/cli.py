@@ -89,7 +89,17 @@ from ceminiparlays.jev_gate import (
     verdict_line,
     write_jev_gate_report,
 )
+from ceminiparlays.card_sync import default_sync_roots
+from ceminiparlays.resources import REPO_ROOT
 from ceminiparlays.slip_annotations import load_annotated
+from ceminiparlays.slip_logger import (
+    DEFAULT_TICKET_ID,
+    SlipRejected,
+    load_slip_csv,
+    log_slip,
+    parse_leg_text,
+    read_interactive_legs,
+)
 from ceminiparlays.slip_screen import (
     MODEL_ID,
     REQUIRED_N,
@@ -597,6 +607,77 @@ def build_parser() -> argparse.ArgumentParser:
     inactive.add_argument("--inactives", type=Path, required=True)
     inactive.add_argument("--entered", type=Path, default=None)
     inactive.add_argument("--scratches", type=Path, default=None)
+
+    log_slip_parser = sub.add_parser(
+        "log-slip",
+        help="Type a manual slip before lock and write the card and entered tickets",
+        description=(
+            "Write entered_tickets_DATE.csv and hardrock_card_DATE.csv from a "
+            "typed slip. The command checks the QB starters file and the "
+            "scratches file before it writes. It does not price a leg, and it "
+            "does not submit a bet."
+        ),
+    )
+    log_slip_parser.add_argument(
+        "--date",
+        default=None,
+        help="Slate date YYYY-MM-DD. Default is the date in --slip-csv, else today.",
+    )
+    log_slip_parser.add_argument(
+        "--slip-csv",
+        type=Path,
+        default=None,
+        help=(
+            "Manual slip CSV. Columns: ticket_id (optional), player, market, "
+            "side, line, book_american_odds, stake."
+        ),
+    )
+    log_slip_parser.add_argument(
+        "--leg",
+        action="append",
+        default=[],
+        metavar="TEXT",
+        help="One leg: player|market|side|line|odds|stake. Repeatable.",
+    )
+    log_slip_parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Prompt for one pipe-separated leg per line until a blank line.",
+    )
+    log_slip_parser.add_argument(
+        "--ticket-id",
+        default=DEFAULT_TICKET_ID,
+        help=f"Ticket id for --leg rows. Default {DEFAULT_TICKET_ID}.",
+    )
+    log_slip_parser.add_argument(
+        "--starters",
+        type=Path,
+        default=None,
+        help="qb_starters_DATE.csv. A pass-market leg fails without this file.",
+    )
+    log_slip_parser.add_argument(
+        "--scratches",
+        type=Path,
+        default=None,
+        help="scratches_DATE.csv or scratches.md. An out-family status rejects the leg.",
+    )
+    log_slip_parser.add_argument(
+        "--out-dir",
+        type=Path,
+        default=None,
+        help="Folder for the two files. Default data/bets.",
+    )
+    log_slip_parser.add_argument(
+        "--sync-dirs",
+        nargs="+",
+        type=Path,
+        default=None,
+        help=(
+            "Copy both files into each directory's DATE folder. Default "
+            "parlays-slate and parlays-recap."
+        ),
+    )
+    log_slip_parser.add_argument("--platform", default="hardrock")
 
     compose_flags = argparse.ArgumentParser(add_help=False)
     compose = compose_flags
@@ -2990,6 +3071,43 @@ def _cmd_merge_env_odds(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_log_slip(args: argparse.Namespace) -> int:
+    """Type a slip, check QB starters and scratches, then write the card."""
+
+    legs = []
+    if args.slip_csv is not None:
+        legs.extend(load_slip_csv(args.slip_csv, args.ticket_id))
+    for text in args.leg:
+        legs.append(parse_leg_text(text, args.ticket_id))
+    if args.interactive:
+        legs.extend(read_interactive_legs(args.ticket_id))
+    if not legs:
+        raise ValueError("log-slip needs --slip-csv, --leg, or --interactive")
+    slate_date = resolve_slate_date(args.date, args.slip_csv)
+    out_dir = args.out_dir or (REPO_ROOT / "data" / "bets")
+    sync_roots = args.sync_dirs if args.sync_dirs is not None else default_sync_roots()
+    try:
+        card, entered, synced = log_slip(
+            legs,
+            slate_date=slate_date,
+            out_dir=out_dir,
+            starters=args.starters,
+            scratches=args.scratches,
+            sync_roots=sync_roots,
+            platform=args.platform,
+        )
+    except SlipRejected as exc:
+        for failure in exc.failures:
+            print(f"SLIP_REJECT {failure}")
+        return 2
+    print(f"SLIP_OK legs={len(legs)} date={slate_date}")
+    print(f"wrote {card}")
+    print(f"wrote {entered}")
+    for path in synced:
+        print(f"synced {path}")
+    return 0
+
+
 def _cmd_refresh_roster(args: argparse.Namespace) -> int:
     """Update both NFL roster JSON files from the active whitelist."""
 
@@ -3033,6 +3151,7 @@ def main(argv: list[str] | None = None) -> int:
         "slip-screen-measure": _cmd_slip_screen_measure,
         "fetch": _cmd_fetch,
         "check-inactives": _cmd_check_inactives,
+        "log-slip": _cmd_log_slip,
     }
     try:
         return handlers[args.command](args)

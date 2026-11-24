@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import sys
+from dataclasses import asdict
 from datetime import datetime, timezone
 from math import isnan
 from pathlib import Path
@@ -58,6 +59,14 @@ from ceminiparlays.diff import (
     diff_ticket_lines,
     read_ticket_table,
     write_booked_ledger,
+)
+from ceminiparlays.discovery import (
+    diff_feed,
+    format_alerts,
+    load_state,
+    read_snapshot,
+    summary_payload,
+    write_state,
 )
 from ceminiparlays.environment import (
     discover_environment_odds,
@@ -157,6 +166,12 @@ from ceminiparlays.slips import (
     rank_slips,
     resolve_slip_sizes,
     slip_as_row,
+)
+from ceminiparlays.venue_mix import (
+    allocate_venue_mix,
+    read_candidates,
+    read_venue_profiles,
+    write_venue_mix,
 )
 
 UNCONFIRMED_BANNER = "UNCONFIRMED TABLE MULTIPLIER — confirm in-app"
@@ -678,6 +693,72 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     log_slip_parser.add_argument("--platform", default="hardrock")
+
+    discover = sub.add_parser(
+        "discover-markets",
+        help="Diff local venue snapshots against a persisted state file",
+        description=(
+            "Read snapshot CSVs that another process writes and print only the "
+            "net-new series, markets, and RFQ listings. No socket is opened. A "
+            "repeat run against the written state prints DISCOVERY none."
+        ),
+    )
+    discover.add_argument(
+        "--sources",
+        type=Path,
+        default=None,
+        help='JSON config {"sources": ["path", ...]}. Relative paths resolve '
+        "against the config file's parent.",
+    )
+    discover.add_argument(
+        "--source",
+        type=Path,
+        action="append",
+        default=[],
+        dest="source",
+        help="One snapshot CSV. Repeatable.",
+    )
+    discover.add_argument(
+        "--state",
+        type=Path,
+        required=True,
+        help="Persisted discovery state JSON. Written unless --dry-run.",
+    )
+    discover.add_argument(
+        "--json", action="store_true", help="Print the summary payload as JSON."
+    )
+    discover.add_argument(
+        "--out", type=Path, default=None, help="Also write the summary JSON here."
+    )
+    discover.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the diff but do not write the state file.",
+    )
+
+    venue_mix = sub.add_parser(
+        "venue-mix",
+        help="Size one bankroll across venues with fee, liquidity, and group caps",
+        description=(
+            "Run quarter-Kelly per venue on the fee-adjusted price, then cap each "
+            "venue, each correlated group, and the whole slate. It sizes; it does "
+            "not place a bet."
+        ),
+    )
+    venue_mix.add_argument("--venues", type=Path, required=True, help="Venue profile CSV.")
+    venue_mix.add_argument("--prices", type=Path, required=True, help="Venue candidate CSV.")
+    venue_mix.add_argument("--bankroll", type=float, required=True)
+    venue_mix.add_argument(
+        "--total-cap-pct", type=float, default=0.06, dest="total_cap_pct"
+    )
+    venue_mix.add_argument(
+        "--group-cap-pct", type=float, default=0.045, dest="group_cap_pct"
+    )
+    venue_mix.add_argument(
+        "--kelly-fraction", type=float, default=0.25, dest="kelly_fraction"
+    )
+    venue_mix.add_argument("--out", type=Path, default=None, help="Write the mix CSV here.")
+    venue_mix.add_argument("--json", action="store_true", help="Print a JSON summary.")
 
     compose_flags = argparse.ArgumentParser(add_help=False)
     compose = compose_flags
@@ -3108,6 +3189,78 @@ def _cmd_log_slip(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_discover_markets(args: argparse.Namespace) -> int:
+    """Diff local snapshots and persist the state unless --dry-run."""
+
+    sources = [Path(path) for path in getattr(args, "source", []) or []]
+    config_path = getattr(args, "sources", None)
+    if config_path is not None:
+        config_path = Path(config_path)
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+        entries = payload.get("sources") if isinstance(payload, dict) else None
+        if not isinstance(entries, list):
+            raise ValueError(f"{config_path} must be a JSON object with a sources list")
+        for entry in entries:
+            path = Path(str(entry))
+            if not path.is_absolute():
+                path = config_path.parent / path
+            sources.append(path)
+    if not sources:
+        raise ValueError("discover-markets needs --source or --sources")
+    state = load_state(args.state)
+    offers = []
+    for path in sources:
+        offers.extend(read_snapshot(path))
+    diff = diff_feed(offers, state)
+    payload = summary_payload(diff)
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(format_alerts(diff))
+    if not args.dry_run:
+        write_state(args.state, diff.state)
+    if args.out is not None:
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    return 0
+
+
+def _cmd_venue_mix(args: argparse.Namespace) -> int:
+    """Allocate one bankroll across venues and print the mix."""
+
+    profiles = read_venue_profiles(args.venues)
+    candidates = read_candidates(args.prices)
+    result = allocate_venue_mix(
+        candidates,
+        profiles,
+        bankroll=args.bankroll,
+        total_cap_pct=args.total_cap_pct,
+        group_cap_pct=args.group_cap_pct,
+        kelly_fraction=args.kelly_fraction,
+    )
+    if args.json:
+        print(json.dumps(asdict(result), indent=2, sort_keys=True))
+    else:
+        for stake in result.stakes:
+            print(
+                f"VENUE_MIX venue={stake.venue} "
+                f"stake_pct={stake.stake_pct:.6f} "
+                f"stake_usd={stake.stake_dollars:.2f} "
+                f"net_edge={stake.net_edge:.6f} "
+                f"cap={stake.cap_reason}"
+            )
+        print(
+            f"VENUE_MIX_TOTAL pct={result.total_pct:.6f} "
+            f"usd={result.total_dollars:.2f}"
+        )
+    if args.out is not None:
+        write_venue_mix(args.out, result)
+    return 0
+
+
 def _cmd_refresh_roster(args: argparse.Namespace) -> int:
     """Update both NFL roster JSON files from the active whitelist."""
 
@@ -3152,6 +3305,8 @@ def main(argv: list[str] | None = None) -> int:
         "fetch": _cmd_fetch,
         "check-inactives": _cmd_check_inactives,
         "log-slip": _cmd_log_slip,
+        "discover-markets": _cmd_discover_markets,
+        "venue-mix": _cmd_venue_mix,
     }
     try:
         return handlers[args.command](args)

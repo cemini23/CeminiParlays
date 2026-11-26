@@ -19,10 +19,12 @@ DISPLAY_NAMES = {
     "fanduel": "FanDuel",
     "draftkings": "DraftKings",
     "betmgm": "BetMGM",
+    "pinnacle": "Pinnacle",
+    "betrivers": "BetRivers",
     "polymarket": "Polymarket",
     "kalshi": "Kalshi",
 }
-SPORTSBOOK_PLATFORMS = {"hardrock", "fanduel", "draftkings", "betmgm"}
+SPORTSBOOK_PLATFORMS = {"hardrock", "fanduel", "draftkings", "betmgm", "pinnacle", "betrivers"}
 #: Fixed-multiplier pick'em cards. A published payout structure, not a price.
 PICKEM_PLATFORMS = {"prizepicks", "underdog"}
 #: Prediction venues. Each leg is a 0-1 contract; a combo is the product of

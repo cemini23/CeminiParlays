@@ -1,0 +1,7 @@
+slate_id,game_id,team,opp,implied_total,spread,roof,weather_exposed,wind_mph,precip_pop
+2026-11-26-thu-thanksgiving,2026-11-26-CHI@DET,CHI,DET,28.5,-1.5,dome,false,,
+2026-11-26-thu-thanksgiving,2026-11-26-CHI@DET,DET,CHI,27.0,1.5,dome,false,,
+2026-11-26-thu-thanksgiving,2026-11-26-PHI@DAL,PHI,DAL,19.5,8.5,retractable,true,10,0
+2026-11-26-thu-thanksgiving,2026-11-26-PHI@DAL,DAL,PHI,28.0,-8.5,retractable,true,10,0
+2026-11-26-thu-thanksgiving,2026-11-26-KC@BUF,KC,BUF,21.75,3.0,open,true,15,98
+2026-11-26-thu-thanksgiving,2026-11-26-KC@BUF,BUF,KC,24.75,-3.0,open,true,15,98

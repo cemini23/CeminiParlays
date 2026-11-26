@@ -29,6 +29,8 @@ BOOKMAKER_TO_PLATFORM = {
     "fanduel": "fanduel",
     "draftkings": "draftkings",
     "betmgm": "betmgm",
+    "pinnacle": "pinnacle",
+    "betrivers": "betrivers",
     "hardrockbet": "hardrock",
     "hardrockbet_fl": "hardrock",
 }
@@ -49,7 +51,7 @@ MARKET_TO_STAT = {
     "totals_q3": "total_q3",
 }
 STAT_TO_MARKET = {stat: market for market, stat in MARKET_TO_STAT.items()}
-FETCH_BOOKS = ("hardrock", "fanduel", "draftkings", "betmgm")
+FETCH_BOOKS = ("hardrock", "fanduel", "draftkings", "betmgm", "pinnacle", "betrivers")
 CREDIT_HEADERS = ("x-requests-remaining", "x-requests-used")
 
 

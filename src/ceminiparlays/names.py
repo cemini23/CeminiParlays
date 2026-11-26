@@ -5,6 +5,8 @@ import unicodedata
 
 _SUFFIXES = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b", re.IGNORECASE)
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
+# The only tokens ``strip_trailing_suffix`` drops, and only as the last token.
+_SUFFIX_TOKENS = frozenset({"jr", "sr", "ii", "iii", "iv", "v"})
 
 # One sportsbook spelling and the ESPN box-score spelling share a person.
 # The key and the value are both loose_name() forms. The value is canonical.
@@ -118,15 +120,51 @@ def unique_box_alias(
     return None
 
 
+def _ascii_text(value: object) -> str:
+    """NFKD text with the combining marks dropped. Accents fold away."""
+
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    return "".join(ch for ch in text if not unicodedata.combining(ch))
+
+
+def _fold_core(text: str) -> str:
+    """Lower-case and punctuation fold shared by both name keys."""
+
+    text = _ascii_text(text)
+    text = text.replace("'", "").replace("’", "").replace(".", " ")
+    text = _NON_ALNUM.sub("_", text.lower()).strip("_")
+    return text
+
+
 def fold_name(value: str) -> str:
     """Fold a display name into an nflverse-style player_key."""
 
-    text = unicodedata.normalize("NFKD", str(value or ""))
-    text = "".join(ch for ch in text if not unicodedata.combining(ch))
-    text = text.replace("'", "").replace("’", "").replace(".", " ")
-    text = _SUFFIXES.sub(" ", text)
-    text = _NON_ALNUM.sub("_", text.lower()).strip("_")
-    return text
+    return _fold_core(_SUFFIXES.sub(" ", _ascii_text(value)))
+
+
+def strip_trailing_suffix(value: str) -> str:
+    """Drop ONE generational suffix token from the end of a name.
+
+    That is the only strip this rule allows. A token in the middle of a name
+    stays, a name that would be empty keeps its suffix, and ``St.`` is not a
+    suffix token so ``Amon-Ra St. Brown`` is returned unchanged.
+    """
+
+    parts = _ascii_text(value).split()
+    if len(parts) > 1 and parts[-1].rstrip(".,").lower() in _SUFFIX_TOKENS:
+        return " ".join(parts[:-1])
+    return " ".join(parts)
+
+
+def fold_name_suffix_aware(value: str) -> str:
+    """Fold a name after one trailing generational suffix token is dropped.
+
+    ``James Cook III`` and ``James Cook`` fold to one key, and so do
+    ``Marvin Harrison Jr.`` and ``Marvin Harrison``. Punctuation and case fold
+    exactly as ``fold_name`` folds them.
+    """
+
+    return _fold_core(strip_trailing_suffix(value))
 
 
 def resolve_player_key(

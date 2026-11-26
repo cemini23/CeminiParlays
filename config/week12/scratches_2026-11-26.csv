@@ -1,0 +1,72 @@
+player,team,pos,token,source,retrieved,label
+Roschon Johnson,CHI,RB,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Jake Ferguson,DAL,TE,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Jonathan Mingo,DAL,WR,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Jared Wiley,KC,TE,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved Wed 2026-11-25 05:37 PM ET,CLAIMED
+Kenneth Walker III,KC,RB,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Dontayvion Wicks,PHI,WR,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved Wed 2026-11-25 05:37 PM ET,CLAIMED
+Elijah Hicks,CHI,S,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Kyler Gordon,CHI,CB,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+DaRon Bland,DAL,CB,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved Wed 2026-11-25 05:37 PM ET,CLAIMED
+P.J. Locke,DAL,S,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Tyler Booker,DAL,G,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Cade Mays,DET,C,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved Wed 2026-11-25 05:37 PM ET,CLAIMED
+Ennis Rakestraw Jr.,DET,CB,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Skyler Gill-Howard,DET,DT,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Jaylon Moore,KC,T,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Omarr Norman-Lott,KC,DT,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Arnold Ebiketie,PHI,LB,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Jonathan Jones,PHI,CB,out,https://www.nfl.com/injuries/league/2026/REG12,NFL.com report as rendered (report day not shown on page); retrieved Wed 2026-11-25 05:37 PM ET,CONFIRMED
+Zack Baun,PHI,LB,ir,https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries,retrieved Wed 2026-11-25 05:37 PM ET,CLAIMED
+Joshua Palmer,BUF,WR,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Brittain Brown,CHI,RB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Cole Kmet,CHI,TE,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Hayden Large,CHI,TE,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Nikola Kalinic,CHI,TE,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Zavier Scott,CHI,RB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Malik Davis,DAL,RB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/6/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Princeton Fant,DAL,TE,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/6/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Tyler Goodson,DAL,RB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/6/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Isiah Pacheco,DET,RB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Kendrick Law,DET,WR,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Tom Kennedy,DET,WR,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Brashard Smith,KC,RB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/12/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Jeff Caldwell,KC,WR,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/12/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Jimmy Holiday,KC,WR,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/12/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+John Michael Gyllenborg,KC,TE,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/12/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Tyquan Thornton,KC,WR,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/12/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Jalen Hurts,PHI,QB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/21/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Johnny Wilson,PHI,WR,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/21/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Tank Bigsby,PHI,RB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/21/roster (roster status Active, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Ar'maj Reed-Adams,BUF,G,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Dorian Strong,BUF,CB,out,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/roster (roster status Day-To-Day, injuries[] Out)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Zane Durant,BUF,DT,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Braxton Jones,CHI,OT,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Coby Bryant,CHI,S,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Dallis Flowers,CHI,CB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Dayo Odeyingbo,CHI,DE,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Kentavius Street,CHI,DT,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Nephi Sewell,CHI,LB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Ruben Hyppolite II,CHI,LB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Tony Fields II,CHI,LB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/3/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Kelvin Gilliam Jr.,DAL,DT,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/6/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Malachi Lawrence,DAL,LB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/6/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Matt Hennessy,DAL,C,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/6/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Aidan Hutchinson,DET,DE,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Avonte Maddox,DET,CB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Ben Bartch,DET,G,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Damone Clark,DET,LB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Devin White,DET,LB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Giovanni Manu,DET,OT,out,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Out)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Jack Campbell,DET,LB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Jimmy Rolder,DET,LB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Mason Miller,DET,G,out,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Practice Squad, injuries[] Out)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Payton Turner,DET,DE,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Thomas Harper,DET,S,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/8/roster (roster status Active, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Ethan Downs,KC,LB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/12/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Josh Simmons,KC,OT,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/12/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+L'Jarius Sneed,KC,CB,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/12/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Matt Waletzko,KC,OT,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/12/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Andre' Sam,PHI,S,ir,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/21/roster (roster status Day-To-Day, injuries[] Injured Reserve)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Tucker Large,PHI,S,out,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/21/roster (roster status Day-To-Day, injuries[] Out)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)
+Uar Bernard,PHI,DT,out,"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/21/roster (roster status Practice Squad, injuries[] Out)",Wed 2026-11-25 05:41 PM ET,CLAIMED (roster page)

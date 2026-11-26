@@ -1,0 +1,7 @@
+team,opp,spread,implied_total,over_under,provider,details,source_url,retrieved_et,label
+CHI,DET,-1.5,28.5,55.5,DraftKings,CHI -1.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261126,2026-11-25 05:37 PM ET,CLAIMED
+DET,CHI,1.5,27.0,55.5,DraftKings,CHI -1.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261126,2026-11-25 05:37 PM ET,CLAIMED
+PHI,DAL,8.5,19.5,47.5,DraftKings,DAL -8.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261126,2026-11-25 05:37 PM ET,CLAIMED
+DAL,PHI,-8.5,28.0,47.5,DraftKings,DAL -8.5,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261126,2026-11-25 05:37 PM ET,CLAIMED
+KC,BUF,3.0,21.75,46.5,DraftKings,BUF -3,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261126,2026-11-25 05:37 PM ET,CLAIMED
+BUF,KC,-3.0,24.75,46.5,DraftKings,BUF -3,https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261126,2026-11-25 05:37 PM ET,CLAIMED

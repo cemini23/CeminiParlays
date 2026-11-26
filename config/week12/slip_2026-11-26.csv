@@ -1,0 +1,9 @@
+ticket_id,player,market,side,line,book_american_odds,stake
+HR12-1,James Cook,rush_yds,over,82.50,-115,6.00
+HR12-1,CeeDee Lamb,rec_yds,over,89.50,-115,6.00
+HR12-2,Patrick Mahomes,pass_yds,under,236.50,-115,5.00
+HR12-2,Amon-Ra St. Brown,rec_yds,over,82.50,-115,5.00
+HR12-3,BUF,total_q3,under,7.50,100,5.00
+HR12-3,George Pickens,rec_yds,over,68.50,-115,5.00
+HR12-4,Caleb Williams,pass_yds,over,261.50,-115,4.00
+HR12-4,Javonte Williams,rush_yds,over,75.50,-115,4.00

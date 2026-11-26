@@ -1,0 +1,16 @@
+bookmaker,player,team,opp,market,side,line,american_odds,game,kick_et,note
+hardrockbet,Amon-Ra St. Brown,DET,CHI,player_reception_yds,over,,,CHI@DET,1:00 PM ET,CHI nickel CB Kyler Gordon out; S Elijah Hicks out; Tyrique Stevenson questionable
+hardrockbet,Jared Goff,DET,CHI,player_pass_yds,over,,,CHI@DET,1:00 PM ET,dome; CHI pass defense thinned; pairs with row 1
+hardrockbet,Caleb Williams,CHI,DET,player_pass_yds,over,,,CHI@DET,1:00 PM ET,DET pass D ranked 27; Ennis Rakestraw Jr. out
+hardrockbet,Luther Burden III,CHI,DET,player_reception_yds,over,,,CHI@DET,1:00 PM ET,DET pass D ranked 27; pairs with row 3
+hardrockbet,Rome Odunze,CHI,DET,player_reception_yds,over,,,CHI@DET,1:00 PM ET,DET pass D ranked 27; pairs with row 3
+hardrockbet,Colston Loveland,CHI,DET,player_reception_yds,over,,,CHI@DET,1:00 PM ET,DET pass D ranked 27; pairs with row 3
+hardrockbet,CeeDee Lamb,DAL,PHI,player_reception_yds,over,,,PHI@DAL,4:30 PM ET,Jake Ferguson out; Jonathan Mingo out; PHI CB Jonathan Jones out
+hardrockbet,CeeDee Lamb,DAL,PHI,player_receptions,over,,,PHI@DAL,4:30 PM ET,same target concentration as row 7
+hardrockbet,George Pickens,DAL,PHI,player_reception_yds,over,,,PHI@DAL,4:30 PM ET,Ferguson and Mingo out concentrate targets
+hardrockbet,Javonte Williams,DAL,PHI,player_rush_yds,over,,,PHI@DAL,4:30 PM ET,"full game only; DAL -8.5 is BENCH_BLOWOUT_RISK, so no Q4 rush"
+hardrockbet,James Cook III,BUF,KC,player_rush_yds,over,,,KC@BUF,8:20 PM ET,"storm: 38F, 98-100% rain, 15-22 mph wind, 30-49 mph gusts"
+hardrockbet,Emmett Johnson,KC,BUF,player_rush_yds,over,,,KC@BUF,8:20 PM ET,"Kenneth Walker III out; BUF allows 5.0 RB rec/g, rank 2"
+hardrockbet,Emmett Johnson,KC,BUF,player_receptions,over,,,KC@BUF,8:20 PM ET,"BUF allows 5.0 RB rec/g, rank 2"
+hardrockbet,Patrick Mahomes,KC,BUF,player_pass_yds,under,,,KC@BUF,8:20 PM ET,storm pass fade; only if the posted line has not already moved down
+hardrockbet,Josh Allen,BUF,KC,player_pass_yds,under,,,KC@BUF,8:20 PM ET,storm pass fade; only if the posted line has not already moved down

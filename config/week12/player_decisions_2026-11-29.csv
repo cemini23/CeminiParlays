@@ -1,0 +1,25 @@
+player,team,pos,decision,reason
+Josh Johnson,ARI,QB,PLAY,Beck ruled out; Johnson confirmed starter
+DJ Uiagalelei,LAC,QB,PLAY,Herbert out (concussion); Uiagalelei confirmed starter
+C.J. Stroud,HOU,QB,PLAY,"ESPN Active, depth-chart QB1"
+Sam Darnold,SEA,QB,PLAY,"Off injury report, confirmed starter"
+Tee Higgins,CIN,WR,EXCLUDE,"Fri DNP, new hamstring, Q (1:00)"
+David Njoku,LAC,TE,EXCLUDE,"Fri DNP, Q, 4:05 late kick"
+Keaton Mitchell,LAC,RB,EXCLUDE,"Fri DNP, Q, 4:05 late kick"
+Brenen Thompson,LAC,WR,EXCLUDE,"Fri DNP, Q, 4:05 late kick"
+Jordan Watkins,SF,WR,EXCLUDE,"Fri DNP, Q, 4:25 late kick"
+Brock Purdy,SF,QB,EXCLUDE,"Fri DNP all week, Q, 4:25 late kick"
+Justin Herbert,LAC,QB,EXCLUDE,"Concussion protocol, DNP all week, 4:05"
+Carson Beck,ARI,QB,EXCLUDE,Ruled Out (back)
+Mike Evans,SF,WR,PLAY_LIMITED,Limited Fri practice; expected to play (cap <=15%)
+Hunter Long,ARI,TE,PLAY_LIMITED,Limited Fri practice
+Reggie Gilliam,NE,FB,PLAY_LIMITED,Limited Fri practice
+Drake Maye,NE,QB,EXCLUDE,Out (fibula)
+Jordan Addison,MIN,WR,EXCLUDE,Out
+A.J. Brown,NE,WR,EXCLUDE,Out
+Parker Washington,JAX,WR,EXCLUDE,Out
+Bhayshul Tuten,JAX,RB,EXCLUDE,Out
+Omar Cooper Jr.,NYJ,WR,EXCLUDE,Out
+Juwan Johnson,NO,TE,EXCLUDE,Out
+Seth McGowan,IND,RB,EXCLUDE,Out
+Will Mallory,IND,TE,EXCLUDE,Out

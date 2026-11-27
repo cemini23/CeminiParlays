@@ -1,0 +1,21 @@
+ticket_id,player,market,side,line,book_american_odds,stake
+UD12S-2P-1,David Montgomery,rec_yds,under,8.50,-137,6.00
+UD12S-2P-1,Bijan Robinson,rec_yds,under,21.50,-137,6.00
+UD12S-2P-2,Xavier Restrepo,rec_yds,under,6.50,-137,6.00
+UD12S-2P-2,Zach Charbonnet,rec_yds,over,7.50,-137,6.00
+UD12S-2P-3,Aaron Jones,rec_yds,under,8.50,-137,6.00
+UD12S-2P-3,Rhamondre Stevenson,rec_yds,over,13.50,-137,6.00
+UD12S-2P-4,Tyler Warren,rec_yds,under,31.50,-137,6.00
+UD12S-2P-4,Woody Marks,rec_yds,under,8.50,-137,6.00
+UD12S-FLEX6-1,Jordyn Tyson,rec_yds,over,43.50,-137,6.00
+UD12S-FLEX6-1,J.J. McCarthy,rush_yds,over,16.50,-137,6.00
+UD12S-FLEX6-1,Ollie Gordon II,rec_yds,under,11.50,-137,6.00
+UD12S-FLEX6-1,Michael Penix Jr.,rush_yds,over,7.50,-137,6.00
+UD12S-FLEX6-1,Marvin Harrison Jr.,rec_yds,under,28.50,-137,6.00
+UD12S-FLEX6-1,Sam Darnold,rush_yds,over,4.50,-137,6.00
+UD12S-FLEX6-2,Malik Nabers,rec_yds,over,65.50,-137,6.00
+UD12S-FLEX6-2,Kyle Pitts,rec_yds,under,30.50,-137,6.00
+UD12S-FLEX6-2,Cam Ward,rush_yds,under,8.50,-137,6.00
+UD12S-FLEX6-2,Derrick Henry,rec_yds,under,8.50,-137,6.00
+UD12S-FLEX6-2,Mack Hollins,receptions,under,2.50,-137,6.00
+UD12S-FLEX6-2,Zach Charbonnet,rec_yds,over,7.50,-137,6.00

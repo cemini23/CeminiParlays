@@ -1,0 +1,19 @@
+ticket_id,player,market,side,line,book_american_odds,stake
+HR12S-1,NO@CIN,total_q3,over,7.50,-175,5.00
+HR12S-1,Michael Penix Jr.,rush_yds,over,7.50,-125,5.00
+HR12S-2,TEN@JAX,total_q3,over,7.50,-165,5.00
+HR12S-2,Mark Andrews,receptions,under,3.50,-170,5.00
+HR12S-3,Theo Johnson,rec_yds,over,5.50,-115,5.00
+HR12S-3,David Montgomery,rec_yds,under,7.50,-120,5.00
+HR12S-4,Mason Taylor,receptions,under,2.50,-165,5.00
+HR12S-4,DeMario Douglas,receptions,under,2.50,-105,5.00
+HR12S-5,Cooper Kupp,receptions,under,2.50,-165,5.00
+HR12S-5,Travis Etienne Jr.,receptions,under,2.50,-155,5.00
+HR12S-6,Rhamondre Stevenson,receptions,under,2.50,-125,5.00
+HR12S-6,ATL@MIN,total_q3,under,7.50,-125,5.00
+HR12S-COMBO,NO@CIN,total_q3,over,7.50,-175,5.00
+HR12S-COMBO,TEN@JAX,total_q3,over,7.50,-165,5.00
+HR12S-COMBO,Mark Andrews,receptions,under,3.50,-170,5.00
+HR12S-COMBO,Theo Johnson,rec_yds,over,5.50,-115,5.00
+HR12S-COMBO,Michael Penix Jr.,rush_yds,over,7.50,-125,5.00
+HR12S-COMBO,Cooper Kupp,receptions,under,2.50,-165,5.00

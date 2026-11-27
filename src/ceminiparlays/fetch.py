@@ -140,7 +140,7 @@ def _int_price(value: object) -> int | None:
         return None
 
 
-def _pair_two_way(outcomes: list[dict[str, Any]]) -> list[tuple[str, float, int, int]]:
+def _pair_two_way(outcomes: list[dict[str, Any]]) -> list[tuple[str, float, int | None, int | None]]:
     buckets: dict[tuple[str, float], dict[str, int]] = {}
     for outcome in outcomes:
         player = str(outcome.get("description") or "").strip()
@@ -154,10 +154,11 @@ def _pair_two_way(outcomes: list[dict[str, Any]]) -> list[tuple[str, float, int,
             bucket["over"] = price
         elif name in {"under", "less"}:
             bucket["under"] = price
-    paired: list[tuple[str, float, int, int]] = []
+    paired: list[tuple[str, float, int | None, int | None]] = []
     for (player, point), sides in buckets.items():
-        if "over" in sides and "under" in sides:
-            paired.append((player, point, sides["over"], sides["under"]))
+        # Underdog pick'em may post one side only; keep the row instead of dropping it.
+        if "over" in sides or "under" in sides:
+            paired.append((player, point, sides.get("over"), sides.get("under")))
     return paired
 
 
@@ -580,8 +581,8 @@ def _prop_rows(
             commence_time=ctx["commence_time"],
         )
         row["line"] = point
-        row["book_over"] = over_price
-        row["book_under"] = under_price
+        row["book_over"] = "" if over_price is None else over_price
+        row["book_under"] = "" if under_price is None else under_price
         if stat.endswith(("_q1", "_q2", "_q3", "_q4")):
             row["line_type"] = "quarter"
         rows.append(row)

@@ -262,3 +262,85 @@ def test_load_fixture_rejects_garbage(tmp_path: Path) -> None:
         assert "fixture" in str(exc).lower() or "odds" in str(exc).lower()
     else:
         raise AssertionError("expected bad fixture to fail")
+
+
+def test_rows_from_events_maps_underdog_and_pinnacle() -> None:
+    event = {
+        "home_team": "Pittsburgh Steelers",
+        "away_team": "Denver Broncos",
+        "commence_time": "2026-11-27T20:00:00Z",
+        "bookmakers": [
+            {
+                "key": "underdog",
+                "markets": [
+                    {
+                        "key": "player_pass_yds",
+                        "outcomes": [
+                            {"name": "Over", "description": "Bo Nix", "point": 201.5, "price": -137},
+                            {"name": "Under", "description": "Bo Nix", "point": 201.5, "price": -137},
+                        ],
+                    },
+                    {
+                        "key": "player_receptions",
+                        "outcomes": [
+                            {"name": "Over", "description": "Jaylen Warren", "point": 2.5, "price": -137},
+                        ],
+                    },
+                ],
+            },
+            {
+                "key": "pinnacle",
+                "markets": [
+                    {
+                        "key": "player_pass_yds",
+                        "outcomes": [
+                            {"name": "Over", "description": "Bo Nix", "point": 206.5, "price": 103},
+                            {"name": "Under", "description": "Bo Nix", "point": 206.5, "price": -129},
+                        ],
+                    }
+                ],
+            },
+        ],
+    }
+    notes: list[str] = []
+    rows = rows_from_events(
+        [event],
+        platform_filter={"underdog", "pinnacle"},
+        roster=None,
+        slate_id="2026-11-27",
+        captured_at="2026-11-27T14:00:00Z",
+        notes=notes,
+        team_by_key={},
+    )
+
+    ud = next(
+        row
+        for row in rows
+        if row["platform"] == "underdog"
+        and row["player_name"] == "Bo Nix"
+        and row["stat_type"] == "pass_yds"
+    )
+    assert ud["book_over"] == -137
+    assert ud["book_under"] == -137
+
+    # A one-sided pick'em outcome keeps the row instead of dropping it.
+    ud_single = next(
+        row
+        for row in rows
+        if row["platform"] == "underdog"
+        and row["player_name"] == "Jaylen Warren"
+        and row["stat_type"] == "receptions"
+    )
+    assert ud_single["book_over"] == -137
+    assert ud_single["book_under"] == ""
+
+    pin = next(
+        row
+        for row in rows
+        if row["platform"] == "pinnacle"
+        and row["player_name"] == "Bo Nix"
+        and row["stat_type"] == "pass_yds"
+    )
+    assert pin["book_over"] == 103
+    assert pin["book_under"] == -129
+    assert notes == []

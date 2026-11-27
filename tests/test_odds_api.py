@@ -7,6 +7,7 @@ from datetime import date
 
 from ceminiparlays.odds_api import (
     BOOKMAKER_TO_PLATFORM,
+    FETCH_BOOKS,
     MARKET_TO_STAT,
     TEAM_NAMES,
     bookmakers_for_platforms,
@@ -14,7 +15,9 @@ from ceminiparlays.odds_api import (
     event_odds_url,
     events_url,
     get_json,
+    parse_books,
     redact_url,
+    regions_for_platforms,
     resolve_api_key,
     select_bookmakers,
     team_code,
@@ -169,3 +172,28 @@ def test_resolve_api_key_unset(monkeypatch) -> None:
         assert str(exc) == "THE_ODDS_API_KEY is unset"
     else:
         raise AssertionError("expected unset key to fail")
+
+
+def test_underdog_and_pinnacle_are_fetchable() -> None:
+    assert BOOKMAKER_TO_PLATFORM["underdog"] == "underdog"
+    assert BOOKMAKER_TO_PLATFORM["pinnacle"] == "pinnacle"
+    assert "underdog" in FETCH_BOOKS
+    assert "pinnacle" in FETCH_BOOKS
+
+
+def test_parse_books_accepts_underdog_pinnacle_and_ud_alias() -> None:
+    assert parse_books("hardrock,underdog,pinnacle") == ["hardrock", "underdog", "pinnacle"]
+    assert parse_books("ud") == ["underdog"]
+    # The default must not change: existing CLI behavior and tests stay put.
+    assert parse_books(None) == ["hardrock", "fanduel", "draftkings"]
+
+
+def test_regions_add_dfs_and_eu_only_when_requested() -> None:
+    assert regions_for_platforms("us,us2", parse_books(None)) == "us,us2"
+    assert (
+        regions_for_platforms("us,us2", parse_books("hardrock,underdog,pinnacle"))
+        == "us,us2,us_dfs,eu"
+    )
+    assert regions_for_platforms("us", ["underdog"]) == "us,us_dfs"
+    # An already-present region is not duplicated.
+    assert regions_for_platforms("us,eu", ["pinnacle"]) == "us,eu"

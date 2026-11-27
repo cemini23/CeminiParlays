@@ -33,6 +33,7 @@ BOOKMAKER_TO_PLATFORM = {
     "betrivers": "betrivers",
     "hardrockbet": "hardrock",
     "hardrockbet_fl": "hardrock",
+    "underdog": "underdog",
 }
 MARKET_TO_STAT = {
     "player_pass_yds": "pass_yds",
@@ -51,7 +52,10 @@ MARKET_TO_STAT = {
     "totals_q3": "total_q3",
 }
 STAT_TO_MARKET = {stat: market for market, stat in MARKET_TO_STAT.items()}
-FETCH_BOOKS = ("hardrock", "fanduel", "draftkings", "betmgm", "pinnacle", "betrivers")
+FETCH_BOOKS = ("hardrock", "fanduel", "draftkings", "betmgm", "pinnacle", "betrivers", "underdog")
+#: The Odds API region each non-default book needs, added only when requested so
+#: default fetches stay on us,us2 and do not spend extra region credits.
+PLATFORM_REGIONS = {"underdog": "us_dfs", "pinnacle": "eu"}
 CREDIT_HEADERS = ("x-requests-remaining", "x-requests-used")
 
 
@@ -125,6 +129,17 @@ def parse_books(value: str | None) -> list[str]:
     if not tokens:
         raise ValueError("no --books tokens")
     return tokens
+
+
+def regions_for_platforms(base_regions: str, platforms: Iterable[str]) -> str:
+    """Add the extra region a requested book needs, keeping base order and uniqueness."""
+
+    regions = [token.strip() for token in (base_regions or "").split(",") if token.strip()]
+    wanted = {normalize_platform(token) for token in platforms}
+    for platform, region in PLATFORM_REGIONS.items():
+        if platform in wanted and region not in regions:
+            regions.append(region)
+    return ",".join(regions)
 
 
 def parse_fetch_date(value: str | None, *, tzinfo: timezone | ZoneInfo | None = None) -> date:

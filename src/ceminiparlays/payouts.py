@@ -46,6 +46,7 @@ PLATFORM_ALIASES = {
     "mgm": "betmgm",
     "bet_mgm": "betmgm",
     "bet-mgm": "betmgm",
+    "ud": "underdog",
     "poly": "polymarket",
     "polymarket": "polymarket",
     "kalshi": "kalshi",

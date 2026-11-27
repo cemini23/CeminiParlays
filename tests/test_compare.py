@@ -1,3 +1,5 @@
+import pytest
+
 from ceminiparlays.compare import pickem_gap
 from ceminiparlays.payouts import resolve_payout
 
@@ -58,3 +60,8 @@ def test_compare_missing_table_row_raises() -> None:
         assert False, "should have raised"
     except ValueError as exc:
         assert "no 7-leg row" in str(exc)
+
+
+def test_compare_underdog_standard_four_leg_is_blocked() -> None:
+    with pytest.raises(ValueError, match="standard 4-leg"):
+        pickem_gap(-110, -110, "underdog", 4, "standard", "power", "over")

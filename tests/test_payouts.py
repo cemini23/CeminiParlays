@@ -6,6 +6,7 @@ from ceminiparlays.payouts import (
     PayoutTable,
     breakeven_per_leg,
     display_name,
+    ensure_screenable,
     flex_ev,
     implied_slip_win,
     normalize_platform,
@@ -213,3 +214,23 @@ def test_flex_ev_weights_each_payout_rung() -> None:
 def test_flex_ev_is_minus_one_when_nothing_hits() -> None:
     table = PayoutTable(platform="p", mode="flex", legs=3, all_hit=3.0)
     assert flex_ev(0.0, 0.0, 0.0, table) == -1.0
+
+
+def test_underdog_blocked_structures_are_not_screenable() -> None:
+    with pytest.raises(ValueError, match="standard 4-leg"):
+        ensure_screenable("underdog", "standard", 4)
+    with pytest.raises(ValueError, match="flex 3-leg"):
+        ensure_screenable("underdog", "flex", 3)
+
+
+def test_allowed_pickem_structures_stay_screenable() -> None:
+    ensure_screenable("underdog", "standard", 2)
+    ensure_screenable("underdog", "standard", 3)
+    ensure_screenable("underdog", "flex", 6)
+    ensure_screenable("prizepicks", "standard", 4)
+
+
+def test_underdog_allowed_breakevens_stay_on_the_table() -> None:
+    assert isclose(pickem_breakeven("underdog", "standard", 2), 0.5345, rel_tol=1e-3)
+    assert isclose(pickem_breakeven("underdog", "standard", 3), 0.5358, rel_tol=1e-3)
+    assert isclose(pickem_breakeven("underdog", "flex", 6), 0.5382, rel_tol=1e-3)

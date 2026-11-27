@@ -3281,6 +3281,10 @@ def _cmd_refresh_roster(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        from ceminiparlays.envfile import load_dotenv_defaults
+
+        load_dotenv_defaults()
     parser = build_parser()
     args = parser.parse_args(argv)
     handlers = {

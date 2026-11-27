@@ -15,7 +15,7 @@ from ceminiparlays.week12_card import (
     LIVE_PATH,
     SLIP_FIELDS,
     STAKE_POOL,
-    UNQUOTED_SGP_ESTIMATE,
+    UNQUOTED_PARLAY_ESTIMATE,
     FixedCardError,
     FixedLeg,
     RATE_DROPS,
@@ -213,7 +213,7 @@ def test_fixed_card_is_the_operator_card_and_not_an_optimizer_card() -> None:
         if raw_game_label(leg.game_id) == "CHI@DET" and leg.side == "under"
     ]
     assert not [leg for leg in legs if "allen" in fold_name_suffix_aware(leg.player)]
-    assert all(ticket["pricing_source"] == UNQUOTED_SGP_ESTIMATE for ticket in tickets)
+    assert all(ticket["pricing_source"] == UNQUOTED_PARLAY_ESTIMATE for ticket in tickets)
     assert all(ticket["ev"] is None for ticket in tickets)
 
 
@@ -225,11 +225,11 @@ def test_unquoted_product_never_prints_a_market_ev() -> None:
         validate_fixed_card(tickets)
     rows = list(csv.DictReader(StringIO(render_csv(tickets))))
     assert len(rows) == 8
-    assert {row["pricing_source"] for row in rows} == {UNQUOTED_SGP_ESTIMATE}
+    assert {row["pricing_source"] for row in rows} == {UNQUOTED_PARLAY_ESTIMATE}
     assert all(not row["ticket_ev"].strip() for row in rows)
     assert all(float(row["ticket_ev"]) <= 0.0 for row in rows if row["ticket_ev"].strip())
     table = format_ticket_table(tickets)
-    assert "UNQUOTED_SGP_ESTIMATE" in table
+    assert "UNQUOTED_PARLAY_ESTIMATE" in table
     assert "42.00%" not in table
 
 

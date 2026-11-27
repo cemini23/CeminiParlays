@@ -1,9 +1,9 @@
 ticket_id,leg_num,game_id,kick_et,player_name,team,opp,market,side,line,book_american_odds,fair_american,edge,model_prob,ticket_stake_usd,live_parlay_american,fair_parlay_american,ticket_ev,gaussian_joint_p,t_copula_joint_p,corr_unmodeled,pricing_source,note
-HR12-1,1,2026-11-26-KC@BUF,8:20 PM ET,James Cook,BUF,KC,rush_yds,over,82.50,-115,-100,-0.0631,0.5011,6.00,+250,+300,,,,yes,UNQUOTED_SGP_ESTIMATE,"MODEL_REFERENCE SAME_LINE_DEVIG n=3 books=betrivers,fanduel,pinnacle"
-HR12-1,2,2026-11-26-PHI@DAL,4:30 PM ET,CeeDee Lamb,,,rec_yds,over,89.50,-115,+101,-0.0683,0.4983,6.00,+250,+300,,,,yes,UNQUOTED_SGP_ESTIMATE,"MODEL_REFERENCE SAME_LINE_DEVIG n=2 books=betrivers,fanduel"
-HR12-2,1,2026-11-26-KC@BUF,8:20 PM ET,Patrick Mahomes,KC,BUF,pass_yds,under,236.50,-115,+100,-0.0674,0.4989,5.00,+250,+297,,,,yes,UNQUOTED_SGP_ESTIMATE,"MODEL_REFERENCE SAME_LINE_DEVIG n=2 books=draftkings,fanduel"
-HR12-2,2,2026-11-26-CHI@DET,1:00 PM ET,Amon-Ra St. Brown,DET,CHI,rec_yds,over,82.50,-115,-102,-0.0571,0.5044,5.00,+250,+297,,,,yes,UNQUOTED_SGP_ESTIMATE,MODEL_REFERENCE LINE_SHIFT_DEVIG n=5 median=82.84 line=82.50
-HR12-3,1,2026-11-26-KC@BUF,8:20 PM ET,BUF,BUF,KC,total_q3,under,7.50,+100,,,,5.00,+274,,,,,yes,UNQUOTED_SGP_ESTIMATE,MODEL_REFERENCE NO_CONSENSUS
-HR12-3,2,2026-11-26-PHI@DAL,4:30 PM ET,George Pickens,,,rec_yds,over,68.50,-115,-101,-0.0587,0.5035,5.00,+274,,,,,yes,UNQUOTED_SGP_ESTIMATE,"MODEL_REFERENCE SAME_LINE_DEVIG n=2 books=fanduel,pinnacle"
-HR12-4,1,2026-11-26-CHI@DET,1:00 PM ET,Caleb Williams,CHI,DET,pass_yds,over,261.50,-115,+100,-0.0652,0.5000,4.00,+250,+293,,,,yes,UNQUOTED_SGP_ESTIMATE,"MODEL_REFERENCE SAME_LINE_DEVIG n=2 books=fanduel,pinnacle"
-HR12-4,2,2026-11-26-PHI@DAL,4:30 PM ET,Javonte Williams,DAL,PHI,rush_yds,over,75.50,-115,-103,-0.0492,0.5086,4.00,+250,+293,,,,yes,UNQUOTED_SGP_ESTIMATE,MODEL_REFERENCE LINE_SHIFT_DEVIG n=5 median=76.12 line=75.50
+HR12-1,1,2026-11-26-KC@BUF,8:20 PM ET,James Cook,BUF,KC,rush_yds,over,82.50,-115,-100,-0.0631,0.5011,6.00,+250,+300,,,,yes,UNQUOTED_PARLAY_ESTIMATE,"MODEL_REFERENCE SAME_LINE_DEVIG n=3 books=betrivers,fanduel,pinnacle"
+HR12-1,2,2026-11-26-PHI@DAL,4:30 PM ET,CeeDee Lamb,,,rec_yds,over,89.50,-115,+101,-0.0683,0.4983,6.00,+250,+300,,,,yes,UNQUOTED_PARLAY_ESTIMATE,"MODEL_REFERENCE SAME_LINE_DEVIG n=2 books=betrivers,fanduel"
+HR12-2,1,2026-11-26-KC@BUF,8:20 PM ET,Patrick Mahomes,KC,BUF,pass_yds,under,236.50,-115,+100,-0.0674,0.4989,5.00,+250,+297,,,,yes,UNQUOTED_PARLAY_ESTIMATE,"MODEL_REFERENCE SAME_LINE_DEVIG n=2 books=draftkings,fanduel"
+HR12-2,2,2026-11-26-CHI@DET,1:00 PM ET,Amon-Ra St. Brown,DET,CHI,rec_yds,over,82.50,-115,-102,-0.0571,0.5044,5.00,+250,+297,,,,yes,UNQUOTED_PARLAY_ESTIMATE,MODEL_REFERENCE LINE_SHIFT_DEVIG n=5 median=82.84 line=82.50
+HR12-3,1,2026-11-26-KC@BUF,8:20 PM ET,BUF,BUF,KC,total_q3,under,7.50,+100,,,,5.00,+274,,,,,yes,UNQUOTED_PARLAY_ESTIMATE,MODEL_REFERENCE NO_CONSENSUS
+HR12-3,2,2026-11-26-PHI@DAL,4:30 PM ET,George Pickens,,,rec_yds,over,68.50,-115,-101,-0.0587,0.5035,5.00,+274,,,,,yes,UNQUOTED_PARLAY_ESTIMATE,"MODEL_REFERENCE SAME_LINE_DEVIG n=2 books=fanduel,pinnacle"
+HR12-4,1,2026-11-26-CHI@DET,1:00 PM ET,Caleb Williams,CHI,DET,pass_yds,over,261.50,-115,+100,-0.0652,0.5000,4.00,+250,+293,,,,yes,UNQUOTED_PARLAY_ESTIMATE,"MODEL_REFERENCE SAME_LINE_DEVIG n=2 books=fanduel,pinnacle"
+HR12-4,2,2026-11-26-PHI@DAL,4:30 PM ET,Javonte Williams,DAL,PHI,rush_yds,over,75.50,-115,-103,-0.0492,0.5086,4.00,+250,+293,,,,yes,UNQUOTED_PARLAY_ESTIMATE,MODEL_REFERENCE LINE_SHIFT_DEVIG n=5 median=76.12 line=75.50

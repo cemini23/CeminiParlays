@@ -27,6 +27,10 @@ DISPLAY_NAMES = {
 SPORTSBOOK_PLATFORMS = {"hardrock", "fanduel", "draftkings", "betmgm", "pinnacle", "betrivers"}
 #: Fixed-multiplier pick'em cards. A published payout structure, not a price.
 PICKEM_PLATFORMS = {"prizepicks", "underdog"}
+# structures the operator bans for Underdog Pick'em screening.
+UNDERDOG_BLOCKED_STRUCTURES: frozenset[tuple[str, int]] = frozenset(
+    {("standard", 4), ("flex", 3)}
+)
 #: Prediction venues. Each leg is a 0-1 contract; a combo is the product of
 #: independently settled binaries (DKeX COMBOS), paper only.
 PREDICTION_PLATFORMS = {"polymarket", "kalshi"}
@@ -51,6 +55,22 @@ PLATFORM_ALIASES = {
 def normalize_platform(platform: str) -> str:
     token = (platform or "").strip().lower()
     return PLATFORM_ALIASES.get(token, token)
+
+
+def ensure_screenable(platform: str, mode: str, legs: int) -> None:
+    """Reject an Underdog structure the operator bans from Pick'em screening.
+
+    This is a precondition. It does not reprice a payout table.
+    """
+
+    normalized = normalize_platform(platform)
+    structure = (mode.lower(), legs)
+    if normalized != "underdog" or structure not in UNDERDOG_BLOCKED_STRUCTURES:
+        return None
+    blocked_mode, blocked_legs = structure
+    raise ValueError(
+        f"Underdog {blocked_mode} {blocked_legs}-leg is blocked for Pick'em screening"
+    )
 
 
 @dataclass(frozen=True)

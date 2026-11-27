@@ -1,0 +1,307 @@
+bookmaker,player,market,side,line,american_odds,timestamp,game,team,opp
+draftkings,DEN@PIT total,totals,over,37.5,-101,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,DEN@PIT total,totals,under,37.5,-119,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Bo Nix,player_pass_yds,over,202.5,-113,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,Bo Nix,player_pass_yds,under,202.5,-111,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,Mason Rudolph,player_pass_yds,over,174.5,-112,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Mason Rudolph,player_pass_yds,under,174.5,-112,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Jaylen Waddle,player_receptions,over,3.5,-148,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Jaylen Waddle,player_receptions,under,3.5,116,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Jonah Coleman,player_receptions,over,3.5,-105,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,Jonah Coleman,player_receptions,under,3.5,-121,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,Germie Bernard,player_receptions,over,2.5,-161,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Germie Bernard,player_receptions,under,2.5,126,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Courtland Sutton,player_receptions,over,2.5,-139,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,Courtland Sutton,player_receptions,under,2.5,109,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,DK Metcalf,player_receptions,over,2.5,-135,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,DK Metcalf,player_receptions,under,2.5,106,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Jaylen Warren,player_receptions,over,2.5,-117,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Jaylen Warren,player_receptions,under,2.5,-108,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Pat Bryant,player_receptions,over,2.5,-115,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Pat Bryant,player_receptions,under,2.5,-111,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Evan Engram,player_receptions,over,2.5,-110,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Evan Engram,player_receptions,under,2.5,-116,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Pat Freiermuth,player_receptions,over,2.5,110,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Pat Freiermuth,player_receptions,under,2.5,-140,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Rico Dowdle,player_receptions,over,1.5,-152,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Rico Dowdle,player_receptions,under,1.5,119,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Darnell Washington,player_receptions,over,1.5,-146,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Darnell Washington,player_receptions,under,1.5,114,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Roman Wilson,player_receptions,over,1.5,100,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Roman Wilson,player_receptions,under,1.5,-127,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Michael Pittman Jr.,player_receptions,over,1.5,122,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Michael Pittman Jr.,player_receptions,under,1.5,-156,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Marvin Mims Jr.,player_receptions,over,1.5,151,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Marvin Mims Jr.,player_receptions,under,1.5,-194,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Adam Trautman,player_receptions,over,0.5,-179,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Adam Trautman,player_receptions,under,0.5,140,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Troy Franklin,player_receptions,over,0.5,-153,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,Troy Franklin,player_receptions,under,0.5,120,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,Jonah Coleman,player_rush_yds,over,74.5,-112,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,Jonah Coleman,player_rush_yds,under,74.5,-112,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,Jaylen Warren,player_rush_yds,over,64.5,-110,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Jaylen Warren,player_rush_yds,under,64.5,-114,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Rico Dowdle,player_rush_yds,over,31.5,-108,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Rico Dowdle,player_rush_yds,under,31.5,-116,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Bo Nix,player_rush_yds,over,10.5,-111,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,Bo Nix,player_rush_yds,under,10.5,-113,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+draftkings,Mason Rudolph,player_rush_yds,over,5.5,-121,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Mason Rudolph,player_rush_yds,under,5.5,-104,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+draftkings,Tyler Badie,player_rush_yds,over,4.5,-114,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Tyler Badie,player_rush_yds,under,4.5,-110,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Marvin Mims Jr.,player_rush_yds,over,1.5,-117,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,Marvin Mims Jr.,player_rush_yds,under,1.5,-107,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,DEN@PIT total_q3,totals_q3,over,7.5,119,2026-11-27T13:40:32Z,DEN@PIT,,
+draftkings,DEN@PIT total_q3,totals_q3,under,7.5,-153,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,DEN@PIT total,totals,over,36.5,-114,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,DEN@PIT total,totals,under,36.5,-106,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Bo Nix,player_pass_yds,over,201.5,-113,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,Bo Nix,player_pass_yds,under,201.5,-113,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,Mason Rudolph,player_pass_yds,over,175.5,-113,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Mason Rudolph,player_pass_yds,under,175.5,-113,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Courtland Sutton,player_receptions,over,2.5,-138,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,Courtland Sutton,player_receptions,under,2.5,104,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,DK Metcalf,player_receptions,over,2.5,-130,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,DK Metcalf,player_receptions,under,2.5,-102,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Pat Freiermuth,player_receptions,over,2.5,116,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Pat Freiermuth,player_receptions,under,2.5,-154,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Darnell Washington,player_receptions,over,1.5,-148,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Darnell Washington,player_receptions,under,1.5,112,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Rico Dowdle,player_receptions,over,1.5,-148,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Rico Dowdle,player_receptions,under,1.5,112,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Jaylen Warren,player_receptions,over,2.5,-120,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Jaylen Warren,player_receptions,under,2.5,-110,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Jaylen Waddle,player_receptions,over,3.5,-132,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Jaylen Waddle,player_receptions,under,3.5,100,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Michael Pittman Jr.,player_receptions,over,1.5,110,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Michael Pittman Jr.,player_receptions,under,1.5,-146,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Pat Bryant,player_receptions,over,2.5,-102,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Pat Bryant,player_receptions,under,2.5,-130,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Jonah Coleman,player_receptions,over,3.5,102,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,Jonah Coleman,player_receptions,under,3.5,-136,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,Adam Trautman,player_receptions,over,0.5,-188,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Adam Trautman,player_receptions,under,0.5,140,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Troy Franklin,player_receptions,over,0.5,-166,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,Troy Franklin,player_receptions,under,0.5,124,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,Evan Engram,player_receptions,over,2.5,-102,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Evan Engram,player_receptions,under,2.5,-130,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Germie Bernard,player_receptions,over,2.5,-158,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Germie Bernard,player_receptions,under,2.5,118,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Roman Wilson,player_receptions,over,1.5,104,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Roman Wilson,player_receptions,under,1.5,-138,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Marvin Mims Jr.,player_receptions,over,1.5,158,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Marvin Mims Jr.,player_receptions,under,1.5,-215,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Mason Rudolph,player_rush_yds,over,5.5,-128,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Mason Rudolph,player_rush_yds,under,5.5,100,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Marvin Mims Jr.,player_rush_yds,over,3.5,-102,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Marvin Mims Jr.,player_rush_yds,under,3.5,-125,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Tyler Badie,player_rush_yds,over,5.5,-111,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Tyler Badie,player_rush_yds,under,5.5,-115,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Bo Nix,player_rush_yds,over,10.5,-113,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,Bo Nix,player_rush_yds,under,10.5,-113,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,Jaylen Warren,player_rush_yds,over,62.5,-113,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Jaylen Warren,player_rush_yds,under,62.5,-113,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+fanduel,Jonah Coleman,player_rush_yds,over,73.5,-113,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,Jonah Coleman,player_rush_yds,under,73.5,-113,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+fanduel,Rico Dowdle,player_rush_yds,over,32.5,-113,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,Rico Dowdle,player_rush_yds,under,32.5,-113,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,DEN@PIT total_q3,totals_q3,over,6.5,-152,2026-11-27T13:40:32Z,DEN@PIT,,
+fanduel,DEN@PIT total_q3,totals_q3,under,6.5,124,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,DEN@PIT total,totals,over,37.0,-108,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,DEN@PIT total,totals,under,37.0,-110,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Mason Rudolph,player_pass_yds,over,174.5,-111,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Mason Rudolph,player_pass_yds,under,174.5,-120,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Bo Nix,player_pass_yds,over,203.5,-115,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Bo Nix,player_pass_yds,under,203.5,-115,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Troy Franklin,player_receptions,over,0.5,-140,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Troy Franklin,player_receptions,under,0.5,105,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Jonah Coleman,player_receptions,over,3.5,110,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Jonah Coleman,player_receptions,under,3.5,-150,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Marvin Mims Jr.,player_receptions,over,1.5,145,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Marvin Mims Jr.,player_receptions,under,1.5,-200,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Jaylen Waddle,player_receptions,over,3.5,-135,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Jaylen Waddle,player_receptions,under,3.5,100,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Evan Engram,player_receptions,over,2.5,100,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Evan Engram,player_receptions,under,2.5,-135,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Pat Freiermuth,player_receptions,over,2.5,115,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Pat Freiermuth,player_receptions,under,2.5,-155,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Adam Trautman,player_receptions,over,0.5,-165,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Adam Trautman,player_receptions,under,0.5,125,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Rico Dowdle,player_receptions,over,1.5,-155,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Rico Dowdle,player_receptions,under,1.5,115,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Roman Wilson,player_receptions,over,1.5,110,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Roman Wilson,player_receptions,under,1.5,-150,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Jaylen Warren,player_receptions,over,2.5,-120,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Jaylen Warren,player_receptions,under,2.5,-111,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Pat Bryant,player_receptions,over,2.5,100,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Pat Bryant,player_receptions,under,2.5,-135,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Darnell Washington,player_receptions,over,1.5,-155,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Darnell Washington,player_receptions,under,1.5,115,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Courtland Sutton,player_receptions,over,2.5,-135,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Courtland Sutton,player_receptions,under,2.5,100,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Michael Pittman Jr.,player_receptions,over,1.5,120,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Michael Pittman Jr.,player_receptions,under,1.5,-160,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Germie Bernard,player_receptions,over,2.5,-155,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Germie Bernard,player_receptions,under,2.5,115,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,DK Metcalf,player_receptions,over,2.5,-120,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,DK Metcalf,player_receptions,under,2.5,-110,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Bo Nix,player_rush_yds,over,10.5,-110,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Bo Nix,player_rush_yds,under,10.5,-120,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Rico Dowdle,player_rush_yds,over,31.5,-120,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Rico Dowdle,player_rush_yds,under,31.5,-110,2026-11-27T13:40:32Z,DEN@PIT,,
+betmgm,Jonah Coleman,player_rush_yds,over,74.5,-115,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Jonah Coleman,player_rush_yds,under,74.5,-115,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betmgm,Mason Rudolph,player_rush_yds,over,6.5,100,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Mason Rudolph,player_rush_yds,under,6.5,-135,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Jaylen Warren,player_rush_yds,over,59.5,-135,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betmgm,Jaylen Warren,player_rush_yds,under,59.5,100,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betrivers,DEN@PIT total,totals,over,36.5,-114,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,DEN@PIT total,totals,under,36.5,-107,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Mason Rudolph,player_pass_yds,over,168.5,-115,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betrivers,Mason Rudolph,player_pass_yds,under,168.5,-114,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betrivers,Bo Nix,player_pass_yds,over,206.5,-117,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betrivers,Bo Nix,player_pass_yds,under,206.5,-114,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betrivers,DK Metcalf,player_receptions,over,2.5,-148,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Roman Wilson,player_receptions,over,1.5,-103,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betrivers,Adam Trautman,player_receptions,over,0.5,-162,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Pat Freiermuth,player_receptions,over,2.5,112,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betrivers,Michael Pittman Jr.,player_receptions,over,1.5,130,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Marvin Mims Jr.,player_receptions,over,1.5,170,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Pat Bryant,player_receptions,over,2.5,108,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Courtland Sutton,player_receptions,over,2.5,-155,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betrivers,Jonah Coleman,player_receptions,over,3.5,-104,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betrivers,Rico Dowdle,player_receptions,over,1.5,-152,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Troy Franklin,player_receptions,over,0.5,-177,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betrivers,Jaylen Waddle,player_receptions,over,3.5,-141,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Jaylen Warren,player_receptions,over,2.5,-124,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betrivers,Germie Bernard,player_receptions,over,2.5,-155,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Darnell Washington,player_receptions,over,1.5,-148,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betrivers,Evan Engram,player_receptions,over,2.5,-107,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Jaylen Warren,player_rush_yds,over,59.5,-118,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betrivers,Jaylen Warren,player_rush_yds,under,59.5,-113,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+betrivers,Rico Dowdle,player_rush_yds,over,28.5,-117,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Rico Dowdle,player_rush_yds,under,28.5,-114,2026-11-27T13:40:32Z,DEN@PIT,,
+betrivers,Bo Nix,player_rush_yds,over,11.5,-110,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betrivers,Bo Nix,player_rush_yds,under,11.5,-120,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betrivers,Jonah Coleman,player_rush_yds,over,78.5,-117,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+betrivers,Jonah Coleman,player_rush_yds,under,78.5,-113,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,DEN@PIT total,totals,over,36.5,-115,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,DEN@PIT total,totals,under,36.5,-105,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Bo Nix,player_pass_yds,over,204.5,-120,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Bo Nix,player_pass_yds,under,204.5,-110,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Mason Rudolph,player_pass_yds,over,177.5,-115,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Mason Rudolph,player_pass_yds,under,177.5,-115,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Evan Engram,player_receptions,over,2.5,-105,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Evan Engram,player_receptions,under,2.5,-125,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Pat Bryant,player_receptions,over,2.5,-105,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Pat Bryant,player_receptions,under,2.5,-125,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Marvin Mims Jr.,player_receptions,over,1.5,155,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Marvin Mims Jr.,player_receptions,under,1.5,-210,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Jonah Coleman,player_receptions,over,3.5,100,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Jonah Coleman,player_receptions,under,3.5,-130,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Jaylen Waddle,player_receptions,over,3.5,-135,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Jaylen Waddle,player_receptions,under,3.5,105,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Courtland Sutton,player_receptions,over,2.5,-140,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Courtland Sutton,player_receptions,under,2.5,105,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Rico Dowdle,player_receptions,over,1.5,-150,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Rico Dowdle,player_receptions,under,1.5,115,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Jaylen Warren,player_receptions,over,2.5,-115,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Jaylen Warren,player_receptions,under,2.5,-115,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Troy Franklin,player_receptions,over,0.5,-155,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Troy Franklin,player_receptions,under,0.5,115,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Roman Wilson,player_receptions,over,1.5,100,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Roman Wilson,player_receptions,under,1.5,-130,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Pat Freiermuth,player_receptions,over,2.5,115,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Pat Freiermuth,player_receptions,under,2.5,-150,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Darnell Washington,player_receptions,over,1.5,-145,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Darnell Washington,player_receptions,under,1.5,110,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Germie Bernard,player_receptions,over,2.5,-155,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Germie Bernard,player_receptions,under,2.5,120,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,DK Metcalf,player_receptions,over,2.5,-125,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,DK Metcalf,player_receptions,under,2.5,-105,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Adam Trautman,player_receptions,over,0.5,-180,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Adam Trautman,player_receptions,under,0.5,135,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Michael Pittman Jr.,player_receptions,over,1.5,110,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Michael Pittman Jr.,player_receptions,under,1.5,-145,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Rico Dowdle,player_rush_yds,over,31.5,-115,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Rico Dowdle,player_rush_yds,under,31.5,-115,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Bo Nix,player_rush_yds,over,10.5,-115,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Bo Nix,player_rush_yds,under,10.5,-115,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Jonah Coleman,player_rush_yds,over,73.5,-115,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Jonah Coleman,player_rush_yds,under,73.5,-115,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+hardrockbet,Jaylen Warren,player_rush_yds,over,63.5,-115,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Jaylen Warren,player_rush_yds,under,63.5,-115,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Marvin Mims Jr.,player_rush_yds,over,2.5,-115,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Marvin Mims Jr.,player_rush_yds,under,2.5,-115,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Mason Rudolph,player_rush_yds,over,6.5,-110,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Mason Rudolph,player_rush_yds,under,6.5,-120,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+hardrockbet,Tyler Badie,player_rush_yds,over,4.5,-115,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,Tyler Badie,player_rush_yds,under,4.5,-115,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,DEN@PIT total_q3,totals_q3,over,2.5,-1000,2026-11-27T13:40:32Z,DEN@PIT,,
+hardrockbet,DEN@PIT total_q3,totals_q3,under,2.5,500,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,DEN@PIT total,totals,over,37.0,-110,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,DEN@PIT total,totals,under,37.0,-104,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Bo Nix,player_pass_yds,over,206.5,103,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Bo Nix,player_pass_yds,under,206.5,-129,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Mason Rudolph,player_pass_yds,over,178.5,-102,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Mason Rudolph,player_pass_yds,under,178.5,-123,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Courtland Sutton,player_receptions,over,2.5,-146,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Courtland Sutton,player_receptions,under,2.5,116,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Evan Engram,player_receptions,over,2.5,-104,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Evan Engram,player_receptions,under,2.5,-121,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Jaylen Waddle,player_receptions,over,3.5,-139,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Jaylen Waddle,player_receptions,under,3.5,110,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Jaylen Warren,player_receptions,over,2.5,-117,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Jaylen Warren,player_receptions,under,2.5,-107,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Jonah Coleman,player_receptions,over,3.5,102,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Jonah Coleman,player_receptions,under,3.5,-128,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Marvin Mims Jr.,player_receptions,over,1.5,157,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Marvin Mims Jr.,player_receptions,under,1.5,-201,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Pat Bryant,player_receptions,over,2.5,101,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Pat Bryant,player_receptions,under,2.5,-127,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Rico Dowdle,player_receptions,over,1.5,-153,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Rico Dowdle,player_receptions,under,1.5,122,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Troy Franklin,player_receptions,over,0.5,-142,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Troy Franklin,player_receptions,under,0.5,113,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Adam Trautman,player_receptions,over,0.5,-160,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Adam Trautman,player_receptions,under,0.5,127,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,DK Metcalf,player_receptions,over,2.5,-109,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,DK Metcalf,player_receptions,under,2.5,-115,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Darnell Washington,player_receptions,over,1.5,-133,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Darnell Washington,player_receptions,under,1.5,106,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Germie Bernard,player_receptions,over,2.5,-153,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Germie Bernard,player_receptions,under,2.5,121,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Michael Pittman Jr.,player_receptions,over,1.5,104,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Michael Pittman Jr.,player_receptions,under,1.5,-131,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Pat Freiermuth,player_receptions,over,2.5,108,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Pat Freiermuth,player_receptions,under,2.5,-136,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Roman Wilson,player_receptions,over,1.5,109,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Roman Wilson,player_receptions,under,1.5,-137,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Bo Nix,player_rush_yds,over,10.5,-113,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Bo Nix,player_rush_yds,under,10.5,-111,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Jaylen Warren,player_rush_yds,over,64.5,109,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Jaylen Warren,player_rush_yds,under,64.5,-137,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+pinnacle,Jonah Coleman,player_rush_yds,over,75.5,101,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Jonah Coleman,player_rush_yds,under,75.5,-126,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+pinnacle,Rico Dowdle,player_rush_yds,over,32.5,-107,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Rico Dowdle,player_rush_yds,under,32.5,-117,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Marvin Mims Jr.,player_rush_yds,over,3.5,108,2026-11-27T13:40:32Z,DEN@PIT,,
+pinnacle,Marvin Mims Jr.,player_rush_yds,under,3.5,-136,2026-11-27T13:40:32Z,DEN@PIT,,
+underdog,Bo Nix,player_pass_yds,over,201.5,-137,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+underdog,Bo Nix,player_pass_yds,under,201.5,-137,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+underdog,Mason Rudolph,player_pass_yds,over,175.5,-137,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+underdog,Mason Rudolph,player_pass_yds,under,175.5,-137,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+underdog,Jaylen Warren,player_receptions,over,2.5,-137,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+underdog,Jaylen Warren,player_receptions,under,2.5,-137,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+underdog,Nate Adkins,player_receptions,over,0.5,-137,2026-11-27T13:40:32Z,DEN@PIT,,
+underdog,Nate Adkins,player_receptions,under,0.5,-137,2026-11-27T13:40:32Z,DEN@PIT,,
+underdog,Max Hurleman,player_receptions,over,0.5,-137,2026-11-27T13:40:32Z,DEN@PIT,,
+underdog,Max Hurleman,player_receptions,under,0.5,-137,2026-11-27T13:40:32Z,DEN@PIT,,
+underdog,Jaylen Warren,player_rush_yds,over,63.5,-137,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+underdog,Jaylen Warren,player_rush_yds,under,63.5,-137,2026-11-27T13:40:32Z,DEN@PIT,PIT,DEN
+underdog,Rico Dowdle,player_rush_yds,over,32.5,-137,2026-11-27T13:40:32Z,DEN@PIT,,
+underdog,Rico Dowdle,player_rush_yds,under,32.5,-137,2026-11-27T13:40:32Z,DEN@PIT,,
+underdog,Bo Nix,player_rush_yds,over,10.5,-137,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+underdog,Bo Nix,player_rush_yds,under,10.5,-137,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+underdog,Jonah Coleman,player_rush_yds,over,73.5,-137,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT
+underdog,Jonah Coleman,player_rush_yds,under,73.5,-137,2026-11-27T13:40:32Z,DEN@PIT,DEN,PIT

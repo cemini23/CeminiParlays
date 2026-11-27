@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ceminiparlays.odds import devig_two_way
-from ceminiparlays.payouts import resolve_payout
+from ceminiparlays.payouts import ensure_screenable, resolve_payout
 
 
 @dataclass(frozen=True)
@@ -70,6 +70,7 @@ def pickem_gap(
     Returns:
         A PickemGapReport with the fair price, table multiplier, and gap.
     """
+    ensure_screenable(platform, mode, legs)
     result = devig_two_way(odds_over, odds_under, method=method)
 
     if side == "over":

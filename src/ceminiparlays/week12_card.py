@@ -13,7 +13,7 @@ not a zero, a league mean, or a slate median.
 A leg from one game and a leg from another game are a cross-game parlay. It
 does not take the same-game SGP haircut, so the posted leg product is the
 expected price. That product is still not a captured book quote, so the card
-labels it ``UNQUOTED_SGP_ESTIMATE`` and never prints a market EV for it.
+labels it ``UNQUOTED_PARLAY_ESTIMATE`` and never prints a market EV for it.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ CARD_MD = WEEK / "card_2026-11-26.md"
 SLIP_CSV = WEEK / "slip_2026-11-26.csv"
 
 # A price that is only the product of standalone leg prices is not a quote.
-UNQUOTED_SGP_ESTIMATE = "UNQUOTED_SGP_ESTIMATE"
+UNQUOTED_PARLAY_ESTIMATE = "UNQUOTED_PARLAY_ESTIMATE"
 CROSS_GAME_PRICE_NOTE = (
     "The parlay price is the product of two posted Hard Rock leg prices. "
     "It is not a captured Hard Rock quote. No market EV is claimed."
@@ -1463,7 +1463,7 @@ def build_fixed_card(
                 "live_american": _legal_american(decimal_to_american(product_decimal(legs))),
                 "fair_american": fair_parlay_american(legs),
                 "ev": None,
-                "pricing_source": UNQUOTED_SGP_ESTIMATE,
+                "pricing_source": UNQUOTED_PARLAY_ESTIMATE,
                 "same_game": False,
                 "cross_game": True,
                 # No copula joint is modeled across two games.
@@ -1497,7 +1497,7 @@ def validate_fixed_card(tickets: list[dict[str, object]]) -> None:
         assert isinstance(legs, list)
         if len(legs) != 2:
             raise FixedCardError(f"{ticket['ticket_id']} has {len(legs)} legs, not 2")
-        if ticket.get("pricing_source") != UNQUOTED_SGP_ESTIMATE:
+        if ticket.get("pricing_source") != UNQUOTED_PARLAY_ESTIMATE:
             raise FixedCardError(f"{ticket['ticket_id']} is not priced as an unquoted estimate")
         if ticket.get("ev") is not None:
             raise FixedCardError(
@@ -1621,8 +1621,8 @@ def _ticket_sources(ticket: dict[str, object]) -> str:
 def _ticket_ev_text(ticket: dict[str, object]) -> str:
     """An unquoted product never prints a market EV. It prints the label."""
 
-    if str(ticket.get("pricing_source") or "") == UNQUOTED_SGP_ESTIMATE:
-        return UNQUOTED_SGP_ESTIMATE
+    if str(ticket.get("pricing_source") or "") == UNQUOTED_PARLAY_ESTIMATE:
+        return UNQUOTED_PARLAY_ESTIMATE
     ev = ticket.get("ev")
     if ev is None:
         return ""
@@ -1698,7 +1698,7 @@ def render_csv(tickets: list[dict[str, object]]) -> str:
             # An unquoted product never carries a market EV, even if a caller
             # hands render_csv a number. The fixed-card validator also rejects it.
             ev_text = ""
-            if ticket_source != UNQUOTED_SGP_ESTIMATE and ticket_ev is not None:
+            if ticket_source != UNQUOTED_PARLAY_ESTIMATE and ticket_ev is not None:
                 ev_text = f"{float(ticket_ev):.4f}"
             fair = ticket.get("fair_american")
             gaussian = ticket.get("gaussian_joint_p")
